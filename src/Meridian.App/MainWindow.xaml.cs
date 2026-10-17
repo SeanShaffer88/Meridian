@@ -412,6 +412,8 @@ public sealed partial class MainWindow : Window
         var archivePath = selected.FullPath;
         var parent = _activePane.CurrentPath;
         var folder = Path.GetFileNameWithoutExtension(archivePath);
+        if (folder.EndsWith(".tar", StringComparison.OrdinalIgnoreCase))
+            folder = folder[..^4];
         var isZip = string.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase);
         var entryCount = await Task.Run(() => isZip
             ? Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath).Count
@@ -430,9 +432,12 @@ public sealed partial class MainWindow : Window
         var token = _zipExtractionCancellation.Token;
         var progress = new Progress<int>(percent =>
             GlobalStatus.Text = "Extracting ZIP · " + percent + "%");
-        var receipt = await Task.Run(() => Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
-            archivePath, parent, folder, cancellationToken: token, progress: progress), token);
-        GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
+        var extractedFiles = await Task.Run(async () => isZip
+            ? (await Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
+                archivePath, parent, folder, cancellationToken: token, progress: progress)).FileCount
+            : (await Meridian.Core.Archives.TarTreeExtractor.ExtractAsync(
+                archivePath, parent, folder, cancellationToken: token, progress: progress)).FileCount, token);
+        GlobalStatus.Text = "Extracted " + extractedFiles + " files.";
         await NavigateAsync(_activePane, parent, addHistory: false);
         }
         catch (OperationCanceledException)
