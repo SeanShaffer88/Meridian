@@ -98,7 +98,7 @@ The ideas below define the direction of the project. **Unless explicitly listed 
 | Signature idea | The experience we're working toward |
 | --- | --- |
 | **Drop Shelf improvements** | Build on the implemented temporary collection with persistence options, clearer batch management, and stronger workflow integration. |
-| **Operation Simulator improvements** | Extend the implemented read-only copy preflight into richer previews, additional operations, and safe execution with explicit confirmation. |
+| **Consequence Engine** | Extend the existing copy preflight into explainable operation plans, explicit revalidation and outcome receipts. Initial advisory plan and receipt contracts are in [development](docs/CONSEQUENCE_ENGINE.md); they are not yet wired into the interface. |
 | **Smart Collections** | Create dynamic, rule-based views without rearranging the files on disk. |
 | **Meridian TimeVault** | Explore Windows VSS snapshots, historical file versions, safe recovery exports, timeline views, and snapshot differences. Foundation code exists on the [TimeVault development branch](https://github.com/SeanShaffer88/Meridian/pull/37); the viewer and recovery UI are not implemented yet. |
 | **Relationship View** | Discover explainable connections between files, projects, and metadata. |
@@ -117,6 +117,8 @@ The proposed experience includes a read-only **Shadow Copy Explorer**, a **File 
 TimeVault will work only when Windows exposes accessible snapshots. VSS is **not a backup system**: snapshots can disappear, may require elevated access, and must not be treated as guaranteed recovery points. TimeVault will not silently create, delete, or modify snapshots.
 
 Explore the [TimeVault engineering plan](docs/TIMEVAULT.md) and [development pull request](https://github.com/SeanShaffer88/Meridian/pull/37).
+
+The [expanded engineering roadmap](docs/ROADMAP.md#meridian-expansion-program--approved-design-scope) now tracks 16 major initiatives, including FileGraph, Storage X-Ray, FlowForge, OmniSearch, HexLab, File DNA, Archive Portal, Integrity Guardian, Virtual Collections, Device Bridge and Command Nexus. **These are planned capabilities, not currently available features.**
 
 See the full [innovation-first roadmap](docs/ROADMAP.md).
 
