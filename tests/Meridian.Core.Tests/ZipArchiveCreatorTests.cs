@@ -22,6 +22,37 @@ public class ZipArchiveCreatorTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RejectsParentAndDescendantFileEntries(bool parentFirst)
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var first = Path.Combine(root, "first.txt");
+            var second = Path.Combine(root, "second.txt");
+            await File.WriteAllTextAsync(first, "first");
+            await File.WriteAllTextAsync(second, "second");
+            var entries = new Dictionary<string, string>();
+            if (parentFirst)
+            {
+                entries.Add("docs", first);
+                entries.Add("docs/file.txt", second);
+            }
+            else
+            {
+                entries.Add("docs/file.txt", first);
+                entries.Add("docs", second);
+            }
+            var target = Path.Combine(root, "invalid.zip");
+            await Assert.ThrowsAsync<InvalidDataException>(() => ZipArchiveCreator.CreateAsync(target, entries));
+            Assert.False(File.Exists(target));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task CreatesArchiveFromExplicitFileMap()
     {
