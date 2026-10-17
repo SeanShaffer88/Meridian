@@ -5,6 +5,15 @@
     xmlns:models="using:Meridian.Models"
     Title="Meridian">
   <Grid Background="#17191D" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+    <Grid.KeyboardAccelerators>
+      <KeyboardAccelerator Key="F5" Invoked="RefreshShortcut_Invoked" />
+      <KeyboardAccelerator Key="F6" Invoked="SwitchPaneShortcut_Invoked" />
+      <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="FocusActivePathShortcut_Invoked" />
+      <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="FocusActiveFilterShortcut_Invoked" />
+      <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="BackShortcut_Invoked" />
+      <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="ForwardShortcut_Invoked" />
+      <KeyboardAccelerator Key="Up" Modifiers="Menu" Invoked="UpShortcut_Invoked" />
+    </Grid.KeyboardAccelerators>
     <Grid Grid.Row="0" Margin="18,14" ColumnDefinitions="Auto,*,Auto" Background="#202329">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <Border Width="32" Height="32" CornerRadius="8" Background="#F04444">
