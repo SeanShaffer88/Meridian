@@ -477,14 +477,23 @@ public sealed partial class MainWindow : Window
         var sources = _activePane.List.SelectedItems.OfType<FileEntry>().ToArray();
         var destination = Path.Combine(_activePane.CurrentPath,
             (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
-        var formatPicker = new ComboBox { SelectedIndex = 0 };
+        var formatPicker = new ComboBox { SelectedIndex = 0, MinWidth = 260 };
         formatPicker.Items.Add("ZIP (.zip)");
         formatPicker.Items.Add("TAR (.tar)");
         formatPicker.Items.Add("TAR.GZ (.tar.gz)");
         var confirmation = new ContentDialog
         {
             Title = "Create archive?",
-            Content = formatPicker,
+            Content = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock { Text = "Archive format" },
+                    formatPicker,
+                    new TextBlock { Text = "A new archive will be created in the current folder. Existing files are never overwritten.", TextWrapping = TextWrapping.Wrap }
+                }
+            },
             PrimaryButtonText = "Create",
             CloseButtonText = "Cancel",
             XamlRoot = LeftPath.XamlRoot
