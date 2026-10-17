@@ -7,7 +7,7 @@
 
 **A free, open-source, offline-first file manager for Windows 11.** Browse two folders side by side, organize files without jumping between Explorer windows, and use deliberately cautious copy, move, rename, and delete actions.
 
-[![Windows CI](https://github.com/SeanShaffer88/Meridian/actions/workflows/ci.yml/badge.svg)](https://github.com/SeanShaffer88/Meridian/actions)
+[![Windows CI](https://github.com/SeanShaffer88/Meridian/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/SeanShaffer88/Meridian/actions)
 [![Latest release](https://img.shields.io/github/v/release/SeanShaffer88/Meridian?display_name=tag&label=release)](https://github.com/SeanShaffer88/Meridian/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Windows 11](https://img.shields.io/badge/Windows%2011-x64%20%7C%20ARM64-0078D4)
