@@ -45,6 +45,12 @@ public sealed class SnapshotFileExporter
                     stem[3] >= '1' && stem[3] <= '9'))
                 throw new ArgumentException("Destination uses a reserved device name.", nameof(destinationFile));
         }
+        if (!Path.IsPathFullyQualified(originalFile) || originalFile.StartsWith(@"\\", StringComparison.Ordinal) ||
+            originalFile.Length < 3 || !char.IsLetter(originalFile[0]) ||
+            originalFile[1] != ':' || originalFile[2] != '\\')
+            throw new ArgumentException("Source must be an absolute local drive path.", nameof(originalFile));
+        if (originalFile[3..].Split('\\').Any(part => part is "." or ".."))
+            throw new ArgumentException("Source cannot contain traversal components.", nameof(originalFile));
         var original = Path.GetFullPath(originalFile);
         if (string.Equals(original, destination, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Source and destination must differ.", nameof(destinationFile));
