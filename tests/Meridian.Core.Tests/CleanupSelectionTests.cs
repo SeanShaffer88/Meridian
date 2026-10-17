@@ -41,13 +41,11 @@ public class CleanupSelectionTests
     [Fact]
     public void RejectsDuplicateInventoryTargets()
     {
-        var plan = new CleanupPlan(new[]
+        Assert.Throws<ArgumentException>(() => new CleanupPlan(new[]
         {
             new CleanupCandidate("duplicate", 1, "Temp", CleanupRisk.Low, "Review"),
             new CleanupCandidate("duplicate", 2, "Temp", CleanupRisk.Protected, "Protected")
-        });
-        Assert.Throws<ArgumentException>(() =>
-            CleanupSelection.ReviewOnly(plan, new[] { "duplicate" }));
+        }));
     }
 
     [Fact]
