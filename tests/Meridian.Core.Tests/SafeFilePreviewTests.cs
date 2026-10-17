@@ -30,4 +30,44 @@ public class SafeFilePreviewTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             SafeFilePreview.ReadPrefixAsync(Path.GetTempPath(), maxBytes: 1024 * 1024 + 1));
     }
+
+    [Fact]
+    public async Task AlreadyCancelledPreviewDoesNotOpenFile()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.txt");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            SafeFilePreview.ReadPrefixAsync(missing, cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public async Task RejectsReparsePointDirectoryAncestorWhenSupported()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-preview-" + Guid.NewGuid().ToString("N"));
+        var real = Path.Combine(root, "real");
+        var link = Path.Combine(root, "linked");
+        Directory.CreateDirectory(real);
+        await File.WriteAllTextAsync(Path.Combine(real, "test.txt"), "preview");
+        try
+        {
+            try
+            {
+                Directory.CreateSymbolicLink(link, real);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
+                or PlatformNotSupportedException or NotSupportedException)
+            {
+                return; // Symlink creation is restricted on this host.
+            }
+
+            await Assert.ThrowsAsync<IOException>(() =>
+                SafeFilePreview.ReadPrefixAsync(Path.Combine(link, "test.txt")));
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link);
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
