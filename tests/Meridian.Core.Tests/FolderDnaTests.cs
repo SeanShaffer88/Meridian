@@ -14,6 +14,20 @@ public sealed class FolderDnaTests
         };
 
     [Fact]
+    public void Analyze_ClampsNegativeSizesAndSaturatesOverflow()
+    {
+        var summary = FolderDna.Analyze([
+            Entry("invalid.dat", false, "DAT file", -10),
+            Entry("huge-a.dat", false, "DAT file", long.MaxValue),
+            Entry("huge-b.dat", false, "DAT file", 42)
+        ]);
+
+        Assert.Equal(3, summary.Files);
+        Assert.Equal(long.MaxValue, summary.KnownFileBytes);
+        Assert.Equal(long.MaxValue, Assert.Single(summary.Types).Bytes);
+    }
+
+    [Fact]
     public void Analyze_EmptyListingIsSafe()
     {
         var summary = FolderDna.Analyze([]);
