@@ -41,6 +41,7 @@ public static class TarTreeExtractor
             using var reader = new TarReader(stream, leaveOpen: true);
             long total = 0;
             int count = 0;
+            var buffer = new byte[8192];
             for (var i = 0; i < catalog.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -63,7 +64,6 @@ public static class TarTreeExtractor
                     await using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write,
                         FileShare.None, 8192, FileOptions.Asynchronous);
                     if (entry.DataStream is null) throw new InvalidDataException("TAR entry has no data.");
-                    var buffer = new byte[8192];
                     long written = 0;
                     while (written < expected.Bytes)
                     {

@@ -4,6 +4,8 @@
 
 Complete ZIP extraction checks the streamed payload against both its declared length and CRC-32 before reporting success. Single-file and tree staging discard failed output; the direct single-file API removes its partial file on managed failure. Catalog listings and bounded prefix previews do not verify complete payload integrity. CRC detects accidental corruption; it does not authenticate an archive.
 
+TAR/TGZ cataloging reads regular-file payloads in 8 KiB chunks, checks cancellation between reads and rejects premature EOF. This adds a full payload read for uncompressed TAR cataloging; it does not checksum TAR payloads. Synchronous filesystem reads and parser metadata processing remain outside the between-chunk cancellation guarantee. Extraction reuses one 8 KiB payload buffer across files.
+
 The [verified baseline](STATUS.md) includes the app commands **Inspect Archive**, **Create Archive** and **Extract Archive** for ZIP/TAR/TGZ. Both architecture builds and selected core regressions pass CI; hands-on archive workflows and broad format compatibility are not verified. These dialogs are not archive-as-folder navigation.
 
 ## Implemented capability matrix

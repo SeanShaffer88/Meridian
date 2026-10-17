@@ -29,6 +29,7 @@ public static class TarArchiveCatalog
         var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ancestors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
+        var buffer = new byte[8192];
         TarEntry? entry;
         while ((entry = reader.GetNextEntry(copyData: false)) is not null)
         {
@@ -53,6 +54,8 @@ public static class TarArchiveCatalog
                 throw new InvalidDataException("TAR catalog size or entry limit exceeded.");
             if (directory && entry.Length != 0)
                 throw new InvalidDataException("Directory TAR entry has a payload.");
+            if (!directory)
+                ValidatePayload(entry.DataStream, entry.Length, buffer, cancellationToken);
             total += entry.Length;
             names.Add(name);
             entries.Add(new Entry(name, entry.Length, directory));
@@ -60,6 +63,21 @@ public static class TarArchiveCatalog
         }
         ValidateTrailer(stream, cancellationToken);
         return entries.AsReadOnly();
+    }
+
+    // Explicit reads prevent TarReader from skipping a large compressed payload
+    // without observing cancellation, and detect truncated seekable TAR files.
+    internal static void ValidatePayload(Stream? stream, long length, byte[] buffer,
+        CancellationToken cancellationToken)
+    {
+        while (length > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = stream?.Read(buffer, 0, (int)Math.Min(buffer.Length, length)) ?? 0;
+            if (read == 0) throw new InvalidDataException("Truncated TAR entry.");
+            length -= read;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     // TarReader stops at the end marker; consume bounded zero padding to force
