@@ -24,6 +24,16 @@ public class SnapshotPathGuardTests
             SnapshotPathGuard.RejectReparsePoints(invalid, @"C:\Windows\test.txt"));
     }
 
+    [Theory]
+    [InlineData(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy7\..\Windows")]
+    [InlineData(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy7\folder\file.txt:stream")]
+    public void RejectsUnsafeComponentsBeforeOpeningSnapshot(string mappedPath)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Assert.Throws<ArgumentException>(() =>
+            SnapshotPathGuard.RejectReparsePoints(Snapshot, mappedPath));
+    }
+
     [Fact]
     public void RejectsNonWindowsInspection()
     {
