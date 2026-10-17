@@ -374,8 +374,7 @@ public sealed partial class MainWindow : Window
         _previewDialogOpen = true;
         try
         {
-            if ((File.GetAttributes(path) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
-                throw new IOException("Preview does not follow file links or directories.");
+            path = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(path);
             if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
             {
                 player = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
