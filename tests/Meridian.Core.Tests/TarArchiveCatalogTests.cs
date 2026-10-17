@@ -8,6 +8,31 @@ namespace Meridian.Core.Tests;
 public sealed class TarArchiveCatalogTests
 {
     [Fact]
+    public void RejectsFileAsParentOfAnotherEntry()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-conflict-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "conflict.tar");
+            using (var output = File.Create(path))
+            using (var writer = new TarWriter(output))
+            {
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "parent")
+                {
+                    DataStream = new MemoryStream(new byte[] { 1 })
+                });
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "parent/child")
+                {
+                    DataStream = new MemoryStream(new byte[] { 2 })
+                });
+            }
+            Assert.Throws<InvalidDataException>(() => TarArchiveCatalog.List(path));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void ListsRegularFilesInTar()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-tar-" + Guid.NewGuid().ToString("N"));
