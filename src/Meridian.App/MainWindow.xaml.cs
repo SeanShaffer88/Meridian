@@ -491,7 +491,7 @@ public sealed partial class MainWindow : Window
     private static void AddPropertyRow(StackPanel panel, string label, string value)
     {
         var row = new StackPanel { Spacing = 2 };
-        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = Microsoft.UI.Colors.Gray });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray) });
         row.Children.Add(new TextBlock { Text = value, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap });
         panel.Children.Add(row);
     }
