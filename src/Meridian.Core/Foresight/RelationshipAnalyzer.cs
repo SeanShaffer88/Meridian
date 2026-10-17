@@ -88,6 +88,7 @@ public static class RelationshipAnalyzer
         var result = new List<FileRelationship>();
         for (var i = 0; i < items.Count; i++)
         {
+            CheckBudget();
             var stem = stems[i];
             var stemIndices = stem.Length > 0 ? byStem[stem] : null;
             var directoryIndices = byDirectory[directories[i]];
