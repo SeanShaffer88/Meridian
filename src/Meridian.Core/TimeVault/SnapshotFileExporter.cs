@@ -53,6 +53,10 @@ public sealed class SnapshotFileExporter
             throw new ArgumentException("Source must be an absolute local drive path.", nameof(originalFile));
         if (originalFile[3..].Split('\\').Any(part => part is "." or ".."))
             throw new ArgumentException("Source cannot contain traversal components.", nameof(originalFile));
+        if (originalFile[3..].Contains("\\\\", StringComparison.Ordinal))
+            throw new ArgumentException("Source cannot contain empty path components.", nameof(originalFile));
+        if (originalFile.EndsWith('\\'))
+            throw new ArgumentException("Source must name a file.", nameof(originalFile));
         foreach (var part in originalFile[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries))
         {
             if (part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.'))
