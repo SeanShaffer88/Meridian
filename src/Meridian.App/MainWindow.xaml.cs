@@ -401,7 +401,7 @@ public sealed partial class MainWindow : Window
         var archivePath = selected.FullPath;
         var parent = _activePane.CurrentPath;
         var folder = Path.GetFileNameWithoutExtension(archivePath);
-        var plan = Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath);
+        var plan = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath));
         var dialog = new ContentDialog
         {
             Title = "Extract ZIP?",
@@ -411,7 +411,8 @@ public sealed partial class MainWindow : Window
             XamlRoot = LeftPath.XamlRoot
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-        var receipt = await Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(archivePath, parent, folder);
+        GlobalStatus.Text = "Extracting ZIP · " + selected.Name;
+        var receipt = await Task.Run(() => Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(archivePath, parent, folder));
         GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
