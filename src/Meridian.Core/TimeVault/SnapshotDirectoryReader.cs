@@ -19,6 +19,14 @@ public sealed class SnapshotDirectoryReader
         return Task.Run<IReadOnlyList<SnapshotEntry>>(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Only inspect ordinary drive-letter paths. Reject aliases and traversal
+            // before normalization so the caller cannot obscure the requested folder.
+            if (liveFolder.Length < 3 || !char.IsLetter(liveFolder[0]) ||
+                liveFolder[1] != ':' || liveFolder[2] != '\\')
+                throw new ArgumentException("Folder must be an absolute local drive path.", nameof(liveFolder));
+            if (liveFolder[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries).Any(part =>
+                part is "." or ".." || part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.')))
+                throw new ArgumentException("Folder contains an unsafe path component.", nameof(liveFolder));
             var root = Path.GetPathRoot(Path.GetFullPath(liveFolder))
                 ?? throw new ArgumentException("Invalid local folder.", nameof(liveFolder));
             var snapshotFolder = ShadowPath.ResolveForDrive(snapshot, liveFolder, root);
