@@ -70,6 +70,9 @@ public static class FileOperations
     private static void CopyFileWithCancellation(string source, string destination, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var creationTime = File.GetCreationTimeUtc(source);
+        var lastWriteTime = File.GetLastWriteTimeUtc(source);
+        var lastAccessTime = File.GetLastAccessTimeUtc(source);
         var buffer = new byte[1024 * 1024];
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
         using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.SequentialScan))
@@ -83,9 +86,9 @@ public static class FileOperations
             cancellationToken.ThrowIfCancellationRequested();
         }
 
-        File.SetCreationTimeUtc(destination, File.GetCreationTimeUtc(source));
-        File.SetLastWriteTimeUtc(destination, File.GetLastWriteTimeUtc(source));
-        File.SetLastAccessTimeUtc(destination, File.GetLastAccessTimeUtc(source));
+        File.SetCreationTimeUtc(destination, creationTime);
+        File.SetLastWriteTimeUtc(destination, lastWriteTime);
+        File.SetLastAccessTimeUtc(destination, lastAccessTime);
     }
 
     private static void RejectReparsePoint(string path)
