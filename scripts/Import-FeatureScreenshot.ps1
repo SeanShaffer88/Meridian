@@ -24,8 +24,8 @@ $pngSignature = [byte[]](137,80,78,71,13,10,26,10)
 for ($i=0; $i -lt 8; $i++) {
     if ($bytes[$i] -ne $pngSignature[$i]) { throw 'Source must be a PNG screenshot.' }
 }
-$width = [System.Buffers.Binary.BinaryPrimitives]::ReadInt32BigEndian([ReadOnlySpan[byte]]$bytes[16..19])
-$height = [System.Buffers.Binary.BinaryPrimitives]::ReadInt32BigEndian([ReadOnlySpan[byte]]$bytes[20..23])
+$width = ([int64]$bytes[16] -shl 24) -bor ([int64]$bytes[17] -shl 16) -bor ([int64]$bytes[18] -shl 8) -bor [int64]$bytes[19]
+$height = ([int64]$bytes[20] -shl 24) -bor ([int64]$bytes[21] -shl 16) -bor ([int64]$bytes[22] -shl 8) -bor [int64]$bytes[23]
 if ($width -lt 640 -or $height -lt 360 -or $width -gt 12000 -or $height -gt 12000) {
     throw "Unexpected PNG dimensions: $width x $height"
 }
