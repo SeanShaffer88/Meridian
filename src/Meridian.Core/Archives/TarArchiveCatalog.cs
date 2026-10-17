@@ -43,6 +43,7 @@ public static class TarArchiveCatalog
             while (parent.Contains('/'))
             {
                 parent = parent[..parent.LastIndexOf('/')];
+                ancestors.Add(parent);
                 if (fileNames.Contains(parent))
                     throw new InvalidDataException("TAR entry conflicts with a parent file.");
             }
