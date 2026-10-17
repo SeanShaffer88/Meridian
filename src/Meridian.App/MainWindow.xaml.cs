@@ -367,6 +367,7 @@ public sealed partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap
         });
         Microsoft.UI.Xaml.Controls.MediaPlayerElement? player = null;
+        Windows.Media.Playback.MediaPlayer? mediaSession = null;
         try
         {
             if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
@@ -377,8 +378,9 @@ public sealed partial class MainWindow : Window
                     AutoPlay = false,
                     Height = decision.Kind == Meridian.Core.Viewer.ViewerKind.Video ? 320 : 100
                 };
-                player.SetMediaPlayer(new Windows.Media.Playback.MediaPlayer());
-                player.MediaPlayer.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
+                mediaSession = new Windows.Media.Playback.MediaPlayer();
+                player.SetMediaPlayer(mediaSession);
+                mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
                 panel.Children.Add(player);
             }
             else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
@@ -440,8 +442,9 @@ public sealed partial class MainWindow : Window
         {
             if (player is not null)
             {
-                player.MediaPlayer?.Pause();
+                mediaSession?.Pause();
                 player.SetMediaPlayer(null);
+                mediaSession?.Dispose();
             }
         }
     }
