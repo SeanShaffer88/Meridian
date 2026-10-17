@@ -1,0 +1,48 @@
+name: Windows build and core tests
+
+on:
+  push:
+    branches:
+      - main
+      - feature/timevault-foundation
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore core tests
+        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj
+      - name: Build core tests
+        run: dotnet build tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --no-restore --configuration Release
+      - name: Run core tests
+        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --no-build --configuration Release --logger trx
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+
+  windows-app:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore Windows app
+        run: dotnet restore src/Meridian.App/Meridian.App.csproj -p:RuntimeIdentifier=win-x64
+      - name: Build Windows app x64
+        run: dotnet build src/Meridian.App/Meridian.App.csproj --no-restore --configuration Release -p:RuntimeIdentifier=win-x64 -p:Platform=x64
