@@ -477,9 +477,13 @@ public sealed partial class MainWindow : Window
         var sources = _activePane.List.SelectedItems.OfType<FileEntry>().ToArray();
         var destination = Path.Combine(_activePane.CurrentPath,
             (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
+        var formatPicker = new ComboBox { SelectedIndex = 0 };
+        formatPicker.Items.Add("ZIP (.zip)");
+        formatPicker.Items.Add("TAR (.tar)");
+        formatPicker.Items.Add("TAR.GZ (.tar.gz)");
         var confirmation = new ContentDialog
         {
-            Title = "Create ZIP?",
+            Title = "Create archive?",
             Content = new TextBlock { Text = "Selected files: " + sources.Length +
                 Environment.NewLine + "Destination: " + destination +
                 Environment.NewLine + "Existing archives will not be overwritten.",
