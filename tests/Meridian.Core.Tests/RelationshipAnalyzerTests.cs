@@ -279,4 +279,40 @@ public class RelationshipAnalyzerTests
         Assert.Single(result);
         Assert.Equal(RelationshipEvidence.SameDirectory, result[0].Evidence);
     }
+
+    [Fact]
+    public void FilenameMatchingUsesPlatformPathCaseRules()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-case"));
+        var paths = new[]
+        {
+            Path.Combine(root, "upper", "Diagram.svg"),
+            Path.Combine(root, "lower", "diagram.png")
+        };
+        var result = RelationshipAnalyzer.Analyze(paths);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Single(result);
+            Assert.Equal(RelationshipEvidence.FilenameStem, result[0].Evidence);
+        }
+        else
+        {
+            Assert.Empty(result);
+        }
+    }
+
+    [Fact]
+    public void CaseOnlyDuplicatePathsFollowPlatformRules()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-case"));
+        var paths = new[]
+        {
+            Path.Combine(root, "Report.txt"),
+            Path.Combine(root, "report.txt")
+        };
+        if (OperatingSystem.IsWindows())
+            Assert.Throws<ArgumentException>(() => RelationshipAnalyzer.Analyze(paths));
+        else
+            Assert.Single(RelationshipAnalyzer.Analyze(paths));
+    }
 }
