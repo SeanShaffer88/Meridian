@@ -1,6 +1,6 @@
 # Roadmap
 
-Meridian is an early-stage, offline-first Windows file manager. This roadmap is a feature inventory and an ordering guide, not a claim that any unchecked item is implemented. Features will be delivered incrementally, with security, responsiveness, accessibility, tests, and honest Windows CI verification required alongside functionality.
+Meridian is an early-stage, offline-first file manager targeting Windows 11 only, across x64 and ARM64 architectures. This roadmap is a feature inventory and an ordering guide, not a claim that any unchecked item is implemented. Features will be delivered incrementally, with security, responsiveness, accessibility, tests, and honest Windows CI verification required alongside functionality.
 
 ## Delivery principles
 
@@ -17,7 +17,7 @@ Meridian is an early-stage, offline-first Windows file manager. This roadmap is 
 - [x] Background directory enumeration
 - [x] Conservative copy path that refuses overwrite
 - [x] Core unit-test source
-- [ ] Build and run on Windows 11; resolve compiler/runtime issues and record actual CI results
+- [ ] Build and run on Windows 11 x64 and ARM64; resolve compiler/runtime issues and record actual CI results
 - [ ] Expand safety tests: nested directory copy, collisions, self/descendant copy prevention, cancellation and staging cleanup, disappearing files, and access-denied cases
 - [ ] Establish operation contracts, structured error reporting, cancellation semantics, and path/reparse-point safety
 - [ ] Audit dependencies, permissions, threat model, and supported Windows versions
