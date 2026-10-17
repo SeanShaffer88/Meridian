@@ -131,6 +131,7 @@ public static class ZipArchiveCreator
             }
             File.Move(stage, target, overwrite: false);
             created = false;
+            progress?.Report((total, total));
         }
         finally
         {
