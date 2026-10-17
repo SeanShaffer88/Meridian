@@ -320,6 +320,45 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         { GlobalStatus.Text = "Could not open file · " + ex.Message; }
     }
+    private async Task MoveSelectedAsync(PaneState source, PaneState destination)
+    {
+        if (source.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
+
+        var kind = selected.IsDirectory ? "folder" : "file";
+        var dialog = new ContentDialog
+        {
+            Title = "Move item?",
+            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
+            PrimaryButtonText = "Move",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var sourcePath = selected.FullPath;
+        var sourceFolder = source.CurrentPath;
+        var destinationPath = destination.CurrentPath;
+        try
+        {
+            var movedTo = await Task.Run(() => FileOperations.MoveItem(sourcePath, destinationPath));
+            if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(source, sourceFolder, addHistory: false);
+            if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(destination, destinationPath, addHistory: false);
+            GlobalStatus.Text = $"Moved successfully · {Path.GetFileName(movedTo)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Move failed · " + ex.Message;
+        }
+    }
+
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
         if (_copyCancellation is not null) { GlobalStatus.Text = "A copy is already in progress."; return; }
@@ -567,6 +606,8 @@ public sealed partial class MainWindow : Window
     private async void LeftForward_Click(object sender, RoutedEventArgs e) => await NavigateForwardAsync(_left);
     private async void RightForward_Click(object sender, RoutedEventArgs e) => await NavigateForwardAsync(_right);
     private async void CopyLeftToRight_Click(object sender, RoutedEventArgs e) => await CopySelectedAsync(_left, _right);
+    private async void MoveLeftToRight_Click(object sender, RoutedEventArgs e) => await MoveSelectedAsync(_left, _right);
+    private async void MoveRightToLeft_Click(object sender, RoutedEventArgs e) => await MoveSelectedAsync(_right, _left);
     private async void CopyRightToLeft_Click(object sender, RoutedEventArgs e) => await CopySelectedAsync(_right, _left);
     private async void RefreshBoth_Click(object sender, RoutedEventArgs e)
     {
