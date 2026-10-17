@@ -502,6 +502,12 @@ public sealed partial class MainWindow : Window
             _ => ".zip"
         };
         destination = Path.ChangeExtension(destination, extension);
+        if (File.Exists(destination) || Directory.Exists(destination))
+        {
+            GlobalStatus.Text = "Archive destination already exists · " + destination;
+            _zipCreationBusy = false;
+            return;
+        }
         _zipCreationCancellation = new CancellationTokenSource();
         try
         {
