@@ -57,4 +57,22 @@ public class TemporaryFileInventoryTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new TemporaryFileInventory().ScanAsync(Path.GetTempPath(), cancellationToken: source.Token));
     }
+    [Theory]
+    [InlineData("relative-directory")]
+    [InlineData("../parent-directory")]
+    public async Task RejectsRelativeOrTraversalRoots(string path)
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new TemporaryFileInventory().ScanAsync(path));
+    }
+
+    [Fact]
+    public async Task RejectsWindowsNetworkRoots()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new TemporaryFileInventory().ScanAsync(@"\\server\share\folder"));
+    }
+
+
 }
