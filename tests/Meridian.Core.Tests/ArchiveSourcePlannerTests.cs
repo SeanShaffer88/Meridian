@@ -26,6 +26,23 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsFileSelectedBothDirectlyAndThroughFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-overlap-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var folder = Path.Combine(root, "docs");
+            Directory.CreateDirectory(folder);
+            var file = Path.Combine(folder, "readme.txt");
+            File.WriteAllText(file, "hello");
+            Assert.Throws<InvalidDataException>(() =>
+                ArchiveSourcePlanner.Plan(new[] { folder, file }));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void RejectsMissingSources()
     {
         Assert.Throws<FileNotFoundException>(() =>
