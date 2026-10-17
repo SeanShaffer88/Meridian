@@ -23,6 +23,8 @@ public static class BatchCopy
 
         // Materialize once so the same exact set is previewed and executed.
         var sources = sourcePaths.ToArray();
+        if (sources.Length == 0)
+            throw new InvalidOperationException("Batch copy refused: the source collection is empty.");
         var plan = OperationPreview.PreviewCopy(sources, destinationDirectory, cancellationToken);
         if (plan.HasBlockers)
             throw new InvalidOperationException(
