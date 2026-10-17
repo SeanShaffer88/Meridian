@@ -60,7 +60,7 @@ Foresight, Consequence Engine contracts and Storage Reclaimer inventory/planning
 | Location | Contents and behavior |
 | --- | --- |
 | `%LOCALAPPDATA%\Meridian\workspace.json` | Pane paths, bookmark names/paths, tab names/paths and active-tab index; updated as workspace state is saved |
-| `%LOCALAPPDATA%\Meridian\last-error.log` | Most recent recorded unhandled/startup exception with UTC timestamp; overwritten on the next recorded error, not a full operation journal. Can include local paths |
+| `%LOCALAPPDATA%\Meridian\last-error.log` | Most recent successfully recorded unhandled/startup exception as bounded JSON (128 KiB maximum), with UTC timestamp and truncation indicators. Replaced on the next successful record; failed logging can leave an older record. Not a full operation journal. Can include local paths |
 | In memory | Drop Shelf and transient operation results; not restored after restart |
 
 Portable and installed copies use the same per-user state location. There is no implemented telemetry or mandatory account. Local/UNC paths can cause normal Windows network filesystem access, and opening a file delegates to its configured application; offline-first does not mean every OS or external handler is network-isolated. Review diagnostics before sharing them. Close Meridian and back up `workspace.json` before removing it to reset saved state. Uninstall does not reverse file operations or promise removal of per-user preferences/logs.
