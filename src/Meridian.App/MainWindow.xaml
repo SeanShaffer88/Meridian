@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:Meridian.Models"
     Title="Meridian">
-  <Grid Background="#17191D" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+  <Grid Background="#17191D" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
     <Grid.KeyboardAccelerators>
       <KeyboardAccelerator Key="F5" Invoked="RefreshShortcut_Invoked" />
       <KeyboardAccelerator Key="F6" Invoked="SwitchPaneShortcut_Invoked" />
@@ -49,7 +49,14 @@
       <TextBlock Grid.Column="2" Text="SAVED LOCATIONS" FontSize="10" Foreground="#9CA3AF" VerticalAlignment="Center" />
       <ComboBox x:Name="BookmarksBox" Grid.Column="3" PlaceholderText="Jump to a saved location…" DisplayMemberPath="Name" SelectionChanged="BookmarksBox_SelectionChanged" HorizontalAlignment="Stretch" />
     </Grid>
-    <Grid Grid.Row="4" Margin="12" ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
+    <Grid Grid.Row="4" Margin="12,2" ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
+      <Button Content="＋ Shelf selected" Click="AddToShelf_Click" ToolTipService.ToolTip="Collect the selected file or folder without moving it" />
+      <Button Grid.Column="1" Content="Remove from shelf" Click="RemoveFromShelf_Click" />
+      <Button Grid.Column="2" Content="Clear shelf" Click="ClearShelf_Click" />
+      <Button Grid.Column="3" Content="Show location" Click="ShowShelfLocation_Click" />
+      <ComboBox x:Name="ShelfItemsBox" Grid.Column="4" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" />
+    </Grid>
+    <Grid Grid.Row="5" Margin="12" ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
       <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="#202329" PointerPressed="LeftPane_PointerPressed">
         <Grid Margin="12,10" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="01" Foreground="#F04444" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="SOURCE PANE" FontSize="11" CharacterSpacing="100" Foreground="#9CA3AF" /></Grid>
         <Grid Grid.Row="1" Margin="10,0,10,10" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
@@ -106,7 +113,7 @@
         <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="#9CA3AF" Margin="12,8" />
       </Grid>
     </Grid>
-    <Grid Grid.Row="5" Margin="14,9" ColumnDefinitions="Auto,*,Auto" Background="#202329">
+    <Grid Grid.Row="6" Margin="14,9" ColumnDefinitions="Auto,*,Auto" Background="#202329">
       <Ellipse Width="7" Height="7" Fill="#4ADE80" VerticalAlignment="Center" />
       <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" FontSize="11" Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" />
       <TextBlock Grid.Column="2" Text="MERIDIAN · EARLY DEVELOPMENT" FontSize="10" Foreground="#6B7280" CharacterSpacing="70" VerticalAlignment="Center" />
