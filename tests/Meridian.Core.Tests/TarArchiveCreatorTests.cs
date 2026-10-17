@@ -151,6 +151,26 @@ public sealed class TarArchiveCreatorTests
 
     [Theory]
     [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task RejectsDirectoryAsFileSource(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-directory-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var directory = Path.Combine(root, "source-folder");
+            Directory.CreateDirectory(directory);
+            var archive = Path.Combine(root, "bundle" + extension);
+            await Assert.ThrowsAnyAsync<Exception>(() => TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["source.txt"] = directory }));
+            Assert.False(File.Exists(archive));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData(".tar")]
     [InlineData(".tar.gz")]
     [InlineData(".tgz")]
     public async Task CreatesCatalogReadableArchive(string extension)
