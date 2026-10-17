@@ -39,4 +39,32 @@ public class CleanupPreviewRevalidatorTests
         });
         Assert.False(CleanupPreviewRevalidator.Matches(preview, protectedPlan));
     }
+    [Fact]
+    public void RejectsTamperedPreviewTotal()
+    {
+        var plan = new CleanupPlan(new[] { Candidate(10) });
+        var preview = CleanupPreviewBuilder.Build(plan, new[] { "sample" }) with { EstimatedBytes = 999 };
+        Assert.False(CleanupPreviewRevalidator.Matches(preview, plan));
+    }
+
+    [Fact]
+    public void RejectsTamperedReviewCount()
+    {
+        var plan = new CleanupPlan(new[] { Candidate(10) });
+        var preview = CleanupPreviewBuilder.Build(plan, new[] { "sample" }) with { ReviewRequiredCount = 0 };
+        Assert.False(CleanupPreviewRevalidator.Matches(preview, plan));
+    }
+
+    [Fact]
+    public void RejectsInjectedProtectedPreviewItem()
+    {
+        var plan = new CleanupPlan(new[]
+        {
+            Candidate(10) with { Risk = CleanupRisk.Protected }
+        });
+        var forged = new CleanupPreview(1, 10, 0, plan.Candidates, "Preview");
+        Assert.False(CleanupPreviewRevalidator.Matches(forged, plan));
+    }
+
+
 }
