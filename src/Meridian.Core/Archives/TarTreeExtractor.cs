@@ -13,14 +13,14 @@ public static class TarTreeExtractor
         IProgress<int>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
-        var catalog = TarArchiveCatalog.List(archivePath, cancellationToken: cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
         if (!Path.IsPathFullyQualified(destinationDirectory))
             throw new ArgumentException("Destination parent must be absolute.", nameof(destinationDirectory));
         var folder = ArchiveEntryPathPolicy.Normalize(newFolderName);
         if (folder.Contains('/')) throw new ArgumentException("Output must be a single folder name.");
         var parent = Path.GetFullPath(destinationDirectory);
         CheckParents(parent, cancellationToken);
+        var catalog = TarArchiveCatalog.List(archivePath, cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var target = Path.Combine(parent, folder);
         if (File.Exists(target) || Directory.Exists(target))
             throw new IOException("Extraction destination exists.");
