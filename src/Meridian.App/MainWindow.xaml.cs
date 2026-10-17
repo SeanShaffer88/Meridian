@@ -741,11 +741,14 @@ public sealed partial class MainWindow : Window
         }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
+        var sourcePath = selected.FullPath;
+        var sourceFolder = source.CurrentPath;
+        var destinationPath = destination.CurrentPath;
         var kind = selected.IsDirectory ? "folder" : "file";
         var dialog = new ContentDialog
         {
             Title = "Move item?",
-            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original.",
+            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {sourcePath}\nTo: {destinationPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original.",
             PrimaryButtonText = "Move",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
@@ -753,9 +756,13 @@ public sealed partial class MainWindow : Window
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var sourcePath = selected.FullPath;
-        var sourceFolder = source.CurrentPath;
-        var destinationPath = destination.CurrentPath;
+        if (!ReferenceEquals(source.List.SelectedItem, selected) ||
+            !string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
+        {
+            GlobalStatus.Text = "Move cancelled · The selection or a pane location changed. Review the item and destination again.";
+            return;
+        }
         try
         {
             var movedTo = await Task.Run(() => FileOperations.MoveItem(sourcePath, destinationPath));
@@ -961,12 +968,14 @@ public sealed partial class MainWindow : Window
 
     private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        var pane = _activePane;
+        if (pane.List.SelectedItem is not FileEntry selected)
         {
             GlobalStatus.Text = "Select a file or folder to delete.";
             return;
         }
 
+        var parentPath = pane.CurrentPath;
         var kind = selected.IsDirectory ? "folder" : "file";
         var dialog = new ContentDialog
         {
@@ -980,6 +989,12 @@ public sealed partial class MainWindow : Window
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        if (!ReferenceEquals(pane.List.SelectedItem, selected) ||
+            !string.Equals(pane.CurrentPath, parentPath, StringComparison.OrdinalIgnoreCase))
+        {
+            GlobalStatus.Text = "Recycle Bin request cancelled · The selection or pane location changed. Review the item again.";
+            return;
+        }
         try
         {
             if (selected.IsDirectory)
@@ -987,8 +1002,8 @@ public sealed partial class MainWindow : Window
             else
                 Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
 
-            var pane = _activePane;
-            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            if (string.Equals(pane.CurrentPath, parentPath, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(pane, parentPath, addHistory: false);
             GlobalStatus.Text = $"Moved to Recycle Bin · {selected.Name}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
