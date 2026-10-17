@@ -79,11 +79,12 @@ public static class TarTreeExtractor
                         throw new InvalidDataException("TAR entry size did not match the catalog.");
                     count++;
                 }
-                progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / Math.Max(1, catalog.Count)));
+                ReportProgressSafely(progress, (int)Math.Min(99L, (i + 1L) * 100 / Math.Max(1, catalog.Count)));
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (reader.GetNextEntry(copyData: false) is not null)
                 throw new InvalidDataException("TAR gained entries after cataloging.");
+            TarArchiveCatalog.ValidateTrailer(stream, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             CheckParents(parent, cancellationToken);
             var stageAttributes = File.GetAttributes(stage);
@@ -94,7 +95,7 @@ public static class TarTreeExtractor
                 throw new IOException("Extraction destination appeared.");
             Directory.Move(stage, target);
             staged = false;
-            progress?.Report(100);
+            ReportProgressSafely(progress, 100);
             return new Receipt(target, count, total);
         }
         finally
@@ -111,6 +112,12 @@ public static class TarTreeExtractor
                 catch (UnauthorizedAccessException) { }
             }
         }
+    }
+
+    private static void ReportProgressSafely(IProgress<int>? progress, int value)
+    {
+        try { progress?.Report(value); }
+        catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException) { }
     }
 
     private static void CheckParents(string directory, CancellationToken cancellationToken)

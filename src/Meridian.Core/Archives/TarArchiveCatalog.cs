@@ -58,6 +58,27 @@ public static class TarArchiveCatalog
             entries.Add(new Entry(name, entry.Length, directory));
             if (!directory) fileNames.Add(name);
         }
+        ValidateTrailer(stream, cancellationToken);
         return entries.AsReadOnly();
+    }
+
+    // TarReader stops at the end marker; consume bounded zero padding to force
+    // gzip checksum validation and reject hidden entries after that marker.
+    internal static void ValidateTrailer(Stream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[8192];
+        long padding = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = stream.Read(buffer, 0, buffer.Length);
+            if (read == 0) break;
+            padding += read;
+            if (padding > 1024 * 1024)
+                throw new InvalidDataException("TAR trailing padding exceeds 1 MiB.");
+            for (var i = 0; i < read; i++)
+                if (buffer[i] != 0)
+                    throw new InvalidDataException("TAR contains data after its end marker.");
+        }
     }
 }
