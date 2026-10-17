@@ -3,21 +3,20 @@ namespace Meridian.Services;
 /// <summary>Conservative copy operations. Existing destinations are never overwritten.</summary>
 public static class FileOperations
 {
-    /// <summary>Renames a file or directory in its current parent without overwriting another item.</summary>
+    /// <summary>Renames a file or directory in place without replacing an existing item.</summary>
     public static string RenameItem(string sourcePath, string newName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        if (newName is "." or ".." ||
+            newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            newName.Contains(Path.DirectorySeparatorChar) ||
+            newName.Contains(Path.AltDirectorySeparatorChar) ||
+            Path.IsPathRooted(newName) ||
+            !string.Equals(newName, newName.Trim(), StringComparison.Ordinal))
+            throw new ArgumentException("Enter a valid file or folder name without path separators or surrounding whitespace.", nameof(newName));
 
         var source = Path.GetFullPath(sourcePath);
-        var name = newName.Trim();
-        if (name.Length == 0 || name is "." or ".." ||
-            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            name.Contains(Path.DirectorySeparatorChar) ||
-            name.Contains(Path.AltDirectorySeparatorChar) ||
-            Path.IsPathRooted(name))
-            throw new ArgumentException("Enter a valid file or folder name without path separators.", nameof(newName));
-
         if (!File.Exists(source) && !Directory.Exists(source))
             throw new FileNotFoundException("The selected item no longer exists.", source);
         RejectReparsePoint(source);
@@ -26,19 +25,38 @@ public static class FileOperations
         if (string.IsNullOrWhiteSpace(parent))
             throw new IOException("The selected item cannot be renamed from its current location.");
 
-        var destination = Path.Combine(parent, name);
-        if (string.Equals(source, destination, StringComparison.Ordinal))
+        var originalName = Path.GetFileName(source);
+        if (string.Equals(originalName, newName, StringComparison.Ordinal))
             return source;
-        if (File.Exists(destination) || Directory.Exists(destination))
-        {
-            if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase))
-                throw new IOException("Changing only the letter casing of a name is not supported yet.");
-            throw new IOException($"'{name}' already exists in this folder. Nothing was overwritten.");
-        }
 
-        if (Directory.Exists(source)) Directory.Move(source, destination);
-        else File.Move(source, destination);
+        var destination = Path.Combine(parent, newName);
+        var caseOnlyRename = string.Equals(originalName, newName, StringComparison.OrdinalIgnoreCase);
+        if (!caseOnlyRename && (File.Exists(destination) || Directory.Exists(destination)))
+            throw new IOException($"'{newName}' already exists in this folder. Nothing was overwritten.");
+
+        var isDirectory = Directory.Exists(source);
+        if (caseOnlyRename)
+        {
+            // Windows paths are case-insensitive; use a unique temporary sibling for case-only changes.
+            var temporary = Path.Combine(parent, $".meridian-rename-{Guid.NewGuid():N}.tmp");
+            MoveItem(source, temporary, isDirectory);
+            try { MoveItem(temporary, destination, isDirectory); }
+            catch
+            {
+                try { MoveItem(temporary, source, isDirectory); }
+                catch { /* Preserve the original failure if rollback is blocked. */ }
+                throw;
+            }
+        }
+        else MoveItem(source, destination, isDirectory);
+
         return destination;
+    }
+
+    private static void MoveItem(string source, string destination, bool isDirectory)
+    {
+        if (isDirectory) Directory.Move(source, destination);
+        else File.Move(source, destination);
     }
 
     public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
