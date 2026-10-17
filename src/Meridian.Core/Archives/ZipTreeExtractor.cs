@@ -56,11 +56,13 @@ public static class ZipTreeExtractor
         if (Directory.Exists(stage) || File.Exists(stage))
             throw new IOException("Extraction staging path already exists.");
         var staged = false;
+        var stageIdentity = "";
         try
         {
             // Stage must be a newly created directory, not a pre-existing path.
             Directory.CreateDirectory(stage);
             staged = true;
+            stageIdentity = Path.GetFullPath(stage);
             long total = 0;
             var fileCount = 0;
             for (var i = 0; i < catalog.Count; i++)
@@ -110,7 +112,12 @@ public static class ZipTreeExtractor
         {
             if (staged)
             {
-                try { Directory.Delete(stage, recursive: true); }
+                try
+                {
+                    if (Path.GetFullPath(stage) == stageIdentity &&
+                        (File.GetAttributes(stage) & FileAttributes.ReparsePoint) == 0)
+                        Directory.Delete(stage, recursive: true);
+                }
                 catch (IOException) { }
                 catch (UnauthorizedAccessException) { }
             }
