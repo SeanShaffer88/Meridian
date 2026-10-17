@@ -46,7 +46,8 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
 - [x] Rename files and folders in place with validation and no-overwrite behavior
-- [ ] Move and delete flows with clear error handling and safe confirmation
+- [ ] Move flow with clear error handling and no-overwrite behavior
+- [x] Confirmed deletion to the Windows Recycle Bin (subject to Windows/filesystem support)
 - [x] Read-only properties dialog for basic file/folder metadata (folder size intentionally not recursively calculated)
 - [ ] Portable configuration and settings persistence; installer/package path
 
