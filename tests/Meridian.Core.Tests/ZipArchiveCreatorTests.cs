@@ -54,6 +54,31 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task CancellationDuringStreamingRemovesStagingArchive()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.bin");
+            await File.WriteAllBytesAsync(source, new byte[3 * 1024 * 1024]);
+            var target = Path.Combine(root, "result.zip");
+            using var cts = new CancellationTokenSource();
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(update =>
+            {
+                if (update.CompletedBytes > 0) cts.Cancel();
+            });
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                ZipArchiveCreator.CreateAsync(target,
+                    new Dictionary<string, string> { ["source.bin"] = source },
+                    cancellationToken: cts.Token, progress: progress));
+            Assert.False(File.Exists(target));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-zip-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task StreamingProgressObserverFailureDoesNotAbortArchive()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-zip-stream-observer-" + Guid.NewGuid().ToString("N"));
