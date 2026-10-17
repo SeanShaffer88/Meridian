@@ -63,6 +63,40 @@ public sealed class TarTreeExtractorTests
         public void Report(int value) => callback(value);
     }
 
+    [Fact]
+    public async Task CancelledExtractionLeavesNoPublishedOrStagedTree()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "sample.tar");
+            using (var output = File.Create(archive))
+            using (var writer = new TarWriter(output))
+            {
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "one.txt")
+                {
+                    DataStream = new MemoryStream(new byte[] { 1 })
+                });
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "two.txt")
+                {
+                    DataStream = new MemoryStream(new byte[] { 2 })
+                });
+            }
+            using var cancellation = new CancellationTokenSource();
+            var progress = new InlineProgress(value =>
+            {
+                if (value > 0) cancellation.Cancel();
+            });
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                TarTreeExtractor.ExtractAsync(archive, root, "output",
+                    cancellationToken: cancellation.Token, progress: progress));
+            Assert.False(Directory.Exists(Path.Combine(root, "output")));
+            Assert.Empty(Directory.GetDirectories(root, ".meridian-tar-extract-*"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData(".tar")]
     [InlineData(".tar.gz")]
