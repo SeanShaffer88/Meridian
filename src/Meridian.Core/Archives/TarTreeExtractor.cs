@@ -12,6 +12,7 @@ public static class TarTreeExtractor
         string newFolderName, CancellationToken cancellationToken = default,
         IProgress<int>? progress = null)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
         var catalog = TarArchiveCatalog.List(archivePath, cancellationToken: cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (!Path.IsPathFullyQualified(destinationDirectory))
