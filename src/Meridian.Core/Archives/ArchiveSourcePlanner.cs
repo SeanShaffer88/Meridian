@@ -12,7 +12,6 @@ public static class ArchiveSourcePlanner
         long totalBytes = 0;
         foreach (var path in paths)
         {
-            if (files.Count >= 10000) throw new InvalidDataException("Archive entry count limit exceeded.");
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentException.ThrowIfNullOrWhiteSpace(path);
             if (!Path.IsPathFullyQualified(path))
