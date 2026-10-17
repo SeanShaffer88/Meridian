@@ -152,9 +152,12 @@ public static class ZipArchiveCreator
 
         void ReportProgress(long completed, long totalBytes)
         {
-            // Observer failures must never interrupt the staged archive transaction.
+            // Progress is advisory, but fatal runtime failures must not be hidden.
             try { progress?.Report((completed, totalBytes)); }
-            catch (Exception) { /* Progress is advisory. */ }
+            catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+            {
+                // Observer errors cannot compromise archive publication or cleanup.
+            }
         }
     }
 }
