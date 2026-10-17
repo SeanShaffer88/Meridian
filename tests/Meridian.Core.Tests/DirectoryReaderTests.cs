@@ -37,6 +37,47 @@ public sealed class DirectoryReaderTests
     }
 
     [Fact]
+    public void Filter_MatchesNameCaseInsensitivelyAndKeepsFoldersFirst()
+    {
+        var entries = new[]
+        {
+            new Meridian.Models.FileEntry { Name = "z-note.txt", FullPath = @"C:\work\z-note.txt", IsDirectory = false, TypeLabel = "TXT file", SizeLabel = "1 B", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "AlphaFolder", FullPath = @"C:\work\AlphaFolder", IsDirectory = true, TypeLabel = "Folder", SizeLabel = "—", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "ALPHA.txt", FullPath = @"C:\work\ALPHA.txt", IsDirectory = false, TypeLabel = "TXT file", SizeLabel = "1 B", ModifiedLabel = "" }
+        };
+
+        var results = DirectoryReader.Filter(entries, "alpha");
+
+        Assert.Equal(new[] { "AlphaFolder", "ALPHA.txt" }, results.Select(item => item.Name));
+    }
+
+    [Fact]
+    public void Filter_MatchesFullPathAndTypeLabel()
+    {
+        var entries = new[]
+        {
+            new Meridian.Models.FileEntry { Name = "report.bin", FullPath = @"C:\archive\report.bin", IsDirectory = false, TypeLabel = "BIN file", SizeLabel = "1 B", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "notes.txt", FullPath = @"C:\work\notes.txt", IsDirectory = false, TypeLabel = "TXT file", SizeLabel = "1 B", ModifiedLabel = "" }
+        };
+
+        Assert.Equal("report.bin", Assert.Single(DirectoryReader.Filter(entries, "ARCHIVE")).Name);
+        Assert.Equal("notes.txt", Assert.Single(DirectoryReader.Filter(entries, "txt file")).Name);
+    }
+
+    [Fact]
+    public void Filter_EmptyQueryReturnsAllSortedItems()
+    {
+        var entries = new[]
+        {
+            new Meridian.Models.FileEntry { Name = "b.txt", FullPath = @"C:\work\b.txt", IsDirectory = false, TypeLabel = "TXT file", SizeLabel = "1 B", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "Folder", FullPath = @"C:\work\Folder", IsDirectory = true, TypeLabel = "Folder", SizeLabel = "—", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "a.txt", FullPath = @"C:\work\a.txt", IsDirectory = false, TypeLabel = "TXT file", SizeLabel = "1 B", ModifiedLabel = "" }
+        };
+
+        Assert.Equal(new[] { "Folder", "a.txt", "b.txt" }, DirectoryReader.Filter(entries, " ").Select(item => item.Name));
+    }
+
+    [Fact]
     public void FormatSize_FormatsBytesAndKilobytes()
     {
         Assert.Equal("12 B", DirectoryReader.FormatSize(12));
