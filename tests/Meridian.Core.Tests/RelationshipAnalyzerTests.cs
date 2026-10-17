@@ -115,4 +115,44 @@ public class RelationshipAnalyzerTests
             .Select(i => Path.Combine(root, $"folder-{i}", $"file-{i}.txt"));
         Assert.Empty(RelationshipAnalyzer.Analyze(paths));
     }
+
+    [Fact]
+    public void AlreadyCancelledAnalysisThrows()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var path = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-cancel.txt"));
+        Assert.Throws<OperationCanceledException>(() =>
+            RelationshipAnalyzer.Analyze(new[] { path }, cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public void CancellationDuringInputEnumerationStopsBeforeIndexing()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-cancel"));
+        IEnumerable<string> Paths()
+        {
+            yield return Path.Combine(root, "first.txt");
+            cancellation.Cancel();
+            yield return Path.Combine(root, "second.txt");
+        }
+        Assert.Throws<OperationCanceledException>(() =>
+            RelationshipAnalyzer.Analyze(Paths(), cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public void CancellationDuringRelationshipEmissionStopsWithoutReturningPartialResults()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-cancel"));
+        IEnumerable<string> Paths()
+        {
+            yield return Path.Combine(root, "first.txt");
+            yield return Path.Combine(root, "second.txt");
+            cancellation.Cancel();
+        }
+        Assert.Throws<OperationCanceledException>(() =>
+            RelationshipAnalyzer.Analyze(Paths(), cancellationToken: cancellation.Token));
+    }
 }
