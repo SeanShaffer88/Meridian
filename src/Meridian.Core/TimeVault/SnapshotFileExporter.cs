@@ -23,6 +23,8 @@ public sealed class SnapshotFileExporter
         // Reject NTFS alternate data streams and Windows device-name aliases.
         // A recovery destination must be a normal file, not a stream or device.
         var destinationParts = destinationFile[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        if (destinationParts.Length == 0)
+            throw new ArgumentException("Destination must name a file.", nameof(destinationFile));
         foreach (var part in destinationParts)
         {
             if (part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.'))
