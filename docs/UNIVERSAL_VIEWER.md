@@ -31,3 +31,5 @@ The WinUI prototype renders at most 4 KiB of hexadecimal data, reads at most 64 
 ## Preview path boundaries
 
 The bounded text/hex preview reader now rejects reparse-point ancestors and the final reparse-point file, and honors cooperative cancellation before opening and while reading. This is a **pre-open inspection**, not a race-free handle-based identity check: concurrent filesystem changes can invalidate it. The image and media playback paths now use the same shared pre-open ancestor-validation policy as text and hex preview. A unified handle-based policy and adversarial Windows tests are required before treating untrusted filesystem previews as hardened.
+
+The bounded byte reader performs a second pre-read path inspection after opening its stream. This reduces some race windows but cannot establish that the opened handle refers to the same object as the path inspected; race-free handle verification remains an outstanding security requirement.
