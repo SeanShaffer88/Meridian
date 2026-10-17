@@ -350,9 +350,13 @@ public sealed partial class MainWindow : Window
         await NavigateAsync(pane, target, addHistory: false);
     }
 
+    private bool _zipInspectionOpen;
+
     private async void InspectZip_Click(object sender, RoutedEventArgs e)
     {
+        if (_zipInspectionOpen || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory) return;
+        _zipInspectionOpen = true;
         try
         {
             var entries = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath));
@@ -372,6 +376,7 @@ public sealed partial class MainWindow : Window
         {
             GlobalStatus.Text = "ZIP inspection failed · " + ex.Message;
         }
+        finally { _zipInspectionOpen = false; }
     }
 
     private bool _previewDialogOpen;
