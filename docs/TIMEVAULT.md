@@ -40,3 +40,7 @@
 - [ ] Accessibility, localization, security audit, and end-user documentation.
 
 This document is a roadmap, not a claim that these features already work.
+
+## Recovery export foundation (unverified)
+
+`SnapshotFileExporter` provides a single-file, streaming, cancellation-aware copy from an existing snapshot to an explicitly supplied destination. The destination is opened with `FileMode.CreateNew` so existing files are never overwritten. It rejects reparse-point components in the snapshot path and attempts to remove partial exports on failure. It is **not connected to the UI** and must not be represented as a released recovery feature. Before exposing it to users, add a confirmation dialog, destination-parent safety checks, file identity/reparse race defenses, Windows integration tests, and an export receipt.
