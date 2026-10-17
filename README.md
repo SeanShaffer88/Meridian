@@ -37,94 +37,136 @@ Meridian is being built to answer more:
 
 The goal is not to clone File Explorer with more buttons. It's to make everyday file work **clearer, more capable, and safer**.
 
-## Complete feature & innovation atlas
+## Complete feature list
 
-**Status legend — color used sparingly to convey meaning:**
+Inspired by the clear, category-by-category feature reference used by classic dual-pane file managers, this directory covers **what Meridian has today, what exists in the development branch, and what is on the roadmap**. It is intentionally comprehensive, but it is **not** a claim that every listed feature is available.
 
-| Label | Status | Meaning |
-| --- | --- | --- |
-| **[MAIN]** | ![Implemented](https://img.shields.io/badge/implemented-22863a?style=flat-square) | Implemented on the main development branch; not necessarily hardware-verified |
-| **[BRANCH]** | ![Development](https://img.shields.io/badge/in_development-0969da?style=flat-square) | Prototype or code in [PR #37](https://github.com/SeanShaffer88/Meridian/pull/37); not released |
-| **[PLANNED]** | ![Planned](https://img.shields.io/badge/planned-8250df?style=flat-square) | Design or roadmap only |
-| **[PRINCIPLE]** | ![Quality gate](https://img.shields.io/badge/quality_gate-6e7781?style=flat-square) | Engineering requirement, not a product feature |
+**Availability key:** **[MAIN]** implemented in the main branch · **[DEV]** prototype or backend code in [draft PR #37](https://github.com/SeanShaffer88/Meridian/pull/37), not released · **[PLANNED]** not implemented · **[REQUIREMENT]** design or release criterion. Even [MAIN] and [DEV] items do **not** imply successful Windows 11 x64/ARM64 runtime verification.
 
-Text labels remain in the tree for accessibility, monochrome display, and plain-text copies. Subitems inherit their parent's status unless noted. **None of these labels guarantees real Windows hardware verification.**
+### General features and interface
 
-```text
-MERIDIAN — BEYOND FILE MANAGEMENT
-|
-+-- 01  Everyday file workspace
-|   +-- [MAIN] Two-pane browsing, folder navigation, history and refresh
-|   +-- [MAIN] Paired workspace tabs, bookmarks and session restoration
-|   +-- [MAIN] Per-pane filtering and independent sorting
-|   +-- [MAIN] Keyboard shortcuts and active-pane navigation
-|   +-- [MAIN] Copy, move, rename, create folder and basic properties
-|   +-- [MAIN] Confirmed Recycle Bin deletion (Windows-dependent)
-|   +-- [PLANNED] Flexible pane layouts, folder trees and view modes
-|   +-- [PLANNED] Advanced keyboard customization and shell integration
-|
-+-- 02  Understand and organize
-|   +-- [MAIN] Folder DNA: immediate counts, sizes, dates and file types
-|   +-- [MAIN] Drop Shelf: temporary cross-folder path collection
-|   +-- [MAIN] Operation Simulator: advisory shelf-copy preflight
-|   +-- [MAIN] Confirmed sequential batch copy, progress and cancellation
-|   +-- [BRANCH] Consequence Engine: advisory plan/receipt contracts
-|   +-- [PLANNED] Virtual/Smart Collections, tags and saved rules
-|   +-- [PLANNED] FileGraph / Relationship View and explainable links
-|   +-- [PLANNED] Workspace Constellations and adaptive navigation
-|
-+-- 03  Historical exploration — TimeVault
-|   +-- [BRANCH] Windows VSS snapshot metadata and WMI discovery
-|   +-- [BRANCH] Drive-volume GUID matching and scoped path resolution
-|   +-- [BRANCH] Toolbar snapshot picker and limited read-only folder list
-|   +-- [BRANCH] Backend-only, single-file no-overwrite recovery export
-|   |   +-- Staging file, final atomic no-overwrite publication
-|   |   +-- Cancellation and best-effort staging cleanup
-|   |   +-- Path, alternate-stream and reparse-point validation
-|   +-- [BRANCH] Backend export receipt model (not a UI history)
-|   +-- [PLANNED] Full Shadow Copy Explorer and historical file viewer
-|   +-- [PLANNED] File Time Machine timeline and snapshot search
-|   +-- [PLANNED] Recovery Studio UI, checksums and Difference Lens
-|   +-- [PLANNED] Snapshot health and timeline collections
-|
-+-- 04  Search, inspect and automate
-|   +-- [PLANNED] OmniSearch: scoped search and optional indexing
-|   +-- [PLANNED] Restore Center: System Restore points and protection
-|   +-- [BRANCH] Storage Reclaimer: read-only cleanup plan and bounded directory inventory
-|   +-- [PLANNED] Storage Reclaimer: Windows scanning and cleanup UI
-|   +-- [PLANNED] Meridian Vaults: encrypted, lockable file storage
-|   +-- [PLANNED] Storage X-Ray: disk-usage visualization
-|   +-- [BRANCH] Universal Viewer: text, hex and image preview; native audio/video playback prototype
-|   +-- [PLANNED] HexLab: advanced binary inspection beyond bounded preview
-|   +-- [PLANNED] Archive Portal: safe archive browsing/extraction
-|   +-- [PLANNED] Integrity Guardian: opt-in checksum verification
-|   +-- [PLANNED] FlowForge / Workflow Recipes: inspectable automation
-|   +-- [PLANNED] Command Nexus: searchable command registry
-|   +-- [PLANNED] Optional explainable, local-first intelligence
-|
-+-- 05  Connectivity and extension
-|   +-- [PLANNED] Device Bridge: removable, mobile and remote providers
-|   +-- [PLANNED] Network shares, SFTP and optional cloud connectors
-|   +-- [PLANNED] Developer tools, Git integration and comparisons
-|   +-- [PLANNED] Customizable views, themes and launchers
-|
-+-- 06  Safety, privacy and engineering considerations
-    +-- [MAIN] No-overwrite defaults and explicit confirmations
-    +-- [MAIN] Staged copies and cancellable operations where supported
-    +-- [MAIN] Local-first workflow; no required account or telemetry
-    +-- [BRANCH] VSS read-only discovery and bounded folder enumeration
-    +-- [BRANCH] Recovery path validation and no-overwrite staging
-    +-- [PRINCIPLE] No silent elevation or snapshot modification
-    +-- [PRINCIPLE] Revalidate at execution; previews are not locks
-    +-- [PRINCIPLE] Treat paths, links, archives and metadata as untrusted
-    +-- [PRINCIPLE] Bound scans, memory use and background work
-    +-- [PRINCIPLE] Accessibility, keyboard use and error clarity
-    +-- [PRINCIPLE] Document cancellation, partial success and limits
-    +-- [PRINCIPLE] Test on Windows 11 x64 and ARM64 before release
-    +-- [PRINCIPLE] Audit dependencies, licenses, packaging and security
-```
+- **[MAIN]** Windows 11 desktop application built with WinUI 3 and .NET 10; x64 and ARM64 are intended targets.
+- **[MAIN]** Side-by-side file panes for working across two locations.
+- **[MAIN]** Folder navigation, refresh, backward and forward history.
+- **[MAIN]** Paired workspace tabs, bookmarks and session restoration.
+- **[MAIN]** Per-pane filename filtering and independent sorting.
+- **[MAIN]** Active-pane keyboard shortcuts and basic file-selection workflow.
+- **[MAIN]** File and folder properties.
+- **[DEV]** Integrated preview command for selected files.
+- **[PLANNED]** Folder trees, Miller columns, gallery and timeline views.
+- **[PLANNED]** Thumbnail grids, customizable columns, multi-selection refinements and richer file badges.
+- **[PLANNED]** Configurable toolbars, context menus, themes, layouts and keyboard shortcuts.
+- **[PLANNED]** Command Nexus: searchable command palette and reusable commands.
+- **[PLANNED]** Workspace Constellations: named layouts and saved working contexts.
+- **[PLANNED]** Accessibility enhancements, high-contrast and keyboard-first refinements.
+- **[REQUIREMENT]** Fast startup, responsive large-folder navigation, no mandatory account or telemetry.
 
-**Important distinctions:** The Drop Shelf is currently in-memory; Folder DNA analyzes only the loaded folder listing; preflight results can become stale; batch copy can leave earlier completed items after a failure or cancellation; and TimeVault's backend exporter is **not** a recovery button in the app. The VSS path checks are best-effort and do **not** eliminate filesystem race conditions. See the [detailed roadmap](docs/ROADMAP.md), [TimeVault engineering notes](docs/TIMEVAULT.md), [threat model](docs/THREAT_MODEL.md) and [release gate](docs/RELEASE_GATE.md).
+### File operations and organization
+
+- **[MAIN]** Copy files and folders with conservative no-overwrite behavior.
+- **[MAIN]** Move and rename items; create folders.
+- **[MAIN]** Delete to Windows Recycle Bin with confirmation where supported.
+- **[MAIN]** Staged copying, progress and cancellation for supported copy workflows.
+- **[MAIN]** Drop Shelf: collect paths from different folders in a temporary in-memory list.
+- **[MAIN]** Operation Simulator: advisory preflight for shelf-based copy operations.
+- **[DEV]** Consequence Engine planning and receipt contracts; not a universal undo mechanism.
+- **[PLANNED]** Transfer queue with pause/resume, retry policies and detailed per-file receipts.
+- **[PLANNED]** Advanced batch rename with tokens, patterns, previews and collision detection.
+- **[PLANNED]** Directory comparison and synchronization with dry-run conflict review.
+- **[PLANNED]** File splitting/joining and content-based comparison.
+- **[PLANNED]** Duplicate detection with hash verification and human-reviewed removal.
+- **[PLANNED]** File integrity manifests, checksum generation and verification.
+- **[PLANNED]** Tags, rules, virtual collections and non-destructive organization.
+- **[PLANNED]** FlowForge: inspectable automation recipes with explicit execution approval.
+- **[REQUIREMENT]** Never silently overwrite; revalidate operations at execution time and explain partial success.
+
+### Built-in viewer, images, audio and video
+
+- **[DEV]** Universal Viewer prototype integrated with the selected-file Preview command.
+- **[DEV]** Bounded read-only text and hexadecimal previews.
+- **[DEV]** Strict UTF-8 and UTF-16 text decoding with binary-content fallback.
+- **[DEV]** Image preview with a compressed-file size guard; decoded-pixel limits are not yet established.
+- **[DEV]** Audio and video playback prototype using Windows media components, transport controls and no autoplay.
+- **[DEV]** Shared conservative path checks that reject reparse-point ancestors; these are not race-free identity guarantees.
+- **[DEV]** Unsupported formats receive an explanatory message instead of silently launching another application.
+- **[PLANNED]** Dedicated full-window viewer, zoom, rotation, slideshow and image metadata.
+- **[PLANNED]** PDF rendering, document previews and archive-entry previews.
+- **[PLANNED]** Video subtitles, playlists, playback-speed controls and explicit codec compatibility reporting.
+- **[PLANNED]** HexLab: binary search, offsets, signatures, byte-level comparisons and large-file navigation.
+- **[REQUIREMENT]** Bounded reads, cancellation, safe decoding and no automatic execution of viewed content.
+
+### Archives and compressed files
+
+- **[DEV]** Conservative archive-entry path validator that rejects traversal, rooted paths, reserved device names and unsafe components.
+- **[DEV]** Backend-only, read-only ZIP entry catalog using built-in .NET ZIP support.
+- **[DEV]** ZIP catalog limits on entry count and declared uncompressed sizes; duplicate path rejection.
+- **[PLANNED]** Browse supported archives like virtual folders inside either pane.
+- **[PLANNED]** Extract individual entries or selected groups, with preview and no-overwrite defaults.
+- **[PLANNED]** ZIP/ZIP64 creation, update and extraction.
+- **[PLANNED]** 7z browsing/extraction and creation where the chosen embedded backend supports it.
+- **[PLANNED]** RAR/RAR5 browsing and extraction where supported by an appropriately licensed bundled decoder; **RAR creation is not promised**.
+- **[PLANNED]** TAR/PAX/GNU TAR, GZIP, BZIP2, XZ and Zstandard streams and combinations.
+- **[PLANNED]** Password-protected archive reading and encryption options, explicitly scoped by format.
+- **[PLANNED]** Archive integrity testing, progress, cancellation, collision reporting and safe staging.
+- **[PLANNED]** Compression-ratio, nesting, total-output, memory and time budgets to resist archive bombs.
+- **[REQUIREMENT]** **No separate WinRAR, 7-Zip or other archive-manager installation required.** Ship supported decoding components with Meridian; audit licenses and Windows x64/ARM64 packaging.
+- **[REQUIREMENT]** No universal-format promise: advertise exact browse, extract, create and encryption capabilities by format.
+
+See [Archive Engine design and compatibility](docs/ARCHIVE_ENGINE.md).
+
+### Search, discovery and file intelligence
+
+- **[MAIN]** Folder DNA: immediate metadata summary of the loaded folder listing.
+- **[DEV]** Foresight: explainable read-only relationship candidates based on filenames and directories.
+- **[DEV]** Foresight: bounded inputs, relationship limits, cancellation and optional time budgets.
+- **[DEV]** Foresight: optional bounded JSON reference inspection and dependency-impact hints from explicit evidence.
+- **[PLANNED]** OmniSearch: multi-folder, drive and scoped metadata search.
+- **[PLANNED]** Content search, saved queries, filters and optional local indexing.
+- **[PLANNED]** Search inside supported archives and historical snapshots.
+- **[PLANNED]** FileGraph: interactive map of related files, projects and verified references.
+- **[PLANNED]** File DNA: signatures, MIME/extension mismatches, hashes and provenance.
+- **[PLANNED]** Storage X-Ray: directory-size visualization, treemaps and growth analysis.
+- **[PLANNED]** Smart Collections based on saved metadata rules.
+- **[PLANNED]** Optional local-first natural-language suggestions with visible evidence.
+- **[REQUIREMENT]** Suggestions never grant authority to delete, move or rewrite files.
+
+### Recovery, history and system maintenance
+
+- **[DEV]** TimeVault: read-only Windows Volume Shadow Copy metadata discovery through WMI.
+- **[DEV]** TimeVault: volume matching, scoped snapshot paths and limited snapshot folder listing.
+- **[DEV]** TimeVault: backend-only single-file export with no-overwrite staging and cancellation.
+- **[DEV]** TimeVault: export receipt model; not yet a complete recovery UI.
+- **[DEV]** Storage Reclaimer: bounded, read-only temporary-file inventory and advisory cleanup planning.
+- **[DEV]** Storage Reclaimer: selection validation and revalidation of preview metadata.
+- **[PLANNED]** TimeVault historical search, comparison, version timeline and Recovery Studio interface.
+- **[PLANNED]** Windows File History integration and clearly separated recovery sources.
+- **[PLANNED]** Restore Center for supported Windows System Restore operations.
+- **[PLANNED]** Storage Reclaimer cleanup interface with confirmations and protected-path safeguards.
+- **[PLANNED]** Meridian Vaults: encrypted, lockable storage with audited key handling.
+- **[PLANNED]** Operation journal and constrained undo where reversal can be verified.
+- **[REQUIREMENT]** Never confuse shadow copies with backups or System Restore points; never promise universal recovery.
+
+### Network, devices and extensions
+
+- **[PLANNED]** Improved SMB and Windows network-share workflows.
+- **[PLANNED]** SFTP and other remote providers with credential isolation.
+- **[PLANNED]** Optional cloud-storage providers and removable/mobile-device integrations.
+- **[PLANNED]** Device Bridge capability-aware provider architecture.
+- **[PLANNED]** Git and developer-focused metadata, diffs and repository navigation.
+- **[PLANNED]** Extensible viewers, providers and automation commands with permission boundaries.
+- **[REQUIREMENT]** No implicit upload, background remote access or silent privilege escalation.
+
+### Reliability, security and release readiness
+
+- **[MAIN]** Offline-first application design with conservative write defaults.
+- **[DEV]** Explicit safety contracts, threat model and release-blocking quality gates.
+- **[DEV]** Read-only bounded scanners, preview path validation and security-oriented regression tests.
+- **[REQUIREMENT]** Windows 11 x64 and ARM64 compilation, packaging and hands-on runtime validation.
+- **[REQUIREMENT]** Verified automated tests, dependency/license audits and malicious-input testing.
+- **[REQUIREMENT]** Accessible dialogs, informative errors, safe cancellation and recovery documentation.
+- **[REQUIREMENT]** Genuine screenshots captured from verified Windows builds; no mockups represented as implemented features.
+
+For implementation details and limitations, see the [roadmap](docs/ROADMAP.md), [safety contract](docs/SAFETY_CONTRACT.md), [release gate](docs/RELEASE_GATE.md), [Universal Viewer](docs/UNIVERSAL_VIEWER.md), [Foresight](docs/FORESIGHT.md) and [TimeVault](docs/TIMEVAULT.md).
 
 ## Feature screenshots
 
