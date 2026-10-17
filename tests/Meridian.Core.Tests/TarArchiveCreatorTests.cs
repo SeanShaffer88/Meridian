@@ -226,6 +226,33 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task ProgressObserverExceptionsDoNotAbortCreation(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-observer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "input.bin");
+            await File.WriteAllBytesAsync(source, new byte[2 * 1024 * 1024]);
+            var archive = Path.Combine(root, "bundle" + extension);
+            var calls = 0;
+            var progress = new InlineProgress<(long CompletedBytes, long TotalBytes)>(_ =>
+            {
+                calls++;
+                throw new InvalidOperationException("Observer failure");
+            });
+            await TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["input.bin"] = source }, progress: progress);
+            Assert.True(calls >= 2);
+            Assert.Single(TarArchiveCatalog.List(archive));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
     {
         public void Report(T value) => callback(value);
