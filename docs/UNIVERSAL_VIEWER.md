@@ -1,6 +1,6 @@
 # Universal Viewer and Integrated Player
 
-**Status:** backend routing and bounded binary preview are implemented on the feature branch. An initial WinUI Preview dialog and MediaPlayerElement transport controls are committed, but **Windows compilation and actual codec playback are not yet verified**. Image and PDF rendering remain unimplemented.
+**Status:** backend routing and bounded binary preview are implemented on the feature branch. An initial WinUI Preview dialog and MediaPlayerElement transport controls are committed, but **Windows compilation and actual codec playback are not yet verified**. An initial Windows image decoder path is also committed but not verified. PDF rendering remains unimplemented.
 
 ## Intended experience
 
@@ -19,6 +19,7 @@
 - [x] Commit a Preview toolbar action with read-only text/hex display and an initial MediaPlayerElement dialog (not yet Windows-tested).
 - [ ] Verify lifecycle disposal, selection changes and viewer usability on Windows.
 - [ ] Add MediaPlayerElement and verify actual video playback, seek, audio, subtitles and codec failures on Windows 11 x64/ARM64.
-- [ ] Add bounded text decoding, image rendering, and sandboxed or reviewed PDF handling.
+- [x] Commit an initial image display path using Windows image decoding (not yet Windows-tested).
+- [ ] Add bounded text decoding, image decode resource limits, and sandboxed or reviewed PDF handling.
 - [ ] Test malformed media, decompression bombs, symlinks/junctions, huge files, missing codecs, cancellation, and rapid selection changes.
 - [ ] Document supported formats from verified playback tests, not extension guesses.
