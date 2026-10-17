@@ -98,6 +98,9 @@ public static class ZipTreeExtractor
             }
             cancellationToken.ThrowIfCancellationRequested();
             CheckDirectoryChain(parent, cancellationToken);
+            // Recheck for destination conflicts before publishing the complete tree.
+            if (File.Exists(target) || Directory.Exists(target))
+                throw new IOException("Extraction destination appeared during staging.");
             // Atomic on the same volume when the filesystem supports rename.
             Directory.Move(stage, target);
             staged = false;
