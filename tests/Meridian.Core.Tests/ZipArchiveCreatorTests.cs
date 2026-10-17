@@ -61,14 +61,19 @@ public class ZipArchiveCreatorTests
         try
         {
             var source = Path.Combine(root, "source.bin");
-            await File.WriteAllBytesAsync(source, new byte[20000]);
+            await File.WriteAllBytesAsync(source, new byte[2 * 1024 * 1024 + 8192]);
             var target = Path.Combine(root, "result.zip");
+            var observed = 0;
             var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(_ =>
-                throw new InvalidOperationException("Observer failed"));
+            {
+                observed++;
+                throw new InvalidOperationException("Observer failed");
+            });
             await ZipArchiveCreator.CreateAsync(target,
                 new Dictionary<string, string> { ["source.bin"] = source }, progress: progress);
             Assert.True(File.Exists(target));
             Assert.Single(ZipArchiveCatalog.List(target));
+            Assert.True(observed >= 2); // Initial notification plus at least one throttled streaming update.
         }
         finally { Directory.Delete(root, true); }
     }
