@@ -15,6 +15,10 @@ Meridian is an early-stage, free and open-source dual-pane file manager for Wind
 - Dark UI with restrained red accents. No telemetry or network calls are implemented.
 - Unit-test source for directory listing and copy behavior.
 
+## Product vision
+
+Meridian's long-term goals—including advanced panes and tabs, a transfer queue, search, previews, archive support, and developer tools—are documented in the [Product Vision](docs/PRODUCT_VISION.md). These are aspirations, not claims that those features are already implemented. The [Roadmap](docs/ROADMAP.md) tracks planned work.
+
 ## Planned
 
 Flexible 1–4 pane layouts, tabs, workspace presets, folder tree and Miller Columns, advanced search, batch rename, previews, archive support, checksums, duplicate discovery, file comparison, extension points, settings, and packaged releases.
