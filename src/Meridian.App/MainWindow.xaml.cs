@@ -795,6 +795,33 @@ public sealed partial class MainWindow : Window
                     ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
                     : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
                       (result.Cancelled ? "Cancelled" : result.Failure);
+                if (!result.Succeeded)
+                {
+                    var details = new ContentDialog
+                    {
+                        Title = result.Cancelled ? "Batch copy cancelled" : "Batch copy stopped",
+                        Content = new ScrollViewer
+                        {
+                            MaxHeight = 360,
+                            Content = new TextBlock
+                            {
+                                Text = $"Completed: {result.CompletedTargets.Count:N0} of {sources.Length:N0} items\n" +
+                                       $"Destination: {destination}\n" +
+                                       $"Stopped at: {result.FailedSource ?? "(unknown)"}\n" +
+                                       $"Reason: {(result.Cancelled ? "Cancelled by request" : result.Failure ?? "Unknown failure")}\n\n" +
+                                       "Earlier successful copies remain in the destination. Original files were not moved. " +
+                                       "There is no automatic rollback.\n\nCompleted targets:\n" +
+                                       string.Join("\n", result.CompletedTargets.Take(100)) +
+                                       (result.CompletedTargets.Count > 100 ? $"\n…and {result.CompletedTargets.Count - 100:N0} more" : ""),
+                                TextWrapping = TextWrapping.Wrap,
+                                IsTextSelectionEnabled = true
+                            }
+                        },
+                        CloseButtonText = "Close",
+                        XamlRoot = Content.XamlRoot
+                    };
+                    await details.ShowAsync();
+                }
             }
             finally
             {
