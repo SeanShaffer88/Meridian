@@ -171,6 +171,40 @@ public sealed class TarArchiveCreatorTests
 
     [Theory]
     [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task ProgressReportsCompletionAfterPublishing(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "input.bin");
+            await File.WriteAllBytesAsync(source, new byte[2 * 1024 * 1024]);
+            var archive = Path.Combine(root, "bundle" + extension);
+            var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var progress = new InlineProgress<(long CompletedBytes, long TotalBytes)>(value =>
+            {
+                updates.Add(value);
+                if (value.CompletedBytes == value.TotalBytes)
+                    Assert.True(File.Exists(archive));
+            });
+            await TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["input.bin"] = source }, progress: progress);
+            Assert.Equal((0L, 2L * 1024 * 1024), updates[0]);
+            Assert.Equal((2L * 1024 * 1024, 2L * 1024 * 1024), updates[^1]);
+            Assert.Contains(updates, update => update.CompletedBytes > 0 && update.CompletedBytes < update.TotalBytes);
+            Assert.Single(TarArchiveCatalog.List(archive));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
+
+    [Theory]
+    [InlineData(".tar")]
     [InlineData(".tar.gz")]
     [InlineData(".tgz")]
     public async Task CreatesCatalogReadableArchive(string extension)
