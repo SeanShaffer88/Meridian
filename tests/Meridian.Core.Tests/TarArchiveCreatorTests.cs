@@ -6,6 +6,29 @@ namespace Meridian.Core.Tests;
 
 public sealed class TarArchiveCreatorTests
 {
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task PreCancelledCreationLeavesNoArchiveOrStagingFile(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var input = Path.Combine(root, "input.txt");
+            await File.WriteAllTextAsync(input, "content");
+            var archive = Path.Combine(root, "bundle" + extension);
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                TarArchiveCreator.CreateAsync(archive,
+                    new Dictionary<string, string> { ["input.txt"] = input }, cts.Token));
+            Assert.False(File.Exists(archive));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task RejectsDuplicatePhysicalSourceUnderDifferentEntryNames()
     {
