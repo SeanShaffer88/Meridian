@@ -15,6 +15,8 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _left;
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
+    private readonly DropShelf _dropShelf = new();
+    private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
     private int _activeWorkspaceTabIndex;
@@ -28,6 +30,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         BookmarksBox.ItemsSource = _bookmarks;
+        ShelfItemsBox.ItemsSource = _shelfPaths;
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus);
         _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus);
         _activePane = _left;
@@ -617,6 +620,65 @@ public sealed partial class MainWindow : Window
         {
             GlobalStatus.Text = "Could not move item to Recycle Bin · " + ex.Message;
         }
+    }
+
+    private void AddToShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to add to the Drop Shelf.";
+            return;
+        }
+        if (_dropShelf.Add(selected.FullPath))
+        {
+            _shelfPaths.Add(Path.GetFullPath(selected.FullPath));
+            GlobalStatus.Text = $"Added to Drop Shelf · {_shelfPaths.Count:N0} collected";
+        }
+        else GlobalStatus.Text = "This item is already on the Drop Shelf.";
+    }
+
+    private void RemoveFromShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShelfItemsBox.SelectedItem is not string selected)
+        {
+            GlobalStatus.Text = "Select a Drop Shelf item to remove.";
+            return;
+        }
+        _dropShelf.Remove(selected);
+        _shelfPaths.Remove(selected);
+        GlobalStatus.Text = $"Removed from Drop Shelf · {_shelfPaths.Count:N0} remaining";
+    }
+
+    private void ClearShelf_Click(object sender, RoutedEventArgs e)
+    {
+        _dropShelf.Clear();
+        _shelfPaths.Clear();
+        GlobalStatus.Text = "Drop Shelf cleared · No files were changed.";
+    }
+
+    private async void ShowShelfLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShelfItemsBox.SelectedItem is not string selected)
+        {
+            GlobalStatus.Text = "Select a Drop Shelf item first.";
+            return;
+        }
+        if (!File.Exists(selected) && !Directory.Exists(selected))
+        {
+            GlobalStatus.Text = "Shelf item is missing · Nothing was changed.";
+            return;
+        }
+        var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(selected));
+        if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+        {
+            GlobalStatus.Text = "The selected item's parent folder is unavailable.";
+            return;
+        }
+        await NavigateAsync(_activePane, parent);
+        var match = _activePane.Items.FirstOrDefault(item =>
+            string.Equals(item.FullPath, selected, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) _activePane.List.SelectedItem = match;
+        GlobalStatus.Text = $"Showing Drop Shelf item · {Path.GetFileName(selected)}";
     }
 
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
