@@ -6,7 +6,7 @@
 
 - `CleanupPlan` captures immutable findings, estimated sizes, explanations and risk categories.
 - `TemporaryFileInventory.ScanAsync` inventories immediate regular files in one caller-selected directory.
-- The scan is nonrecursive, has a configurable entry limit (1–100,000), supports cancellation and skips link entries.
+- The scan is nonrecursive, has a configurable entry limit (1–100,000), supports cancellation and skips link entries and checks directory ancestors for reparse points before enumeration (best-effort, not race-free).
 - Every discovered file is classified **ReviewRequired**, never automatically safe to delete.
 - Size estimates are advisory; files may change during or after scanning.
 - The scanner does not delete, change permissions, modify Windows settings or request elevation.
