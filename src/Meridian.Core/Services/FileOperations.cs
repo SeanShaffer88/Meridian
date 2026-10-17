@@ -164,7 +164,11 @@ public static class FileOperations
         return finalPath;
     }
 
-    public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
+    /// <summary>Bytes written to staging across the copy; not a receipt of final publication.</summary>
+    public sealed record CopyProgress(string Source, long BytesCopied);
+
+    public static string CopyItem(string sourcePath, string destinationDirectory,
+        CancellationToken cancellationToken = default, IProgress<CopyProgress>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
@@ -191,19 +195,20 @@ public static class FileOperations
         if (File.Exists(finalPath) || Directory.Exists(finalPath))
             throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
         var stagingPath = Path.Combine(destinationRoot, $".meridian-{Guid.NewGuid():N}.partial");
+        var reporting = progress is null ? null : new CopyProgressState(progress);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (Directory.Exists(source))
             {
                 Directory.CreateDirectory(stagingPath);
-                CopyDirectoryContents(source, stagingPath, cancellationToken);
+                CopyDirectoryContents(source, stagingPath, cancellationToken, reporting);
                 cancellationToken.ThrowIfCancellationRequested();
                 Directory.Move(stagingPath, finalPath);
             }
             else
             {
-                CopyFileWithCancellation(source, stagingPath, cancellationToken);
+                CopyFileWithCancellation(source, stagingPath, cancellationToken, reporting);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(stagingPath, finalPath);
             }
@@ -212,7 +217,8 @@ public static class FileOperations
         catch { TryDeleteStaging(stagingPath); throw; }
     }
 
-    private static void CopyDirectoryContents(string source, string destination, CancellationToken cancellationToken)
+    private static void CopyDirectoryContents(string source, string destination,
+        CancellationToken cancellationToken, CopyProgressState? reporting)
     {
         foreach (var sourcePath in Directory.EnumerateFileSystemEntries(source))
         {
@@ -223,13 +229,14 @@ public static class FileOperations
             if ((attributes & FileAttributes.Directory) != 0)
             {
                 Directory.CreateDirectory(targetPath);
-                CopyDirectoryContents(sourcePath, targetPath, cancellationToken);
+                CopyDirectoryContents(sourcePath, targetPath, cancellationToken, reporting);
             }
-            else CopyFileWithCancellation(sourcePath, targetPath, cancellationToken);
+            else CopyFileWithCancellation(sourcePath, targetPath, cancellationToken, reporting);
         }
     }
 
-    private static void CopyFileWithCancellation(string source, string destination, CancellationToken cancellationToken)
+    private static void CopyFileWithCancellation(string source, string destination,
+        CancellationToken cancellationToken, CopyProgressState? reporting)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var creationTime = File.GetCreationTimeUtc(source);
@@ -244,6 +251,7 @@ public static class FileOperations
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 output.Write(buffer, 0, read);
+                reporting?.Report(source, read);
             }
             cancellationToken.ThrowIfCancellationRequested();
         }
@@ -251,6 +259,20 @@ public static class FileOperations
         File.SetCreationTimeUtc(destination, creationTime);
         File.SetLastWriteTimeUtc(destination, lastWriteTime);
         File.SetLastAccessTimeUtc(destination, lastAccessTime);
+    }
+
+    private sealed class CopyProgressState(IProgress<CopyProgress> observer)
+    {
+        private long _bytes;
+
+        public void Report(string source, int count)
+        {
+            _bytes = checked(_bytes + count);
+            // Reporting is observational. Its exceptions must not change the
+            // operation outcome; cancellation is controlled by the token.
+            try { observer.Report(new CopyProgress(source, _bytes)); }
+            catch { }
+        }
     }
 
     private static void RejectReparsePoint(string path)

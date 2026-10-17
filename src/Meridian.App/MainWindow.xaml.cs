@@ -767,9 +767,18 @@ public sealed partial class MainWindow : Window
         _copyCancellation = cancellation;
         CancelCopyButton.IsEnabled = true;
         GlobalStatus.Text = $"Copying {selected.Name}…"; SetPaneStatus(source, "Copy in progress…");
+        var acceptingProgress = true;
         try
         {
-            var copiedTo = await Task.Run(() => FileOperations.CopyItem(selected.FullPath, destinationPath, cancellation.Token), cancellation.Token);
+            var progress = new Progress<FileOperations.CopyProgress>(update =>
+            {
+                if (acceptingProgress && ReferenceEquals(_copyCancellation, cancellation))
+                    GlobalStatus.Text = $"Copying {selected.Name} · {FormatFileSize(update.BytesCopied)} written";
+            });
+            var copiedTo = await Task.Run(() => FileOperations.CopyItem(
+                selected.FullPath, destinationPath, cancellation.Token, progress), cancellation.Token);
+            // Ignore queued progress before awaiting the destination refresh.
+            acceptingProgress = false;
             if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
             SetPaneStatus(source, "Ready"); GlobalStatus.Text = $"Copied successfully · {Path.GetFileName(copiedTo)}";
         }
@@ -782,6 +791,7 @@ public sealed partial class MainWindow : Window
         { SetPaneStatus(source, "Copy failed"); GlobalStatus.Text = "Copy failed · " + ex.Message; }
         finally
         {
+            acceptingProgress = false;
             if (ReferenceEquals(_copyCancellation, cancellation)) _copyCancellation = null;
             CancelCopyButton.IsEnabled = false;
             cancellation.Dispose();
