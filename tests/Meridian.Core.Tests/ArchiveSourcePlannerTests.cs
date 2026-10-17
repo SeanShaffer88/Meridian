@@ -67,6 +67,23 @@ public sealed class ArchiveSourcePlannerTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RejectsOverlappingSelectedFoldersRegardlessOfOrder(bool parentFirst)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-overlap-folders-" + Guid.NewGuid().ToString("N"));
+        var child = Path.Combine(root, "child");
+        Directory.CreateDirectory(child);
+        try
+        {
+            File.WriteAllText(Path.Combine(child, "file.txt"), "data");
+            var paths = parentFirst ? new[] { root, child } : new[] { child, root };
+            Assert.Throws<InvalidDataException>(() => ArchiveSourcePlanner.Plan(paths));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public void RejectsMissingSources()
     {
