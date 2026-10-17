@@ -33,6 +33,7 @@ public static class TarTreeExtractor
         {
             Directory.CreateDirectory(stage);
             staged = true;
+            cancellationToken.ThrowIfCancellationRequested();
             using var file = File.OpenRead(source);
             var gzip = source.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase) ||
                 source.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
