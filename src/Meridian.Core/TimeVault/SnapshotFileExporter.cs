@@ -42,6 +42,23 @@ public sealed class SnapshotFileExporter
         if (destination.Length < 3 || !char.IsLetter(destination[0]) ||
             destination[1] != ':' || destination[2] != '\\')
             throw new ArgumentException("Destination must be a local drive-letter path.", nameof(destinationFile));
+        // Reject NTFS alternate data streams and Windows device-name aliases.
+        // A recovery destination must be a normal file, not a stream or device.
+        var destinationParts = destination[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in destinationParts)
+        {
+            if (part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.'))
+                throw new ArgumentException("Destination contains an unsafe path component.", nameof(destinationFile));
+            var stem = part.Split('.')[0].TrimEnd(' ');
+            if (stem.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+                stem.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+                stem.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+                stem.Equals("NUL", StringComparison.OrdinalIgnoreCase) ||
+                (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
+                    stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
+                    stem[3] >= '1' && stem[3] <= '9'))
+                throw new ArgumentException("Destination uses a reserved device name.", nameof(destinationFile));
+        }
         var parent = Path.GetDirectoryName(destination)
             ?? throw new ArgumentException("Destination must have a parent directory.", nameof(destinationFile));
         var driveRoot = Path.GetPathRoot(destination)!;
