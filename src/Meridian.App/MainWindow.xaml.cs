@@ -619,6 +619,46 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void FolderDna_Click(object sender, RoutedEventArgs e)
+    {
+        var pane = _activePane;
+        if (string.IsNullOrWhiteSpace(pane.CurrentPath))
+        {
+            GlobalStatus.Text = "Choose a folder to profile.";
+            return;
+        }
+
+        // Analyze the complete cached listing, not the filtered visible subset.
+        // No filesystem access, recursive traversal, or hashing is performed here.
+        var snapshot = FolderDna.Analyze(pane.AllItems);
+        var types = snapshot.Types.Take(8).Select(group =>
+            $"{group.Label}: {group.Count:N0} files · {DirectoryReader.FormatSize(group.Bytes)}");
+        var oldest = snapshot.OldestModifiedUtc?.ToLocalTime().ToString("yyyy-MM-dd") ?? "Unknown";
+        var newest = snapshot.NewestModifiedUtc?.ToLocalTime().ToString("yyyy-MM-dd") ?? "Unknown";
+        var details = $"Location: {pane.CurrentPath}\n\n" +
+            $"Folders: {snapshot.Folders:N0}\n" +
+            $"Files: {snapshot.Files:N0}\n" +
+            $"Known file size: {DirectoryReader.FormatSize(snapshot.KnownFileBytes)}\n" +
+            $"Oldest file modified: {oldest}\n" +
+            $"Newest file modified: {newest}\n\n" +
+            "Largest file-type groups:\n" +
+            (snapshot.Types.Count == 0 ? "No files" : string.Join("\n", types)) +
+            (snapshot.Types.Count > 8 ? $"\n…and {snapshot.Types.Count - 8:N0} more types" : "") +
+            "\n\nOnly immediate files are included. Folder sizes and nested contents are not scanned.";
+        var dialog = new ContentDialog
+        {
+            Title = "Folder DNA · Current folder",
+            Content = new ScrollViewer
+            {
+                Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap },
+                MaxHeight = 460
+            },
+            CloseButtonText = "Close",
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
