@@ -33,7 +33,7 @@ public static class TarArchiveCreator
         {
             cancellationToken.ThrowIfCancellationRequested();
             var name = ArchiveEntryPathPolicy.Normalize(item.Key);
-            if (!names.Add(name)) throw new InvalidDataException("Duplicate TAR entry name.");
+            if (names.Contains(name)) throw new InvalidDataException("Duplicate TAR entry name.");
             var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Value, cancellationToken);
             if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Archive cannot contain itself.");
@@ -53,6 +53,7 @@ public static class TarArchiveCreator
                     throw new InvalidDataException("TAR file entry conflicts with a parent path.");
                 parentPaths.Add(parentPath);
             }
+            names.Add(name);
             plan.Add((name, source, length));
         }
         var ancestor = parent;
