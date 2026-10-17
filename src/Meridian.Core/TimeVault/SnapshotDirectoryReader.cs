@@ -26,7 +26,9 @@ public sealed class SnapshotDirectoryReader
             // of the path could otherwise escape the expected historical tree.
             var deviceRoot = snapshot.DeviceObject.TrimEnd('\\');
             var relative = snapshotFolder[deviceRoot.Length..].TrimStart('\\');
-            var current = deviceRoot;
+            if ((File.GetAttributes(deviceRoot + @"\\") & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("Snapshot device root is a reparse point.");
+        var current = deviceRoot;
             foreach (var part in relative.Split('\\', StringSplitOptions.RemoveEmptyEntries))
             {
                 current = Path.Combine(current, part);
