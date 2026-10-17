@@ -218,4 +218,35 @@ public class RelationshipAnalyzerTests
             RelationshipAnalyzer.Analyze(Array.Empty<string>(),
                 cancellationToken: cancellation.Token, timeBudget: TimeSpan.FromTicks(1)));
     }
+
+    [Fact]
+    public void IndexedCandidatesMatchReferencePairwiseAlgorithm()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-equivalence"));
+        var random = new Random(8675309);
+        for (var iteration = 0; iteration < 50; iteration++)
+        {
+            var paths = Enumerable.Range(0, 45)
+                .Select(i => Path.Combine(root, $"dir-{random.Next(8)}",
+                    $"stem-{random.Next(9)}-{i % 3}.{i}"))
+                .ToArray();
+
+            var actual = RelationshipAnalyzer.Analyze(paths);
+            var expected = new List<(string Source, string Related, RelationshipEvidence Evidence)>();
+            var comparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            for (var i = 0; i < paths.Length; i++)
+                for (var j = i + 1; j < paths.Length; j++)
+                {
+                    var sameStem = comparer.Equals(Path.GetFileNameWithoutExtension(paths[i]),
+                        Path.GetFileNameWithoutExtension(paths[j]));
+                    if (sameStem)
+                        expected.Add((paths[i], paths[j], RelationshipEvidence.FilenameStem));
+                    else if (comparer.Equals(Path.GetDirectoryName(paths[i]), Path.GetDirectoryName(paths[j])))
+                        expected.Add((paths[i], paths[j], RelationshipEvidence.SameDirectory));
+                }
+
+            Assert.Equal(expected, actual.Select(x => (x.SourcePath, x.RelatedPath, x.Evidence)));
+        }
+    }
 }
