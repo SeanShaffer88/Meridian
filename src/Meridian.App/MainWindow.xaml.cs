@@ -356,9 +356,9 @@ public sealed partial class MainWindow : Window
     {
         if (_zipInspectionOpen || _zipCreationBusy || _zipExtractionBusy || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
-            !string.Equals(Path.GetExtension(selected.FullPath), ".zip", StringComparison.OrdinalIgnoreCase))
+            Meridian.Core.Archives.ArchiveCapabilities.ForPath(selected.FullPath)?.CanList != true)
         {
-            GlobalStatus.Text = "Select a ZIP file to inspect.";
+            GlobalStatus.Text = "Select a supported archive to inspect.";
             return;
         }
         _zipInspectionOpen = true;
