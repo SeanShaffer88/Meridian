@@ -22,6 +22,8 @@ public sealed class SnapshotDirectoryReader
             var root = Path.GetPathRoot(Path.GetFullPath(liveFolder))
                 ?? throw new ArgumentException("Invalid local folder.", nameof(liveFolder));
             var snapshotFolder = ShadowPath.ResolveForDrive(snapshot, liveFolder, root);
+            if ((File.GetAttributes(snapshotFolder) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Snapshot folder is a reparse point; refusing traversal.");
             var items = new List<SnapshotEntry>();
             // Enumeration is deliberately nonrecursive and capped to bound memory use.
             const int maxEntries = 10000;
