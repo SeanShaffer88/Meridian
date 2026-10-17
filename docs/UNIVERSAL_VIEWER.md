@@ -27,3 +27,7 @@
 ## Current preview resource limits
 
 The WinUI prototype renders at most 4 KiB of hexadecimal data, reads at most 64 KiB for text previews, uses strict UTF-8 with a hexadecimal fallback for invalid sequences, and refuses image files larger than 64 MiB. These are initial defensive limits, **not** a guarantee against decompression bombs, codec vulnerabilities, or filesystem races. Decoded pixel count, parser isolation, media resource budgets and Windows hands-on testing remain open release blockers.
+
+## Preview path boundaries
+
+The bounded text/hex preview reader now rejects reparse-point ancestors and the final reparse-point file, and honors cooperative cancellation before opening and while reading. This is a **pre-open inspection**, not a race-free handle-based identity check: concurrent filesystem changes can invalidate it. The image and media playback paths do not yet share this full ancestor-validation logic. A unified handle-based policy and adversarial Windows tests are required before treating untrusted filesystem previews as hardened.
