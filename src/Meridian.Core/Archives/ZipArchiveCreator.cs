@@ -22,6 +22,7 @@ public static class ZipArchiveCreator
             throw new ArgumentOutOfRangeException(nameof(sourceFiles));
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var plan = new List<(string Name, string Source, long Length)>();
         long total = 0;
         foreach (var item in sourceFiles)
