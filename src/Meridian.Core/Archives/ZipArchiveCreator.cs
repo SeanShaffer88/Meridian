@@ -129,6 +129,7 @@ public static class ZipArchiveCreator
                 if (string.IsNullOrEmpty(next) || next == ancestor) break;
                 ancestor = next;
             }
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(stage, target, overwrite: false);
             created = false;
             ReportProgress(total, total);
