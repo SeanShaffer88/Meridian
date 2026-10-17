@@ -8,6 +8,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Meridian.Core.Tests" />
     <PackageReference Include="System.Management" Version="10.0.0" />
   </ItemGroup>
 </Project>

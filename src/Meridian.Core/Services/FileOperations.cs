@@ -159,7 +159,14 @@ public static class FileOperations
 
     public static string CopyItem(string sourcePath, string destinationDirectory,
         CancellationToken cancellationToken = default, IProgress<CopyProgress>? progress = null)
+        => CopyItemCore(sourcePath, destinationDirectory, cancellationToken, progress, CreateCopyOutput);
+
+    // Operation-local dependency: failure tests exercise real staging/publication
+    // without global hooks or a different public execution path.
+    internal static string CopyItemCore(string sourcePath, string destinationDirectory,
+        CancellationToken cancellationToken, IProgress<CopyProgress>? progress, Func<string, Stream> outputFactory)
     {
+        ArgumentNullException.ThrowIfNull(outputFactory);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
         var source = Path.GetFullPath(sourcePath);
@@ -194,13 +201,13 @@ public static class FileOperations
             if (Directory.Exists(source))
             {
                 Directory.CreateDirectory(stagingPath);
-                CopyDirectoryContents(source, stagingPath, buffer, cancellationToken, reporting);
+                CopyDirectoryContents(source, stagingPath, buffer, cancellationToken, reporting, outputFactory);
                 cancellationToken.ThrowIfCancellationRequested();
                 Directory.Move(stagingPath, finalPath);
             }
             else
             {
-                CopyFileWithCancellation(source, stagingPath, buffer, cancellationToken, reporting);
+                CopyFileWithCancellation(source, stagingPath, buffer, cancellationToken, reporting, outputFactory);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(stagingPath, finalPath);
             }
@@ -214,7 +221,7 @@ public static class FileOperations
     }
 
     private static void CopyDirectoryContents(string source, string destination, byte[] buffer,
-        CancellationToken cancellationToken, CopyProgressState? reporting)
+        CancellationToken cancellationToken, CopyProgressState? reporting, Func<string, Stream> outputFactory)
     {
         foreach (var sourcePath in Directory.EnumerateFileSystemEntries(source))
         {
@@ -225,14 +232,14 @@ public static class FileOperations
             if ((attributes & FileAttributes.Directory) != 0)
             {
                 Directory.CreateDirectory(targetPath);
-                CopyDirectoryContents(sourcePath, targetPath, buffer, cancellationToken, reporting);
+                CopyDirectoryContents(sourcePath, targetPath, buffer, cancellationToken, reporting, outputFactory);
             }
-            else CopyFileWithCancellation(sourcePath, targetPath, buffer, cancellationToken, reporting);
+            else CopyFileWithCancellation(sourcePath, targetPath, buffer, cancellationToken, reporting, outputFactory);
         }
     }
 
     private static void CopyFileWithCancellation(string source, string destination, byte[] buffer,
-        CancellationToken cancellationToken, CopyProgressState? reporting)
+        CancellationToken cancellationToken, CopyProgressState? reporting, Func<string, Stream> outputFactory)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var creationTime = File.GetCreationTimeUtc(source);
@@ -241,7 +248,7 @@ public static class FileOperations
         // One operation-owned transfer buffer is reused throughout the tree.
         // Small stream buffers avoid another large allocation for every file.
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
-        using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
+        using (var output = outputFactory(destination))
         {
             int read;
             while ((read = input.Read(buffer, 0, CopyBufferSize)) > 0)
@@ -257,6 +264,9 @@ public static class FileOperations
         File.SetLastWriteTimeUtc(destination, lastWriteTime);
         File.SetLastAccessTimeUtc(destination, lastAccessTime);
     }
+
+    private static Stream CreateCopyOutput(string destination) =>
+        new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan);
 
     private sealed class CopyProgressState(IProgress<CopyProgress> observer)
     {
