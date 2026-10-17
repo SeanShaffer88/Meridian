@@ -67,8 +67,8 @@ public static class TarArchiveCreator
             await using (var output = new FileStream(stage, FileMode.CreateNew, FileAccess.Write,
                 FileShare.None, 8192, FileOptions.Asynchronous))
             {
-                using (Stream stream = gzip ? new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true) : output)
-                using (var writer = new TarWriter(stream, leaveOpen: true))
+                using (var compressor = gzip ? new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true) : null)
+                using (var writer = new TarWriter(compressor ?? (Stream)output, leaveOpen: true))
                 {
                     foreach (var item in plan)
                     {
