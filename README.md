@@ -266,6 +266,8 @@ Meridian is designed around conservative defaults, not irreversible surprises.
 
 **A future Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
 
+**Safety is a release blocker, not a preference.** Meridian's [Safety Contract](docs/SAFETY_CONTRACT.md) defines risk tiers, no-overwrite rules, mandatory previews and revalidation, verified recovery claims, failure testing, and strict gates for cleanup, restore management and encrypted vaults. These are **targets**, not claims that the preview already implements them.
+
 For detailed risks and verification requirements, see the [threat model](docs/THREAT_MODEL.md) and [release gate](docs/RELEASE_GATE.md).
 
 ## Build from source
