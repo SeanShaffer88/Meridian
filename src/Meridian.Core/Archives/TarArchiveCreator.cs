@@ -42,7 +42,6 @@ public static class TarArchiveCreator
             var length = new FileInfo(source).Length;
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
                 throw new InvalidDataException("TAR source exceeds 4 GiB aggregate budget.");
-            totalBytes += length;
             if (parentPaths.Contains(name))
                 throw new InvalidDataException("TAR file entry conflicts with a descendant path.");
             var parentPath = name;
@@ -54,6 +53,7 @@ public static class TarArchiveCreator
                 parentPaths.Add(parentPath);
             }
             names.Add(name);
+            totalBytes += length;
             plan.Add((name, source, length));
         }
         var ancestor = parent;
