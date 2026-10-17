@@ -65,6 +65,8 @@ public static class TarArchiveCreator
                 await output.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(target) || Directory.Exists(target))
+                throw new IOException("TAR destination appeared during creation.");
             File.Move(stage, target, overwrite: false);
         }
         finally
