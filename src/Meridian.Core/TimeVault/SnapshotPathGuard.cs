@@ -8,6 +8,7 @@ internal static class SnapshotPathGuard
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(mappedPath);
         if (!snapshot.IsUsable) throw new ArgumentException("Unrecognized snapshot device.", nameof(snapshot));
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var root = snapshot.DeviceObject.TrimEnd('\\');
         if (!mappedPath.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Path does not belong to this snapshot.", nameof(mappedPath));
