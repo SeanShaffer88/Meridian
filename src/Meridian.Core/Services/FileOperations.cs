@@ -41,7 +41,7 @@ public static class FileOperations
             }
             else
             {
-                File.Copy(source, stagingPath, overwrite: false);
+                CopyFileWithCancellation(source, stagingPath, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(stagingPath, finalPath);
             }
@@ -63,8 +63,29 @@ public static class FileOperations
                 Directory.CreateDirectory(targetPath);
                 CopyDirectoryContents(sourcePath, targetPath, cancellationToken);
             }
-            else File.Copy(sourcePath, targetPath, overwrite: false);
+            else CopyFileWithCancellation(sourcePath, targetPath, cancellationToken);
         }
+    }
+
+    private static void CopyFileWithCancellation(string source, string destination, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var buffer = new byte[1024 * 1024];
+        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
+        using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.SequentialScan))
+        {
+            int read;
+            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                output.Write(buffer, 0, read);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        File.SetCreationTimeUtc(destination, File.GetCreationTimeUtc(source));
+        File.SetLastWriteTimeUtc(destination, File.GetLastWriteTimeUtc(source));
+        File.SetLastAccessTimeUtc(destination, File.GetLastAccessTimeUtc(source));
     }
 
     private static void RejectReparsePoint(string path)
