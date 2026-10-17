@@ -99,6 +99,8 @@ public static class TarArchiveCreator
                         {
                             DataStream = cancellableInput
                         });
+                        if (input.Length != item.Length)
+                            throw new InvalidDataException("TAR source file length changed during creation.");
                     }
                 }
                 await output.FlushAsync(cancellationToken);
