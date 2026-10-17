@@ -12,7 +12,10 @@ public static class SnapshotPathGuard
         var root = snapshot.DeviceObject.TrimEnd('\\');
         if (!mappedPath.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Path does not belong to this snapshot.", nameof(mappedPath));
-        var components = mappedPath[(root.Length + 1)..].Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        var relative = mappedPath[(root.Length + 1)..];
+        if (relative.Contains("\\\\", StringComparison.Ordinal))
+            throw new ArgumentException("Snapshot path contains empty components.", nameof(mappedPath));
+        var components = relative.Split('\\', StringSplitOptions.RemoveEmptyEntries);
         if (components.Any(part =>
             part is "." or ".." || part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.')))
             throw new ArgumentException("Unsafe snapshot path component.", nameof(mappedPath));
