@@ -100,6 +100,8 @@ public static class ZipTreeExtractor
             }
             cancellationToken.ThrowIfCancellationRequested();
             CheckDirectoryChain(parent, cancellationToken);
+            if ((File.GetAttributes(stage) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Extraction stage became a reparse point.");
             // Recheck for destination conflicts before publishing the complete tree.
             if (File.Exists(target) || Directory.Exists(target))
                 throw new IOException("Extraction destination appeared during staging.");
