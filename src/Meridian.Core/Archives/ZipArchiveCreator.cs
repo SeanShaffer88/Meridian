@@ -103,6 +103,17 @@ public static class ZipArchiveCreator
                 await output.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
+            // Recheck the destination parent immediately before publication.
+            ancestor = parent;
+            while (!string.IsNullOrEmpty(ancestor))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((File.GetAttributes(ancestor) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Archive destination changed to a reparse point.");
+                var next = Path.GetDirectoryName(ancestor);
+                if (string.IsNullOrEmpty(next) || next == ancestor) break;
+                ancestor = next;
+            }
             File.Move(stage, target, overwrite: false);
             created = false;
         }
