@@ -45,7 +45,7 @@ Inspired by the clear, category-by-category feature reference used by classic du
 
 ### Jump to a feature category
 
-[General interface](#general-features-and-interface) · [File operations](#file-operations-and-organization) · [Viewer and media](#built-in-viewer-images-audio-and-video) · [Archives](#archives-and-compressed-files) · [Search and intelligence](#search-discovery-and-file-intelligence) · [Recovery](#recovery-history-and-system-maintenance) · [Network and devices](#network-devices-and-extensions) · [Remote transfers](#network-transfer-and-remote-server-roadmap) · [Security and quality](#reliability-security-and-release-readiness)
+[General interface](#general-features-and-interface) · [File operations](#file-operations-and-organization) · [Viewer and media](#built-in-viewer-images-audio-and-video) · [Archives](#archives-and-compressed-files) · [Search and intelligence](#search-discovery-and-file-intelligence) · [Recovery](#recovery-history-and-system-maintenance) · [Network and devices](#network-devices-and-extensions) · [Remote transfers](#network-transfer-and-remote-server-roadmap) · [Selection](#advanced-file-selection-and-navigation) · [Metadata](#file-metadata-permissions-and-diagnostics) · [Security and quality](#reliability-security-and-release-readiness)
 
 **Quick distinction:** The built-in ZIP catalog is a **read-only backend prototype**, not archive navigation or extraction in the app. The media player is an **unverified WinUI prototype**. No external archive application will be required for formats Meridian eventually supports.
 
@@ -176,6 +176,30 @@ These are **planned**, not present in Meridian today. Remote file handling will 
 - **[PLANNED]** Server-to-server transfer only when explicitly supported and approved; no implicit credential forwarding.
 - **[PLANNED]** Compare local and remote directory trees before synchronization.
 - **[REQUIREMENT]** Credentials must not appear in logs, URLs shown to other users, or exported operation receipts.
+
+### Advanced file selection and navigation
+
+- **[PLANNED]** Select files by wildcard, extension, size, age, attributes or saved rules.
+- **[PLANNED]** Invert selection, select all with matching extension and restore previous selection.
+- **[PLANNED]** Breadcrumb address bar with editable path, path history and folder suggestions.
+- **[PLANNED]** Favorite directories, frequently used destinations and pinned workspaces.
+- **[PLANNED]** Navigate into archives and supported virtual providers without extracting them.
+- **[PLANNED]** Quick filter as you type, with highlighted matches and reversible filter state.
+- **[PLANNED]** Keyboard-accessible file preview, focused-pane indicators and accessible selection counts.
+- **[PLANNED]** Multi-tab drag-and-drop with explicit copy/move intent and collision previews.
+
+### File metadata, permissions and diagnostics
+
+- **[PLANNED]** File attributes and timestamp editor with per-field preview and validation.
+- **[PLANNED]** Windows ACL inspection and carefully scoped permission editing.
+- **[PLANNED]** Alternate data stream inspector with read-only defaults.
+- **[PLANNED]** File signature identification independent of extension.
+- **[PLANNED]** EXIF, audio tags and video metadata inspection without executing handlers.
+- **[PLANNED]** NTFS hardlink and symbolic-link inspection with clear target disclosure.
+- **[PLANNED]** Disk and directory statistics with cancellable, bounded scans.
+- **[PLANNED]** Optional file-lock diagnostics with clearly disclosed system requirements.
+- **[PLANNED]** Copy verification using checksums and detailed mismatch reports.
+- **[REQUIREMENT]** Privileged or destructive metadata changes require separate approval and cannot be inferred from read-only inspection.
 
 ### Reliability, security and release readiness
 
