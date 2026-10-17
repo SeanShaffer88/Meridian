@@ -33,4 +33,16 @@ public class SnapshotExportFailureTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             new SnapshotFileExporter().ExportAsync(Example, @"C:\source.txt", @"\\server\share\recovery.txt"));
     }
+    [Theory]
+    [InlineData(@"C:\Recovered\file.txt:hidden")]
+    [InlineData(@"C:\Recovered\CON.txt")]
+    [InlineData(@"C:\Recovered\LPT1.txt")]
+    [InlineData(@"C:\Recovered\trailing.")]
+    public async Task RejectsUnsafeWindowsDestinationNames(string destination)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new SnapshotFileExporter().ExportAsync(Example, @"C:\source.txt", destination));
+    }
+
 }
