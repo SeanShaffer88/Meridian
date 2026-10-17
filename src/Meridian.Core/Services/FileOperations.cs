@@ -94,9 +94,28 @@ public static class FileOperations
         if (File.Exists(finalPath) || Directory.Exists(finalPath))
             throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
 
-        if (isDirectory) Directory.Move(source, finalPath);
-        else File.Move(source, finalPath);
-        return finalPath;
+        var sourceRoot = Path.GetPathRoot(source);
+        var destinationVolumeRoot = Path.GetPathRoot(destinationRoot);
+        if (string.Equals(sourceRoot, destinationVolumeRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            if (isDirectory) Directory.Move(source, finalPath);
+            else File.Move(source, finalPath);
+            return finalPath;
+        }
+
+        // Cross-volume moves cannot be atomic. Copy completely first, then remove the original.
+        // If copying fails, the source remains untouched. If source cleanup fails, both copies may remain.
+        var copiedPath = CopyItem(source, destinationRoot);
+        try
+        {
+            if (isDirectory) Directory.Delete(source, recursive: true);
+            else File.Delete(source);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            throw new IOException($"The item was copied to '{copiedPath}', but the original could not be removed. Both copies may remain.", ex);
+        }
+        return copiedPath;
     }
 
     public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
