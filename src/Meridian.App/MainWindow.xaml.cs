@@ -442,9 +442,11 @@ public sealed partial class MainWindow : Window
             GlobalStatus.Text = "Cancelling ZIP extraction…";
     }
 
+    private bool _zipCreationBusy;
+
     private async void CreateZip_Click(object sender, RoutedEventArgs e)
     {
-        if (_zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
+        if (_zipCreationBusy || _zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
         {
             GlobalStatus.Text = "Select a regular file to archive.";
@@ -464,6 +466,7 @@ public sealed partial class MainWindow : Window
             XamlRoot = LeftPath.XamlRoot
         };
         if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+        _zipCreationBusy = true;
         try
         {
             GlobalStatus.Text = "Creating ZIP · " + selected.Name;
@@ -475,6 +478,7 @@ public sealed partial class MainWindow : Window
         {
             GlobalStatus.Text = "ZIP creation failed · " + ex.Message;
         }
+        finally { _zipCreationBusy = false; }
     }
 
     private bool _previewDialogOpen;
