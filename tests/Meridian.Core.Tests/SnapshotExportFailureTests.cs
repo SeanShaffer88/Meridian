@@ -42,6 +42,8 @@ public class SnapshotExportFailureTests
     [InlineData(@"C:\")]
     [InlineData(@"C:\Recovered\file.txt:stream")]
     [InlineData(@"C:\Recovered\AUX.log")]
+    [InlineData(@"C:\Recovered\..\other.txt")]
+    [InlineData(@"C:\Recovered\.\other.txt")]
     public async Task RejectsUnsafeWindowsDestinationNames(string destination)
     {
         if (!OperatingSystem.IsWindows()) return;
