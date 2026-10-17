@@ -28,5 +28,11 @@ public sealed class DropShelf
         return true;
     }
 
+    /// <summary>Remove stale references only. Never deletes files or folders from disk.</summary>
+    public int RemoveMissing()
+    {
+        return _paths.RemoveAll(path => !File.Exists(path) && !Directory.Exists(path));
+    }
+
     public void Clear() => _paths.Clear();
 }
