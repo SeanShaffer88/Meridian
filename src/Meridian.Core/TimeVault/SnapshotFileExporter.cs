@@ -14,6 +14,8 @@ public sealed class SnapshotFileExporter
         cancellationToken.ThrowIfCancellationRequested();
 
         var original = Path.GetFullPath(originalFile);
+        if (!Path.IsPathFullyQualified(destinationFile) || destinationFile.StartsWith(@"\\", StringComparison.Ordinal))
+            throw new ArgumentException("Destination must be an absolute local drive path.", nameof(destinationFile));
         var destination = Path.GetFullPath(destinationFile);
         if (string.Equals(original, destination, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Source and destination must differ.", nameof(destinationFile));
