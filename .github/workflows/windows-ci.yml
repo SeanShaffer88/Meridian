@@ -1,0 +1,33 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  core-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Test core library
+        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release
+
+  app-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore solution
+        run: dotnet restore Meridian.sln
+      - name: Publish Windows x64 app
+        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:Platform=x64
