@@ -74,7 +74,8 @@ public static class TarArchiveCreator
                         var currentLength = new FileInfo(item.Source).Length;
                         if (currentLength != item.Length)
                             throw new InvalidDataException("TAR source file exceeds budget.");
-                        using var input = File.OpenRead(item.Source);
+                        using var input = new FileStream(item.Source, FileMode.Open,
+                            FileAccess.Read, FileShare.Read, 8192, FileOptions.SequentialScan);
                         if (input.Length != item.Length)
                             throw new InvalidDataException("TAR source length changed.");
                         writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, item.Name)
