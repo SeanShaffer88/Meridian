@@ -2,6 +2,44 @@
 
 Meridian is an early-stage, offline-first file manager targeting Windows 11 only, across x64 and ARM64 architectures. This roadmap is a feature inventory and an ordering guide, not a claim that any unchecked item is implemented. Features will be delivered incrementally, with security, responsiveness, accessibility, tests, and honest Windows CI verification required alongside functionality.
 
+## North star — make file management fundamentally better
+
+**Meridian's long-term goal is to become a workspace for interacting with everything stored on a computer, not merely an alternative to File Explorer.** Pursue ideas that make people ask, "Why don't all file managers work this way?" Originality is valuable only when it improves a real workflow.
+
+- **Understand:** Reveal useful relationships, structure, history, size, and metadata without making users manually inspect hundreds of folders.
+- **Navigate:** Support spatial, multi-location, and task-specific views while preserving fast, predictable keyboard-first navigation.
+- **Organize without disruption:** Offer virtual collections, a drop shelf, tags, and reusable workspaces without requiring files to be physically relocated.
+- **Act with confidence:** Preview complex changes, detect collisions, make progress visible, journal outcomes, and support undo only when genuinely reliable.
+- **Automate transparently:** Make repeatable workflows and optional local intelligence useful without silently changing files or uploading private data.
+- **Experiment safely:** Prototype unconventional interactions behind explicit opt-in controls, and keep stable daily-use paths reliable.
+
+### Signature experience candidates
+
+These are **aspirations, not implemented capabilities or promised release dates**. Validate each with prototypes, usability feedback, measurable performance, and safety tests.
+
+| Idea | User benefit | Initial deliverable |
+| --- | --- | --- |
+| **Drop Shelf** | Gather items from unrelated folders into a temporary collection | Read-only collection first; preview before batch operations |
+| **Folder DNA** | Understand a folder at a glance | Cancellable local breakdown by type, size, and age; no implicit recursive scan |
+| **Smart Collections** | Reuse saved dynamic views without moving originals | Metadata-only rules with visible scope and refresh behavior |
+| **Operation Simulator** | Know what a batch action will change | Conflict-aware dry-run plan with per-item outcomes; never claim atomicity across volumes |
+| **File Time Machine** | Understand changes and possible recovery paths | Local operation journal; distinguish journal entries from filesystem snapshots and backups |
+| **Relationship View** | Discover associated files and projects | Explainable filename/path/metadata associations; optional hashing |
+| **Universal Command Palette** | Access complex tasks quickly | Searchable registered commands with keyboard shortcuts and explicit confirmation for destructive actions |
+| **Workflow Recipes** | Repeat common organization tasks | Saveable, inspectable steps with preview and no automatic execution by default |
+| **Adaptive Layouts** | Fit the interface to the task | Dual pane, Miller columns, comparison, gallery, and timeline views |
+| **Optional Local Intelligence** | Natural-language discovery and organization suggestions | Opt-in, local-first, explainable suggestions; never silently modify or upload files |
+
+### How to prioritize innovation
+
+1. **Reliability before spectacle.** Finish release blockers and maintain usable everyday workflows; isolate experiments from production behavior.
+2. **Reusable foundations.** Prefer a tested operation engine, command registry, workspace model, provider abstractions, and cancellable metadata services over isolated feature hacks.
+3. **Safety by design.** Default to no overwrite, explicit previews, understandable errors, cancellation, and honest recovery limitations. No blanket claims of universal undo, guaranteed secure deletion, or zero OS footprint.
+4. **Privacy and accessibility.** No mandatory accounts, ads, telemetry, paid services, or cloud inference. Keyboard access, assistive technology, and resource efficiency are first-class requirements.
+5. **Evidence-based progress.** Track each capability as proposed, prototyped, implemented, CI-tested, and device-verified separately. Avoid unsupported performance claims.
+
+This north star **expands rather than replaces** the existing feature inventory and phase ordering below. Continue incremental pull requests, x64/ARM64 CI, tests, and truthful release gating.
+
 ## Delivery principles
 
 - [ ] Keep the core experience fast, dependable, keyboard-friendly, and useful for everyday file management.
