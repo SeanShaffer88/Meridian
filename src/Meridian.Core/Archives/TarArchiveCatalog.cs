@@ -15,6 +15,10 @@ public static class TarArchiveCatalog
         if (maxEntries is < 1 or > 100000) throw new ArgumentOutOfRangeException(nameof(maxEntries));
         if (maxTotalBytes < 1) throw new ArgumentOutOfRangeException(nameof(maxTotalBytes));
         var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(archivePath, cancellationToken);
+        if (!source.EndsWith(".tar", StringComparison.OrdinalIgnoreCase) &&
+            !source.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) &&
+            !source.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("Only TAR and compressed TAR catalogs are supported.");
         using var file = File.OpenRead(source);
         var compressed = source.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
             source.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase);
