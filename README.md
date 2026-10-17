@@ -38,7 +38,7 @@ Run from PowerShell at the repository root:
 
 The Windows CI workflow runs core tests and publishes self-contained app outputs for both architectures. Successful workflow runs attach downloadable `meridian-portable-win-x64` and `meridian-portable-win-arm64` artifacts for 14 days. These are unpackaged portable publish folders, **not signed installers**. Download them from the run's Artifacts section after all jobs succeed.
 
-The build script's publish path is under `src/Meridian.App/bin/Release/net10.0-windows10.0.22000.0/<runtime>/publish`.
+The publish path is under `src/Meridian.App/bin/<platform>/Release/net10.0-windows10.0.22000.0/<runtime>/publish`, where `<platform>` is `x64` or `ARM64`.
 
 ## Safety limitations
 

@@ -49,6 +49,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: meridian-portable-${{ matrix.runtime }}
-          path: src/Meridian.App/bin/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish/
+          path: src/Meridian.App/bin/${{ matrix.architecture }}/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish/
           if-no-files-found: error
           retention-days: 14
