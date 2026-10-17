@@ -501,7 +501,7 @@ public sealed partial class MainWindow : Window
         _zipCreationCancellation = new CancellationTokenSource();
         try
         {
-            GlobalStatus.Text = "Creating ZIP · " + selected.Name;
+            GlobalStatus.Text = "Creating archive · " + selected.Name;
             var token = _zipCreationCancellation.Token;
             var planned = await Task.Run(() => Meridian.Core.Archives.ArchiveSourcePlanner.Plan(
                 sources.Select(entry => entry.FullPath), token), token);
@@ -511,16 +511,16 @@ public sealed partial class MainWindow : Window
             else
                 await Task.Run(() => Meridian.Core.Archives.TarArchiveCreator.CreateAsync(
                     destination, planned, cancellationToken: token), token);
-            GlobalStatus.Text = "ZIP created · " + destination;
+            GlobalStatus.Text = "Archive created · " + destination;
             await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
         }
         catch (OperationCanceledException)
         {
-            GlobalStatus.Text = "ZIP creation cancelled.";
+            GlobalStatus.Text = "Archive creation cancelled.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            GlobalStatus.Text = "ZIP creation failed · " + ex.Message;
+            GlobalStatus.Text = "Archive creation failed · " + ex.Message;
         }
         finally
         {
