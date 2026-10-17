@@ -433,7 +433,7 @@ public sealed partial class MainWindow : Window
                     if (Meridian.Core.Viewer.PreviewTextDecoder.TryDecode(bytes, out var decoded))
                         display = decoded;
                     else
-                        display = "Text encoding is unsupported or binary content detected. Showing the first 4 KiB as hexadecimal.\\n\\n" +
+                        display = "Text encoding is unsupported or binary content detected. Showing the first 4 KiB as hexadecimal.\n\n" +
                             Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes.AsSpan(0, Math.Min(bytes.Length, 4096)));
                 }
                 panel.Children.Add(new ScrollViewer
