@@ -626,6 +626,53 @@ public sealed partial class MainWindow : Window
         GlobalStatus.Text = "Cancelling copy…";
     }
 
+    private async void RefreshShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (!string.IsNullOrWhiteSpace(_left.CurrentPath)) await NavigateAsync(_left, _left.CurrentPath, addHistory: false);
+        if (!string.IsNullOrWhiteSpace(_right.CurrentPath)) await NavigateAsync(_right, _right.CurrentPath, addHistory: false);
+    }
+
+    private void SwitchPaneShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        _activePane = ReferenceEquals(_activePane, _left) ? _right : _left;
+        _activePane.List.Focus(FocusState.Programmatic);
+        GlobalStatus.Text = $"Active pane · {_activePane.Name}";
+    }
+
+    private void FocusActivePathShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        _activePane.PathBox.Focus(FocusState.Programmatic);
+        _activePane.PathBox.SelectAll();
+    }
+
+    private void FocusActiveFilterShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        _activePane.FilterBox.Focus(FocusState.Programmatic);
+        _activePane.FilterBox.SelectAll();
+    }
+
+    private async void BackShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await NavigateBackAsync(_activePane);
+    }
+
+    private async void ForwardShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await NavigateForwardAsync(_activePane);
+    }
+
+    private async void UpShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await NavigateUpAsync(_activePane);
+    }
+
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
     private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
     private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
