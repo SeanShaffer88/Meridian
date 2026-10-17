@@ -27,8 +27,8 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         BookmarksBox.ItemsSource = _bookmarks;
-        _left = new PaneState("Left", LeftPath, LeftItems, LeftStatus);
-        _right = new PaneState("Right", RightPath, RightItems, RightStatus);
+        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus);
+        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus);
         _activePane = _left;
         LeftItems.ItemsSource = _left.Items;
         RightItems.ItemsSource = _right.Items;
@@ -283,14 +283,39 @@ public sealed partial class MainWindow : Window
         {
             var entries = await Task.Run(() => DirectoryReader.Read(fullPath, token), token);
             if (token.IsCancellationRequested) return;
-            pane.Items.Clear(); foreach (var entry in entries) pane.Items.Add(entry);
-            SetPaneStatus(pane, $"{entries.Count:N0} items"); GlobalStatus.Text = "Ready · Local-only · No telemetry";
+            pane.AllItems = entries;
+            ApplyFilter(pane);
+            GlobalStatus.Text = "Ready · Local-only · No telemetry";
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         { SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Could not read folder · " + ex.Message; }
     }
+
+    private void ApplyFilter(PaneState pane)
+    {
+        var query = pane.FilterBox.Text.Trim();
+        var matches = string.IsNullOrEmpty(query)
+            ? pane.AllItems
+            : pane.AllItems.Where(item =>
+                item.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                item.FullPath.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                item.TypeLabel.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        pane.Items.Clear();
+        foreach (var item in matches
+            .OrderByDescending(item => item.IsDirectory)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+            pane.Items.Add(item);
+
+        SetPaneStatus(pane, string.IsNullOrEmpty(query)
+            ? $"{pane.AllItems.Count:N0} items"
+            : $"{matches.Count:N0} of {pane.AllItems.Count:N0} items · filtered");
+    }
+
+    private void LeftFilter_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter(_left);
+    private void RightFilter_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter(_right);
 
     private async Task NavigateUpAsync(PaneState pane)
     {
@@ -632,13 +657,15 @@ public sealed partial class MainWindow : Window
         public string RightPath { get; set; } = rightPath;
     }
 
-    private sealed class PaneState(string name, TextBox pathBox, ListView list, TextBlock status)
+    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status)
     {
         public string Name { get; } = name;
         public TextBox PathBox { get; } = pathBox;
+        public TextBox FilterBox { get; } = filterBox;
         public ListView List { get; } = list;
         public TextBlock Status { get; } = status;
         public ObservableCollection<FileEntry> Items { get; } = [];
+        public IReadOnlyList<FileEntry> AllItems { get; set; } = Array.Empty<FileEntry>();
         public Stack<string> BackHistory { get; } = new();
         public Stack<string> ForwardHistory { get; } = new();
         public string CurrentPath { get; set; } = string.Empty;
