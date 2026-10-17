@@ -27,15 +27,15 @@
     <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="#1B1D22">
       <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
       <AppBarButton Icon="Copy" Label="Copy R → L" Click="CopyRightToLeft_Click" />
-      <AppBarButton Icon="Move" Label="Move L → R" Click="MoveLeftToRight_Click" />
-      <AppBarButton Icon="Move" Label="Move R → L" Click="MoveRightToLeft_Click" />
+      <AppBarButton Icon="MoveToFolder" Label="Move L → R" Click="MoveLeftToRight_Click" />
+      <AppBarButton Icon="MoveToFolder" Label="Move R → L" Click="MoveRightToLeft_Click" />
       <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
       <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" />
       <AppBarButton Icon="View" Label="Preview" Click="PreviewSelected_Click" ToolTipService.ToolTip="Read-only viewer and integrated media player" />
       <AppBarButton Icon="View" Label="Inspect Archive" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP, TAR, or TGZ contents" />
       <AppBarButton Icon="Save" Label="Create Archive" Click="CreateZip_Click" ToolTipService.ToolTip="Create ZIP, TAR, or TAR.GZ from selected files and folders" />
       <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active archive creation" />
-      <AppBarButton Icon="OpenFolder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
+      <AppBarButton Icon="Folder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
       <AppBarButton Icon="Cancel" Label="Cancel Extract" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active archive extraction" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
       <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
@@ -44,7 +44,7 @@
       <AppBarSeparator />
       <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" />
       <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" />
-      <AppBarButton Icon="OpenFolder" Label="Open in Explorer" Click="OpenInExplorer_Click" />
+      <AppBarButton Icon="Folder" Label="Open in Explorer" Click="OpenInExplorer_Click" />
     </CommandBar>
     <Grid Grid.Row="2" Margin="12,4" ColumnDefinitions="*,Auto" ColumnSpacing="8">
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled"><StackPanel x:Name="WorkspaceTabsPanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" /></ScrollViewer>

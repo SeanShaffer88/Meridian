@@ -19,7 +19,7 @@ Free · Open source · Offline-first · Windows 11
 </div>
 
 > [!WARNING]
-> **Meridian is an early development preview, not a finished release.** Windows x64/ARM64 CI build and core-test workflows are configured, but successful results for the latest development changes and hands-on runtime, installer, and accessibility testing have not been verified. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
+> **Meridian is an early development preview, not a finished release.** Windows x64/ARM64 build, publish, installer and core-test CI passed for the archive-integrity baseline `d0d9d597`; subsequent changes require their own CI evidence. Hands-on runtime, clean-install and accessibility testing remain unverified. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
 
 ---
 
@@ -47,7 +47,7 @@ Inspired by the clear, category-by-category feature reference used by classic du
 
 [General interface](#general-features-and-interface) · [File operations](#file-operations-and-organization) · [Viewer and media](#built-in-viewer-images-audio-and-video) · [Archives](#archives-and-compressed-files) · [Search and intelligence](#search-discovery-and-file-intelligence) · [Recovery](#recovery-history-and-system-maintenance) · [Network and devices](#network-devices-and-extensions) · [Remote transfers](#network-transfer-and-remote-server-roadmap) · [Selection](#advanced-file-selection-and-navigation) · [Metadata](#file-metadata-permissions-and-diagnostics) · [Security and quality](#reliability-security-and-release-readiness)
 
-**Quick distinction:** The built-in ZIP catalog is a **read-only backend prototype**, not archive navigation or extraction in the app. The media player is an **unverified WinUI prototype**. No external archive application will be required for formats Meridian eventually supports.
+**Quick distinction:** The feature branch includes ZIP/TAR/TGZ inspection, creation and staged extraction commands. Archive-as-folder navigation remains planned. The media player is an **unverified WinUI prototype**. No external archive application will be required for formats Meridian eventually supports.
 
 ### General features and interface
 
@@ -104,16 +104,16 @@ Inspired by the clear, category-by-category feature reference used by classic du
 ### Archives and compressed files
 
 - **[DEV]** Conservative archive-entry path validator that rejects traversal, rooted paths, reserved device names and unsafe components.
-- **[DEV]** Backend-only, read-only ZIP entry catalog using built-in .NET ZIP support.
+- **[DEV]** Integrated ZIP/TAR/TGZ inspection, archive creation from selected files/folders, and staged extraction into a new folder using built-in .NET support.
 - **[DEV]** ZIP catalog limits on entry count and declared uncompressed sizes; duplicate path rejection.
 - **[PLANNED]** Browse supported archives like virtual folders inside either pane.
 - **[PLANNED]** Extract individual entries or selected groups, with preview and no-overwrite defaults.
-- **[PLANNED]** ZIP/ZIP64 creation, update and extraction.
+- **[DEV]** ZIP creation and extraction with streamed CRC/length checks; archive update remains planned.
 - **[PLANNED]** 7z browsing/extraction and creation where the chosen embedded backend supports it.
 - **[PLANNED]** RAR/RAR5 browsing and extraction where supported by an appropriately licensed bundled decoder; **RAR creation is not promised**.
 - **[PLANNED]** TAR/PAX/GNU TAR, GZIP, BZIP2, XZ and Zstandard streams and combinations.
 - **[PLANNED]** Password-protected archive reading and encryption options, explicitly scoped by format.
-- **[PLANNED]** Archive integrity testing, progress, cancellation, collision reporting and safe staging.
+- **[DEV]** ZIP CRC/length and TAR/TGZ trailer checks, progress, cancellation, collision rejection and staged publication; broader integrity tooling remains planned.
 - **[PLANNED]** Compression-ratio, nesting, total-output, memory and time budgets to resist archive bombs.
 - **[REQUIREMENT]** **No separate WinRAR, 7-Zip or other archive-manager installation required.** Ship supported decoding components with Meridian; audit licenses and Windows x64/ARM64 packaging.
 - **[REQUIREMENT]** No universal-format promise: advertise exact browse, extract, create and encryption capabilities by format.
@@ -124,14 +124,14 @@ This table describes **current implementation versus intended coverage**, not fo
 
 | Format family | Catalog today | Extraction today | Creation today | Intended direction |
 | --- | --- | --- | --- | --- |
-| ZIP / ZIP64 | **[DEV]** ZIP backend prototype | No | No | Browse, extract and create |
+| ZIP / ZIP64 | **[DEV]** inspection command | **[DEV]** staged extraction | **[DEV]** creation | Virtual-folder navigation and tested codec/ZIP64 coverage |
 | 7z | No | No | No | Embedded backend; codec-dependent |
 | RAR / RAR5 | No | No | No | Browse and extract if license and decoder permit; no RAR writing promise |
-| TAR / PAX / GNU TAR | No | No | No | Browse, extract and create |
-| GZIP / BZIP2 / XZ / Zstandard | No | No | No | Decode and encode supported streams; handle TAR combinations |
+| TAR / PAX / GNU TAR | **[DEV]** bounded catalog | **[DEV]** staged extraction | **[DEV]** creation | Virtual-folder navigation and broader metadata compatibility |
+| GZIP / BZIP2 / XZ / Zstandard | **[DEV]** TAR.GZ/TGZ only | **[DEV]** TAR.GZ/TGZ only | **[DEV]** TAR.GZ/TGZ only | Standalone streams and other codecs remain planned |
 | Other archive families | No | No | No | Evaluate individually and publish a tested capability matrix |
 
-The ZIP catalog currently inspects declared metadata only. **It does not decompress, validate payload integrity, extract files or protect against every malformed archive.** Encryption and format-specific codec support are not yet verified.
+Catalog listings inspect declared metadata; complete ZIP extraction validates payload length and CRC, and TAR/TGZ processing checks trailing data and gzip checksums. These checks do not authenticate archives or protect against every malformed input. Encryption and uncommon codecs remain unsupported; interactive and architecture-specific runtime verification remains open.
 
 See [Archive Engine design and compatibility](docs/ARCHIVE_ENGINE.md).
 

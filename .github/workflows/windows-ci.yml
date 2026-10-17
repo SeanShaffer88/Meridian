@@ -61,6 +61,36 @@ jobs:
       - name: Publish Windows 11 app (${{ matrix.runtime }})
         run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
 
+      - name: Verify published XAML resource index
+        shell: pwsh
+        run: |
+          $publish = "src/Meridian.App/bin/${{ matrix.architecture }}/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish"
+          if (!(Test-Path -LiteralPath "$publish/Meridian.pri")) {
+            throw "Published app is missing Meridian.pri; the main window cannot load."
+          }
+
+      - name: Smoke test published x64 startup
+        if: matrix.architecture == 'x64'
+        shell: pwsh
+        run: |
+          $publish = (Resolve-Path "src/Meridian.App/bin/x64/Release/net10.0-windows10.0.22000.0/win-x64/publish").Path
+          $app = Start-Process -FilePath "$publish/Meridian.exe" -WorkingDirectory $publish -WindowStyle Hidden -PassThru
+          try {
+            if ($app.WaitForExit(10000)) {
+              $diagnostic = Join-Path $env:LOCALAPPDATA "Meridian/last-error.log"
+              if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic }
+              throw "Published app exited during startup: $($app.ExitCode)"
+            }
+            $app.Refresh()
+            if ($app.MainWindowHandle -eq 0) { throw "Published app did not create a main window." }
+          } finally {
+            if (!$app.HasExited) {
+              $app.CloseMainWindow() | Out-Null
+              if (!$app.WaitForExit(5000)) { $app.Kill() }
+            }
+            $app.Dispose()
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
