@@ -390,6 +390,7 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _zipExtractionBusy;
+    private CancellationTokenSource? _zipExtractionCancellation;
 
     private async void ExtractZip_Click(object sender, RoutedEventArgs e)
     {
@@ -411,15 +412,23 @@ public sealed partial class MainWindow : Window
             XamlRoot = LeftPath.XamlRoot
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        _zipExtractionCancellation = new CancellationTokenSource();
         GlobalStatus.Text = "Extracting ZIP · " + selected.Name;
-        var receipt = await Task.Run(() => Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(archivePath, parent, folder));
+        var token = _zipExtractionCancellation.Token;
+        var receipt = await Task.Run(() => Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
+            archivePath, parent, folder, cancellationToken: token), token);
         GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             GlobalStatus.Text = "ZIP extraction failed · " + ex.Message;
         }
-        finally { _zipExtractionBusy = false; }
+        finally
+        {
+            _zipExtractionCancellation?.Dispose();
+            _zipExtractionCancellation = null;
+            _zipExtractionBusy = false;
+        }
     }
 
     private bool _previewDialogOpen;
