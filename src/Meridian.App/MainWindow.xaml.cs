@@ -296,17 +296,10 @@ public sealed partial class MainWindow : Window
     private void ApplyFilter(PaneState pane)
     {
         var query = pane.FilterBox.Text.Trim();
-        var matches = string.IsNullOrEmpty(query)
-            ? pane.AllItems
-            : pane.AllItems.Where(item =>
-                item.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                item.FullPath.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                item.TypeLabel.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+        var matches = DirectoryReader.Filter(pane.AllItems, query);
 
         pane.Items.Clear();
-        foreach (var item in matches
-            .OrderByDescending(item => item.IsDirectory)
-            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var item in matches)
             pane.Items.Add(item);
 
         SetPaneStatus(pane, string.IsNullOrEmpty(query)
