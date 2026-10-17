@@ -59,6 +59,46 @@ public static class FileOperations
         else File.Move(source, destination);
     }
 
+    /// <summary>Moves a file or directory to an existing destination folder without overwriting.</summary>
+    public static string MoveItem(string sourcePath, string destinationDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+
+        var source = Path.GetFullPath(sourcePath);
+        var destinationRoot = Path.GetFullPath(destinationDirectory);
+        if (!File.Exists(source) && !Directory.Exists(source))
+            throw new FileNotFoundException("The selected source no longer exists.", source);
+        if (!Directory.Exists(destinationRoot))
+            throw new DirectoryNotFoundException($"The destination folder does not exist: {destinationRoot}");
+        RejectReparsePoint(source);
+
+        var isDirectory = Directory.Exists(source);
+        if (isDirectory)
+        {
+            var relativeDestination = Path.GetRelativePath(source, destinationRoot);
+            var isSelfOrDescendant = !Path.IsPathRooted(relativeDestination) &&
+                (relativeDestination == "." ||
+                 (relativeDestination != ".." &&
+                  !relativeDestination.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)));
+            if (isSelfOrDescendant)
+                throw new IOException("A folder cannot be moved into itself or one of its descendants.");
+        }
+
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(source));
+        if (string.IsNullOrWhiteSpace(name))
+            throw new IOException("The selected item cannot be moved from its current location.");
+        var finalPath = Path.Combine(destinationRoot, name);
+        if (string.Equals(source, finalPath, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("The source and destination are the same item.");
+        if (File.Exists(finalPath) || Directory.Exists(finalPath))
+            throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
+
+        if (isDirectory) Directory.Move(source, finalPath);
+        else File.Move(source, finalPath);
+        return finalPath;
+    }
+
     public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
