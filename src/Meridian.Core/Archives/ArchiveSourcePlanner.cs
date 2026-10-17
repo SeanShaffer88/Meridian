@@ -6,6 +6,7 @@ public static class ArchiveSourcePlanner
         CancellationToken cancellationToken = default)
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in paths)
         {
             if (files.Count >= 10000) throw new InvalidDataException("Archive entry count limit exceeded.");
@@ -28,6 +29,8 @@ public static class ArchiveSourcePlanner
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var directory = pending.Pop();
+                if (!visitedDirectories.Add(directory))
+                    throw new InvalidDataException("Archive source folder was selected more than once.");
                 foreach (var child in Directory.EnumerateFileSystemEntries(directory))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
