@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     private PaneState _activePane;
     private bool _restoringWorkspace;
     private CancellationTokenSource? _copyCancellation;
+    private CancellationTokenSource? _batchCancellation;
 
     public MainWindow()
     {
@@ -737,6 +738,7 @@ public sealed partial class MainWindow : Window
 
     private async void CopyShelf_Click(object sender, RoutedEventArgs e)
     {
+        if (_batchCancellation is not null) return;
         if (_dropShelf.Paths.Count == 0)
         {
             GlobalStatus.Text = "Add files to the Drop Shelf first.";
@@ -774,19 +776,38 @@ public sealed partial class MainWindow : Window
                 XamlRoot = Content.XamlRoot
             };
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
-            GlobalStatus.Text = "Copying Drop Shelf items…";
-            var result = await Task.Run(() => BatchCopy.Execute(sources, destination));
-            await NavigateAsync(_activePane, destination, addHistory: false);
-            GlobalStatus.Text = result.Succeeded
-                ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
-                : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
-                  (result.Cancelled ? "Cancelled" : result.Failure);
+            using var cancellation = new CancellationTokenSource();
+            _batchCancellation = cancellation;
+            CancelShelfButton.IsEnabled = true;
+            try
+            {
+                GlobalStatus.Text = "Copying Drop Shelf items…";
+                var progress = new Progress<BatchCopy.Progress>(state =>
+                    GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}");
+                var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
+                await NavigateAsync(_activePane, destination, addHistory: false);
+                GlobalStatus.Text = result.Succeeded
+                    ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
+                    : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
+                      (result.Cancelled ? "Cancelled" : result.Failure);
+            }
+            finally
+            {
+                CancelShelfButton.IsEnabled = false;
+                _batchCancellation = null;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
             ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException)
         {
             GlobalStatus.Text = "Batch copy did not start · " + ex.Message;
         }
+    }
+
+    private void CancelShelf_Click(object sender, RoutedEventArgs e)
+    {
+        _batchCancellation?.Cancel();
+        GlobalStatus.Text = "Cancelling batch copy…";
     }
 
     private void ClearShelf_Click(object sender, RoutedEventArgs e)
