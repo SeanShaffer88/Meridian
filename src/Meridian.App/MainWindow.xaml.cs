@@ -375,7 +375,7 @@ public sealed partial class MainWindow : Window
             var folderCount = entries.Count - fileCount;
             var listing = string.Join(Environment.NewLine,
                 entries.Select(entry => (entry.IsDirectory ? "[DIR] " : "[FILE] ") +
-                    entry.Path + " (" + entry.UncompressedBytes.ToString("N0") + " bytes)"));
+                    entry.Path + " (" + entry.Bytes.ToString("N0") + " bytes)"));
             await new ContentDialog
             {
                 Title = "Archive contents · " + selected.Name + " · " + entries.Count.ToString("N0") +
