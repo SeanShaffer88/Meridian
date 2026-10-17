@@ -389,6 +389,26 @@ public sealed partial class MainWindow : Window
         finally { _zipInspectionOpen = false; }
     }
 
+    private async void ExtractZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory) return;
+        var archivePath = selected.FullPath;
+        var parent = _activePane.CurrentPath;
+        var folder = Path.GetFileNameWithoutExtension(archivePath);
+        var plan = Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath);
+        var dialog = new ContentDialog
+        {
+            Title = "Extract ZIP?",
+            Content = new TextBlock { Text = plan.Count + " entries to " + Path.Combine(parent, folder) },
+            PrimaryButtonText = "Extract",
+            CloseButtonText = "Cancel",
+            XamlRoot = LeftPath.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var receipt = await Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(archivePath, parent, folder);
+        GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
+    }
+
     private bool _previewDialogOpen;
 
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
