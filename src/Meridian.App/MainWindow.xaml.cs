@@ -418,6 +418,7 @@ public sealed partial class MainWindow : Window
         var receipt = await Task.Run(() => Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
             archivePath, parent, folder, cancellationToken: token), token);
         GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
+        await NavigateAsync(_activePane, parent, addHistory: false);
         }
         catch (OperationCanceledException)
         {
