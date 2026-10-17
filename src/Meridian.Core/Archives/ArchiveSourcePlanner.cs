@@ -7,6 +7,7 @@ public static class ArchiveSourcePlanner
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        long totalBytes = 0;
         foreach (var path in paths)
         {
             if (files.Count >= 10000) throw new InvalidDataException("Archive entry count limit exceeded.");
@@ -52,8 +53,12 @@ public static class ArchiveSourcePlanner
             cancellationToken.ThrowIfCancellationRequested();
             var safeName = ArchiveEntryPathPolicy.Normalize(name);
             var safePath = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(path, cancellationToken);
+            var length = new FileInfo(safePath).Length;
+            if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
+                throw new InvalidDataException("Archive source size budget exceeded.");
             if (files.Count >= 10000 || !files.TryAdd(safeName, safePath))
                 throw new InvalidDataException("Archive entry count or name collision.");
+            totalBytes += length;
         }
     }
 }
