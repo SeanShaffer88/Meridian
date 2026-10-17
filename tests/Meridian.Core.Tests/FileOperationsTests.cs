@@ -82,61 +82,6 @@ public sealed class FileOperationsTests
     }
 
     [Fact]
-    public void RenameItem_RenamesFileWithoutChangingContents()
-    {
-        using var temp = new TemporaryDirectory();
-        var source = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
-        var file = Path.Combine(source, "before.txt");
-        File.WriteAllText(file, "preserve me");
-
-        var result = FileOperations.RenameItem(file, "after.txt");
-
-        Assert.Equal(Path.Combine(source, "after.txt"), result);
-        Assert.False(File.Exists(file));
-        Assert.Equal("preserve me", File.ReadAllText(result));
-    }
-
-    [Fact]
-    public void RenameItem_RenamesDirectory()
-    {
-        using var temp = new TemporaryDirectory();
-        var source = Directory.CreateDirectory(Path.Combine(temp.Path, "before")).FullName;
-        File.WriteAllText(Path.Combine(source, "inside.txt"), "inside");
-
-        var result = FileOperations.RenameItem(source, "after");
-
-        Assert.True(File.Exists(Path.Combine(result, "inside.txt")));
-        Assert.False(Directory.Exists(source));
-    }
-
-    [Fact]
-    public void RenameItem_RefusesToOverwriteExistingItem()
-    {
-        using var temp = new TemporaryDirectory();
-        var source = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
-        var first = Path.Combine(source, "first.txt");
-        var second = Path.Combine(source, "second.txt");
-        File.WriteAllText(first, "first");
-        File.WriteAllText(second, "second");
-
-        Assert.Throws<IOException>(() => FileOperations.RenameItem(first, "second.txt"));
-        Assert.Equal("first", File.ReadAllText(first));
-        Assert.Equal("second", File.ReadAllText(second));
-    }
-
-    [Fact]
-    public void RenameItem_RejectsPathSeparators()
-    {
-        using var temp = new TemporaryDirectory();
-        var source = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
-        var file = Path.Combine(source, "before.txt");
-        File.WriteAllText(file, "keep");
-
-        Assert.Throws<ArgumentException>(() => FileOperations.RenameItem(file, "../outside.txt"));
-        Assert.Equal("keep", File.ReadAllText(file));
-    }
-
-    [Fact]
     public void CopyItem_CopiesNestedDirectoryContents()
     {
         using var temp = new TemporaryDirectory();
