@@ -4,7 +4,9 @@
 
 ## Current prototype
 
-- `CleanupPlan` captures immutable findings, estimated sizes, explanations and risk categories.
+- `CleanupPlan` captures immutable findings, estimated sizes, explanations and risk categories; duplicate targets are rejected.
+- `CleanupSelection` refuses protected, unknown or duplicate selections.
+- `CleanupPreviewBuilder` produces an explicit, non-executable scope and risk summary.
 - `TemporaryFileInventory.ScanAsync` inventories immediate regular files in one caller-selected directory.
 - The scan is nonrecursive, has a configurable entry limit (1–100,000), supports cancellation and skips link entries and checks directory ancestors for reparse points before enumeration (best-effort, not race-free).
 - Every discovered file is classified **ReviewRequired**, never automatically safe to delete.
