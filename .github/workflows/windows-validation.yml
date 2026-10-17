@@ -3,9 +3,7 @@ name: Windows build and core tests
 on:
   push:
     branches:
-      - main
       - feature/timevault-foundation
-  pull_request:
   workflow_dispatch:
 
 concurrency:
