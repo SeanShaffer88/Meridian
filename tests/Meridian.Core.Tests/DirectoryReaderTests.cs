@@ -77,6 +77,26 @@ public sealed class DirectoryReaderTests
         Assert.Equal(new[] { "Folder", "a.txt", "b.txt" }, DirectoryReader.Filter(entries, " ").Select(item => item.Name));
     }
 
+    [Theory]
+    [InlineData(DirectorySortField.Name, false, "a.txt", "b.txt")]
+    [InlineData(DirectorySortField.Name, true, "b.txt", "a.txt")]
+    [InlineData(DirectorySortField.Size, false, "b.txt", "a.txt")]
+    [InlineData(DirectorySortField.Size, true, "a.txt", "b.txt")]
+    [InlineData(DirectorySortField.Modified, false, "a.txt", "b.txt")]
+    [InlineData(DirectorySortField.Modified, true, "b.txt", "a.txt")]
+    [InlineData(DirectorySortField.Type, false, "b.txt", "a.txt")]
+    [InlineData(DirectorySortField.Type, true, "a.txt", "b.txt")]
+    public void Filter_SortsWithoutChangingDirectoryFirstGuarantee(DirectorySortField field, bool descending, string first, string second)
+    {
+        var entries = new[]
+        {
+            new Meridian.Models.FileEntry { Name = "a.txt", FullPath = "a.txt", IsDirectory = false, TypeLabel = "TXT", SizeLabel = "", SizeBytes = 100, ModifiedUtc = new DateTime(2024, 1, 1), ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "b.txt", FullPath = "b.txt", IsDirectory = false, TypeLabel = "BIN", SizeLabel = "", SizeBytes = 10, ModifiedUtc = new DateTime(2025, 1, 1), ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "folder", FullPath = "folder", IsDirectory = true, TypeLabel = "Folder", SizeLabel = "", ModifiedLabel = "" }
+        };
+        Assert.Equal(new[] { "folder", first, second }, DirectoryReader.Filter(entries, null, field, descending).Select(item => item.Name));
+    }
+
     [Fact]
     public void FormatSize_FormatsBytesAndKilobytes()
     {
