@@ -50,4 +50,16 @@ public class SnapshotExportFailureTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             new SnapshotFileExporter().ExportAsync(Example, @"C:\source.txt", destination));
     }
+    [Theory]
+    [InlineData(@"C:\Recovered\..\source.txt")]
+    [InlineData(@"C:\Recovered\.\source.txt")]
+    [InlineData(@"\\server\share\source.txt")]
+    [InlineData("source.txt")]
+    public async Task RejectsUnsafeOriginalSourcePaths(string source)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new SnapshotFileExporter().ExportAsync(Example, source, @"C:\Recovered\safe.txt"));
+    }
+
 }
