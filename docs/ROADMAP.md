@@ -214,6 +214,44 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [ ] Complete portable mode: local settings, configuration, and history beside the executable when selected; document unavoidable OS-level traces and avoid promising literal zero footprint
 - [ ] Installable deployment with clean install, upgrade, repair, and uninstall behavior
 
+## Proposed system utilities — Restore Center, Storage Reclaimer and Meridian Vaults
+
+**Status: PLANNED.** These modules are not implemented. They will be separately permissioned and opt-in; no feature should silently alter restore points, protected files or system cleanup targets.
+
+### Restore Center — Windows System Restore manager
+
+- [ ] Show System Protection availability, supported volumes, protection status, and restore-point metadata through supported Windows interfaces.
+- [ ] Create a restore point on explicit request, reporting disabled protection, policy restrictions, privilege requirements and Windows creation throttling accurately.
+- [ ] Provide guarded links or supported workflows for configuring protection, allocating storage, and initiating Windows' own restore experience; never imply that System Restore restores personal documents.
+- [ ] If supported and justified, manage existing restore points with conspicuous confirmation, eligibility checks and warnings about loss of recovery options. No bulk deletion by default.
+- [ ] Present a unified recovery dashboard distinguishing **System Restore points**, **VSS shadow copies**, **File History**, **Recycle Bin** and **independent backups**; these are different mechanisms and not interchangeable.
+- [ ] Avoid automatic elevation, undocumented restore APIs, direct tampering with restore-point storage and claims of guaranteed rollback.
+
+### Storage Reclaimer — transparent disk cleanup and Windows slimming
+
+Inspired by the *category* of tools such as Auslogics Windows Slimmer; **no proprietary implementation or branding will be copied**.
+
+- [ ] Scan supported Windows temporary locations, user caches, Recycle Bin, thumbnails, logs and application leftovers with per-category sizes and confidence labels.
+- [ ] Provide a dry-run cleanup manifest: exact locations, estimated recoverable bytes, exclusions, access requirements, and reversibility.
+- [ ] Add Windows update/component-store cleanup only through supported Windows servicing or Storage Sense mechanisms, with warnings when uninstall/rollback options are reduced.
+- [ ] Consider optional hibernation-file management, optional-feature inventory, language packs and obsolete system components **only** where Windows exposes supported, auditable workflows.
+- [ ] Exclude downloads, personal documents, active application data, browser sessions, restore points and backups from default deletion.
+- [ ] Require explicit review for high-risk actions; detect active files and concurrent changes; report partial cleanup honestly.
+- [ ] Keep a locally stored cleanup receipt and provide before/after measurements, cancellation where supported and safe rollback guidance without promising universal undo.
+- [ ] Do not market registry cleaning, indiscriminate driver deletion, forced WinSxS deletion or unsupported servicing hacks as performance optimization.
+
+### Meridian Vaults — real encrypted file storage
+
+- [ ] Design encrypted vault containers or an audited OS-backed encrypted-storage provider; **hidden folders and ACLs alone are not encryption**.
+- [ ] Evaluate Windows-native protection options (BitLocker/VHDX, EFS where available) against a portable, independently audited authenticated-encryption design. Document edition, filesystem, account and portability limits.
+- [ ] Offer explicit vault creation, unlock, lock, idle auto-lock, read-only access, secure export and recovery-key setup.
+- [ ] Use authenticated encryption, per-vault keys, a memory-hard password KDF, authenticated metadata, cryptographic randomness and tested recovery flows; do not invent cryptographic algorithms.
+- [ ] Never store plaintext passwords or recovery keys, and do not claim guaranteed secure deletion of source files, temporary files, SSD blocks or backups.
+- [ ] Account for crash consistency, concurrent writers, lock behavior, lost passwords, backups, corruption recovery, clipboard/thumbnail leakage and search-index exposure.
+- [ ] Complete third-party crypto review, threat modeling, tamper/corruption tests and Windows integration testing **before** offering vaults for sensitive real-world data.
+
+**Delivery gates:** start with read-only inventory and threat-model documents; add explicit action plans and testable services; integrate UI only after Windows CI and real-device tests. Restore-point management, privileged cleanup and vault encryption must not be released on the strength of unit tests alone.
+
 ## Cross-cutting quality gates
 
 - [ ] Accessibility and keyboard-only audit
