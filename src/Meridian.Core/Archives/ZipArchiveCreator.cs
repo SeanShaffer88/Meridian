@@ -113,7 +113,7 @@ public static class ZipArchiveCreator
                             completedBytes += count;
                             var visibleBytes = Math.Min(completedBytes, Math.Max(0, total - 1));
                             if (visibleBytes > lastReportedBytes &&
-                                (visibleBytes - lastReportedBytes >= 1024 * 1024 || completedBytes == total))
+                                visibleBytes - lastReportedBytes >= 1024 * 1024)
                             {
                                 lastReportedBytes = visibleBytes;
                                 ReportProgress(visibleBytes, total);
