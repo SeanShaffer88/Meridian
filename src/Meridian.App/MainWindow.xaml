@@ -36,7 +36,7 @@
       <AppBarButton Icon="Save" Label="Create Archive" Click="CreateZip_Click" ToolTipService.ToolTip="Create ZIP, TAR, or TAR.GZ from selected files and folders" />
       <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active archive creation" />
       <AppBarButton Icon="OpenFolder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
-      <AppBarButton Icon="Cancel" Label="Cancel ZIP" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active ZIP extraction" />
+      <AppBarButton Icon="Cancel" Label="Cancel Extract" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active archive extraction" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
       <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
       <AppBarButton Icon="View" Label="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
