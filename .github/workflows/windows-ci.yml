@@ -25,6 +25,9 @@ jobs:
         run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --locked-mode
       - name: Test core library
         run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
+      - name: Test artifact packaging and checksum rejection
+        shell: pwsh
+        run: ./scripts/test-packaging.ps1
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -106,6 +109,21 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "packaging/Meridian.iss" "/DPublishDir=$publishPath" "/DOutputDir=$outputPath" "/DAllowedArch=${{ matrix.inno_arch }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package portable ZIP and verify SHA-256 manifest
+        shell: pwsh
+        run: ./scripts/package.ps1 -PublishDirectory "src/Meridian.App/bin/${{ matrix.architecture }}/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish" -OutputDirectory artifacts -Architecture ${{ matrix.inno_arch }}
+
+      - name: Upload distribution files and SHA-256 manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-distribution-${{ matrix.runtime }}
+          path: |
+            artifacts/Meridian-Setup-win-${{ matrix.inno_arch }}.exe
+            artifacts/Meridian-Portable-win-${{ matrix.inno_arch }}.zip
+            artifacts/SHA256SUMS-win-${{ matrix.inno_arch }}.txt
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload installable Windows installer
         uses: actions/upload-artifact@v4
