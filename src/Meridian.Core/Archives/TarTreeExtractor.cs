@@ -75,6 +75,7 @@ public static class TarTreeExtractor
                 }
                 progress?.Report((i + 1) * 100 / Math.Max(1, catalog.Count));
             }
+            cancellationToken.ThrowIfCancellationRequested();
             if (reader.GetNextEntry(copyData: false) is not null)
                 throw new InvalidDataException("TAR gained entries after cataloging.");
             cancellationToken.ThrowIfCancellationRequested();
