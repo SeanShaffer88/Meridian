@@ -19,6 +19,22 @@ public sealed class FileOperationsTests
     }
 
     [Fact]
+    public void CopyItem_PreservesSourceLastWriteTime()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceDirectory = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var source = Path.Combine(sourceDirectory, "dated.txt");
+        File.WriteAllText(source, "timestamped");
+        var expected = DateTime.UtcNow.AddDays(-3);
+        File.SetLastWriteTimeUtc(source, expected);
+
+        var result = FileOperations.CopyItem(source, destination);
+
+        Assert.Equal(expected, File.GetLastWriteTimeUtc(result));
+    }
+
+    [Fact]
     public void CopyItem_CopiesNestedDirectoryContents()
     {
         using var temp = new TemporaryDirectory();
