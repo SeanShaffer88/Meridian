@@ -349,6 +349,89 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.BackHistory.Push(pane.CurrentPath);
         await NavigateAsync(pane, target, addHistory: false);
     }
+
+    private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
+        {
+            GlobalStatus.Text = "Select a file to preview.";
+            return;
+        }
+
+        var path = selected.FullPath;
+        var decision = Meridian.Core.Viewer.ViewerRouter.Classify(path);
+        var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = decision.Reason,
+            TextWrapping = TextWrapping.Wrap
+        });
+        Microsoft.UI.Xaml.Controls.MediaPlayerElement? player = null;
+        try
+        {
+            if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
+            {
+                player = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
+                {
+                    AreTransportControlsEnabled = true,
+                    AutoPlay = false,
+                    Height = decision.Kind == Meridian.Core.Viewer.ViewerKind.Video ? 320 : 100
+                };
+                player.SetMediaPlayer(new Windows.Media.Playback.MediaPlayer());
+                player.MediaPlayer.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
+                panel.Children.Add(player);
+            }
+            else if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Text or Meridian.Core.Viewer.ViewerKind.Hex)
+            {
+                var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path);
+                var display = decision.Kind == Meridian.Core.Viewer.ViewerKind.Text
+                    ? System.Text.Encoding.UTF8.GetString(bytes)
+                    : Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes);
+                panel.Children.Add(new ScrollViewer
+                {
+                    MaxHeight = 420,
+                    Content = new TextBox
+                    {
+                        Text = display,
+                        IsReadOnly = true,
+                        AcceptsReturn = true,
+                        TextWrapping = TextWrapping.NoWrap,
+                        MinHeight = 220
+                    }
+                });
+            }
+            else
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "This format does not yet have an integrated renderer. No external application will be launched.",
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            await new ContentDialog
+            {
+                Title = "Preview · " + selected.Name,
+                Content = panel,
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+            System.Runtime.InteropServices.COMException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Preview unavailable · " + ex.Message;
+        }
+        finally
+        {
+            if (player is not null)
+            {
+                player.MediaPlayer?.Pause();
+                player.SetMediaPlayer(null);
+            }
+        }
+    }
+
     private async Task OpenSelectedAsync(PaneState pane)
     {
         if (pane.List.SelectedItem is not FileEntry selected) return;
