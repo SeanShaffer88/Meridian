@@ -55,6 +55,19 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsRepeatedSelectedFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-duplicate-folder-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "file.txt"), "data");
+            Assert.Throws<InvalidDataException>(() => ArchiveSourcePlanner.Plan(new[] { root, root }));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void RejectsMissingSources()
     {
         Assert.Throws<FileNotFoundException>(() =>
