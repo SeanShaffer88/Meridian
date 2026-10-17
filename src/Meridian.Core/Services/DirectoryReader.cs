@@ -43,6 +43,25 @@ public static class DirectoryReader
             .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    /// <summary>Filters a previously-read directory listing without touching the filesystem again.</summary>
+    public static IReadOnlyList<FileEntry> Filter(IReadOnlyList<FileEntry> entries, string? query)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var normalizedQuery = query?.Trim();
+        IEnumerable<FileEntry> filtered = entries;
+        if (!string.IsNullOrEmpty(normalizedQuery))
+        {
+            filtered = entries.Where(item =>
+                item.Name.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                item.FullPath.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                item.TypeLabel.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return filtered.OrderByDescending(item => item.IsDirectory)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     public static string FormatSize(long bytes)
     {
         string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];

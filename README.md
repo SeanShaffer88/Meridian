@@ -10,7 +10,7 @@ Meridian is a free, open-source, offline-first dual-pane file manager for Window
 - Background directory enumeration with directory-first sorting and cancellation of superseded reads.
 - Basic file launching through the Windows shell.
 - Local bookmarks and persistence of the last browsed locations.
-- Paired workspace tabs that remember separate left/right locations and restore the saved session.
+- Paired workspace tabs that remember separate left/right locations and restore the saved session.\n- Live per-pane filtering by name, path, or type without rescanning the directory.
 - New-folder creation with name validation and duplicate checks.
 - In-place file and folder rename, including case-only changes, with validation and no-overwrite behavior.
 - Read-only properties dialog for file/folder name, type, path, file size, timestamps, and filesystem attributes (folder sizes are intentionally not recursively calculated).
