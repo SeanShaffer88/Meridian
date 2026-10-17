@@ -689,6 +689,52 @@ public sealed partial class MainWindow : Window
         GlobalStatus.Text = $"Removed from Drop Shelf · {_shelfPaths.Count:N0} remaining";
     }
 
+    private async void PreviewShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dropShelf.Paths.Count == 0)
+        {
+            GlobalStatus.Text = "Add items to the Drop Shelf before previewing a batch.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
+        {
+            GlobalStatus.Text = "Open the intended destination folder in the active pane.";
+            return;
+        }
+
+        try
+        {
+            var sources = _dropShelf.Paths.ToArray();
+            var destination = _activePane.CurrentPath;
+            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
+            var lines = plan.Items.Take(100).Select(item =>
+                $"[{item.Result}] {Path.GetFileName(item.Source)}\n  {item.Explanation}\n  → {item.Target ?? "(unavailable)"}");
+            var summary = $"Destination: {plan.DestinationDirectory}\n" +
+                $"Collected: {plan.Items.Count:N0} · Ready: {plan.ReadyCount:N0} · " +
+                $"Blocked: {plan.Items.Count - plan.ReadyCount:N0}\n\n" +
+                string.Join("\n\n", lines) +
+                (plan.Items.Count > 100 ? $"\n\n…and {plan.Items.Count - 100:N0} more items not shown." : "") +
+                "\n\nREAD-ONLY PREVIEW: No files were copied, moved, or deleted. " +
+                "A preview cannot reserve paths or guarantee a later operation will succeed.";
+            var dialog = new ContentDialog
+            {
+                Title = "Operation Simulator · Drop Shelf batch",
+                Content = new ScrollViewer
+                {
+                    Content = new TextBlock { Text = summary, TextWrapping = TextWrapping.Wrap },
+                    MaxHeight = 480
+                },
+                CloseButtonText = "Close",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not preview shelf · " + ex.Message;
+        }
+    }
+
     private void ClearShelf_Click(object sender, RoutedEventArgs e)
     {
         _dropShelf.Clear();
