@@ -118,6 +118,19 @@ public sealed class BatchCopyTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void Execute_RejectsEmptyBatchWithoutChanges()
+    {
+        var destination = Path.Combine(Path.GetTempPath(), $"meridian-empty-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(destination);
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => BatchCopy.Execute([], destination));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(destination));
+        }
+        finally { Directory.Delete(destination); }
+    }
+
     private sealed class SynchronousProgress<T>(Action<T> callback) : IProgress<T>
     {
         public void Report(T value) => callback(value);
