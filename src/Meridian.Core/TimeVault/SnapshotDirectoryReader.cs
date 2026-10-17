@@ -22,19 +22,7 @@ public sealed class SnapshotDirectoryReader
             var root = Path.GetPathRoot(Path.GetFullPath(liveFolder))
                 ?? throw new ArgumentException("Invalid local folder.", nameof(liveFolder));
             var snapshotFolder = ShadowPath.ResolveForDrive(snapshot, liveFolder, root);
-            // Inspect every ancestor from the snapshot root: a junction in the middle
-            // of the path could otherwise escape the expected historical tree.
-            var deviceRoot = snapshot.DeviceObject.TrimEnd('\\');
-            var relative = snapshotFolder[deviceRoot.Length..].TrimStart('\\');
-            if ((File.GetAttributes(deviceRoot + @"\\") & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Snapshot device root is a reparse point.");
-            var current = deviceRoot;
-            foreach (var part in relative.Split('\\', StringSplitOptions.RemoveEmptyEntries))
-            {
-                current = Path.Combine(current, part);
-                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException("Snapshot path contains a reparse point; refusing traversal.");
-            }
+            SnapshotPathGuard.RejectReparsePoints(snapshot, snapshotFolder);
             var items = new List<SnapshotEntry>();
             // Enumeration is deliberately nonrecursive and capped to bound memory use.
             const int maxEntries = 10000;
