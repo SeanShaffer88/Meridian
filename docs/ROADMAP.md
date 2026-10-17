@@ -2,6 +2,10 @@
 
 Meridian is an early-stage, offline-first file manager targeting Windows 11 only, across x64 and ARM64 architectures. This roadmap is a feature inventory and an ordering guide, not a claim that any unchecked item is implemented. Features will be delivered incrementally, with security, responsiveness, accessibility, tests, and honest Windows CI verification required alongside functionality.
 
+## Meridian Foresight — signature intelligence initiative
+
+The [Foresight design and implementation status](FORESIGHT.md) describes an initial **read-only relationship analyzer** committed on the feature branch, plus future evidence graphs, consequence analysis, optional AI interpretation, and recovery-aware plans. **No AI model, UI integration, or autonomous file operations are implemented.** Every mutation remains subject to the [Safety Contract](SAFETY_CONTRACT.md).
+
 ## North star — make file management fundamentally better
 
 **Meridian's long-term goal is to become a workspace for interacting with everything stored on a computer, not merely an alternative to File Explorer.** Pursue ideas that make people ask, "Why don't all file managers work this way?" Originality is valuable only when it improves a real workflow.
