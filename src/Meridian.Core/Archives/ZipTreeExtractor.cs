@@ -80,22 +80,8 @@ public static class ZipTreeExtractor
                 Directory.CreateDirectory(containing);
                 await using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write,
                     FileShare.None, 8192, FileOptions.Asynchronous);
-                await using var input = archive.Entries[i].Open();
-                var buffer = new byte[8192];
-                long written = 0;
-                while (true)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var read = await input.ReadAsync(buffer, cancellationToken);
-                    if (read == 0) break;
-                    if (read > item.UncompressedBytes - written || read > maxTotalBytes - total)
-                        throw new InvalidDataException("ZIP decompression exceeded declared size or extraction budget.");
-                    await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                    written += read;
-                    total += read;
-                }
-                if (written != item.UncompressedBytes)
-                    throw new InvalidDataException("ZIP decompressed size did not match catalog.");
+                total += await ZipEntryCopy.CopyAsync(archive.Entries[i], output,
+                    maxTotalBytes - total, cancellationToken);
                 fileCount++;
                 progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
             }

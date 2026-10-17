@@ -68,20 +68,7 @@ public static class ZipStagedExtractor
                 FileShare.None, 8192, FileOptions.Asynchronous))
             {
                 stagingCreated = true;
-                await using var input = actual.Open();
-                var buffer = new byte[8192];
-                while (true)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var read = await input.ReadAsync(buffer, cancellationToken);
-                    if (read == 0) break;
-                    if (read > maxUncompressedBytes - total)
-                        throw new InvalidDataException("ZIP data exceeded extraction limit.");
-                    await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                    total += read;
-                }
-                if (total != selected.UncompressedBytes)
-                    throw new InvalidDataException("ZIP entry size mismatch.");
+                total = await ZipEntryCopy.CopyAsync(actual, output, maxUncompressedBytes, cancellationToken);
                 await output.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();

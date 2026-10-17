@@ -72,21 +72,7 @@ public static class ZipSafeExtractor
             await using var output = new FileStream(destination, FileMode.CreateNew,
                 FileAccess.Write, FileShare.None, 8192, FileOptions.Asynchronous);
             created = true;
-            await using var input = entry.Open();
-            var buffer = new byte[8192];
-            long total = 0;
-            while (true)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var read = await input.ReadAsync(buffer, cancellationToken);
-                if (read == 0) break;
-                if (read > maxUncompressedBytes - total)
-                    throw new InvalidDataException("ZIP entry exceeded extraction budget.");
-                await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                total += read;
-            }
-            if (total != selected.UncompressedBytes)
-                throw new InvalidDataException("ZIP entry size differs from its declared size.");
+            var total = await ZipEntryCopy.CopyAsync(entry, output, maxUncompressedBytes, cancellationToken);
             await output.FlushAsync(cancellationToken);
             completed = true;
             return total;

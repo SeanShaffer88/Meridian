@@ -1,6 +1,8 @@
 # Meridian Archive Engine — no external archive manager required
 
-**Status: early backend prototype on the feature branch.** A bounded, read-only ZIP catalog using built-in .NET compression and conservative entry-name validation has been committed with initial tests. It has not been compiled or Windows-verified; extraction, creation, UI navigation and non-ZIP formats are not implemented.
+**Status: early backend prototype on the feature branch.** Built-in .NET backends support bounded ZIP and TAR/TGZ cataloging, creation, and extraction, with Windows core tests. The compatibility table below remains a target contract, not a claim that every listed format is implemented.
+
+Complete ZIP extraction checks the streamed payload against both its declared length and CRC-32 before reporting success. Single-file and tree staging discard failed output; the direct single-file API removes its partial file on managed failure. Catalog listings and bounded prefix previews do not verify complete payload integrity. CRC detects accidental corruption; it does not authenticate an archive.
 
 ## Product contract
 
