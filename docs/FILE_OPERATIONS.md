@@ -16,7 +16,7 @@ Case-only rename uses a unique temporary sibling and attempts rollback if its se
 
 Copy remains separate: it stages data in the destination folder, checks cancellation between bounded I/O operations and publishes without replacing a final item. It attempts cleanup on failure and preserves source files. Post-copy checksum verification and a snapshot of changing directory contents are not implemented; a staged tree is not a consistent filesystem snapshot. Process interruption, disk failure or denied cleanup can leave staging data.
 
-Drop Shelf batch copy is sequential, performs advisory preflight and execution-time checks, and retains earlier successful results after a later failure or cancellation. Its displayed result is not a persistent journal or rollback mechanism. New-folder creation, Recycle Bin requests and shell opening are separate UI paths with their own checks; do not infer all move guards apply to them.
+Drop Shelf batch copy is sequential, performs advisory preflight and execution-time checks, and retains earlier successful results after a later failure or cancellation. Its displayed result is not a persistent journal or rollback mechanism. New-folder creation uses the core operation layer and Windows CreateDirectoryW, which reports a collision instead of accepting an already-existing directory. It shares strict new-name validation with Rename and rejects linked parent paths; these path checks remain subject to concurrent replacement. The UI uses the parent captured before its dialog. Recycle Bin requests and shell opening remain separate paths; do not infer move guards apply to them.
 
 ## Evidence and future gates
 

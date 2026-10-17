@@ -8,14 +8,7 @@ public static class FileOperations
     public static string RenameItem(string sourcePath, string newName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
-        if (newName is "." or ".." ||
-            newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            newName.Contains(Path.DirectorySeparatorChar) ||
-            newName.Contains(Path.AltDirectorySeparatorChar) ||
-            Path.IsPathRooted(newName) ||
-            !string.Equals(newName, newName.Trim(), StringComparison.Ordinal))
-            throw new ArgumentException("Enter a valid file or folder name without path separators or surrounding whitespace.", nameof(newName));
+        ValidateNewName(newName);
 
         var source = Path.GetFullPath(sourcePath);
         if (!File.Exists(source) && !Directory.Exists(source))
@@ -60,7 +53,7 @@ public static class FileOperations
     {
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("Move and rename require Windows.");
-        if (MoveFileEx(ForNativeMove(source), ForNativeMove(destination), 0)) return;
+        if (MoveFileEx(ForNativePath(source), ForNativePath(destination), 0)) return;
         var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
         var detail = new System.ComponentModel.Win32Exception(error);
         if (error == 17) // ERROR_NOT_SAME_DEVICE
@@ -75,11 +68,60 @@ public static class FileOperations
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     private static extern bool MoveFileEx(string existingName, string newName, uint flags);
 
-    private static string ForNativeMove(string path)
+    private static string ForNativePath(string path)
     {
         if (path.Length < 260 || path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path;
         return path.StartsWith(@"\\", StringComparison.Ordinal)
             ? @"\\?\UNC\" + path[2..] : @"\\?\" + path;
+    }
+
+    /// <summary>Creates exactly one new folder in an existing, checked parent; an existing item is an error.</summary>
+    public static string CreateFolder(string parentDirectory, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(parentDirectory);
+        ValidateNewName(name);
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Folder creation requires Windows.");
+        if (!Path.IsPathFullyQualified(parentDirectory))
+            throw new ArgumentException("Choose an absolute parent directory.", nameof(parentDirectory));
+        var parent = Path.GetFullPath(parentDirectory);
+        if (!Directory.Exists(parent)) throw new DirectoryNotFoundException(parent);
+        RejectReparsePoint(parent);
+        var target = Path.Combine(parent, name);
+        // Unlike Directory.CreateDirectory, this fails when the final folder
+        // already exists, including a collision after our parent inspection.
+        if (CreateDirectory(ForNativePath(target), IntPtr.Zero)) return target;
+        var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+        var detail = new System.ComponentModel.Win32Exception(error);
+        if (error is 80 or 183)
+            throw new IOException($"'{name}' already exists. No folder was created.", detail);
+        if (error == 5)
+            throw new UnauthorizedAccessException("The folder could not be created. " + detail.Message, detail);
+        throw new IOException("The folder could not be created. " + detail.Message, detail);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateDirectoryW",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool CreateDirectory(string path, IntPtr securityAttributes);
+
+    private static void ValidateNewName(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (name is "." or ".." || name.Length > 255 || name.EndsWith('.') ||
+            !string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
+            name.IndexOfAny(new[] { '<', '>', ':', '"', '/', '\\', '|', '?', '*' }) >= 0 ||
+            name.Any(char.IsControl))
+            throw new ArgumentException("Enter a single valid name without surrounding whitespace, a trailing period or reserved characters.", nameof(name));
+        var device = name.Split('.')[0].TrimEnd(' ');
+        if (device.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("NUL", StringComparison.OrdinalIgnoreCase) ||
+            (device.Length == 4 && (device.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
+                device.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
+                (device[3] is >= '1' and <= '9' or '¹' or '²' or '³')))
+            throw new ArgumentException("Windows reserves this device name, including when followed by an extension.", nameof(name));
     }
 
     /// <summary>Moves a file or directory to an existing destination folder without overwriting.</summary>

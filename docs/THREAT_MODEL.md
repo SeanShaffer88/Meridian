@@ -13,7 +13,8 @@ Normal file opening delegates to Windows shell associations and can execute code
 | Surface | Existing controls | Residual risk |
 | --- | --- | --- |
 | Copy/rename/move | No intentional overwrite, staged copy/cancel, existing ancestor checks, selected link/collision tests | Path swaps/aliases, crash/disk-full copy cleanup and source mutation; cross-volume moves are now refused through a no-copy native rename policy. No universal rollback |
-| New folder/delete/open | Name/conflict UI checks, confirmed Recycle Bin request, explicit shell open | These paths do not automatically share core guards. Handlers can execute code; Recycle Bin availability/recovery varies |
+| New folder | Shared strict name policy, parent ancestor checks, native fail-if-existing creation | Parent path-swap races remain; no handle-based identity guarantee |
+| Delete/open | Confirmed Recycle Bin request, explicit shell open | These paths do not automatically share core guards. Handlers can execute code; Recycle Bin availability/recovery varies |
 | Archives | Path normalization, collisions/special entries rejected, entry/byte budgets, staging, ZIP length/CRC and TAR/gzip checks | In-process parsers, no authentication or complete ratio/time/nesting isolation. ZIP metadata may allocate before application limits are checked |
 | Text/hex | Bounded reads, strict decoding, repeated path inspection | No opened-handle identity guarantee; cooperative cancellation is not preemptive |
 | Images/media | Pre-open checks, image compressed-size guard, no autoplay or automatic codec installation | In-process Windows decoders, no decoded-pixel cap, incomplete media budgets/lifecycle and hostile-content testing |

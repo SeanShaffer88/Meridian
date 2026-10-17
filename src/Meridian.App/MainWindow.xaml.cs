@@ -796,6 +796,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var pane = _activePane;
+        var parentPath = pane.CurrentPath;
         var nameBox = new TextBox { PlaceholderText = "Folder name", MinWidth = 280 };
         var dialog = new ContentDialog
         {
@@ -809,29 +811,12 @@ public sealed partial class MainWindow : Window
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var name = nameBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(name) || name is "." or ".." ||
-            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            name.Contains(Path.DirectorySeparatorChar) ||
-            name.Contains(Path.AltDirectorySeparatorChar) ||
-            Path.IsPathRooted(name))
-        {
-            GlobalStatus.Text = "Folder name is invalid. Enter a single folder name without path separators.";
-            return;
-        }
-
-        var target = Path.Combine(_activePane.CurrentPath, name);
-        if (File.Exists(target) || Directory.Exists(target))
-        {
-            GlobalStatus.Text = $"Cannot create folder · '{name}' already exists.";
-            return;
-        }
-
+        var name = nameBox.Text;
         try
         {
-            Directory.CreateDirectory(target);
-            var pane = _activePane;
-            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            await Task.Run(() => FileOperations.CreateFolder(parentPath, name));
+            if (string.Equals(pane.CurrentPath, parentPath, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(pane, parentPath, addHistory: false);
             GlobalStatus.Text = $"Created folder · {name}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)

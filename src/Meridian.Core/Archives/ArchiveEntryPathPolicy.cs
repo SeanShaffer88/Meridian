@@ -30,7 +30,7 @@ public static class ArchiveEntryPathPolicy
                 deviceBase.Equals("NUL", StringComparison.OrdinalIgnoreCase) ||
                 (deviceBase.Length == 4 && (deviceBase.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
                     deviceBase.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
-                    deviceBase[3] is >= '1' and <= '9'))
+                    deviceBase[3] is >= '1' and <= '9' or '¹' or '²' or '³'))
                 throw new ArgumentException("Archive entry uses a reserved Windows device name.", nameof(entryName));
         }
         return string.Join('/', segments);

@@ -10,6 +10,7 @@ public sealed class FileOperationAncestorTests
     [InlineData("move-source")]
     [InlineData("move-destination")]
     [InlineData("rename")]
+    [InlineData("create-folder")]
     public void RejectsJunctionAncestorWithoutChangingFiles(string operation)
     {
         using var temp = new TemporaryDirectory();
@@ -46,11 +47,13 @@ public sealed class FileOperationAncestorTests
                     case "move-source": FileOperations.MoveItem(aliasedSource, destination); break;
                     case "move-destination": FileOperations.MoveItem(externalSource, aliasedFolder); break;
                     case "rename": FileOperations.RenameItem(aliasedSource, "renamed.txt"); break;
+                    case "create-folder": FileOperations.CreateFolder(aliasedFolder, "new"); break;
                 }
             });
             Assert.Equal("preserve source", File.ReadAllText(source));
             Assert.Equal("preserve external", File.ReadAllText(externalSource));
             Assert.Equal(new[] { source }, Directory.GetFiles(nested));
+            Assert.Empty(Directory.GetDirectories(nested));
             Assert.Empty(Directory.GetFileSystemEntries(destination));
         }
         finally { Directory.Delete(link); }
