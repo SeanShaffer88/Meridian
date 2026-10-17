@@ -125,6 +125,14 @@ MERIDIAN — BEYOND FILE MANAGEMENT
 
 **Important distinctions:** The Drop Shelf is currently in-memory; Folder DNA analyzes only the loaded folder listing; preflight results can become stale; batch copy can leave earlier completed items after a failure or cancellation; and TimeVault's backend exporter is **not** a recovery button in the app. The VSS path checks are best-effort and do **not** eliminate filesystem race conditions. See the [detailed roadmap](docs/ROADMAP.md), [TimeVault engineering notes](docs/TIMEVAULT.md), [threat model](docs/THREAT_MODEL.md) and [release gate](docs/RELEASE_GATE.md).
 
+## Feature screenshots
+
+As Meridian's features become usable and **verified in a running Windows build**, this README will include genuine screenshots of the interface—not mockups presented as completed functionality.
+
+The screenshot gallery will cover the dual-pane workspace, Folder DNA, Drop Shelf, Operation Simulator, Universal Viewer (including video playback), TimeVault and subsequent tools as each reaches a demonstrable milestone.
+
+**Screenshots are pending:** the current branch's Windows runtime and media playback have not yet been verified, so there are no authenticated captures to publish. See [Screenshot guidelines](docs/SCREENSHOTS.md) for the capture, review and maintenance process.
+
 ## What you can use today
 
 These features are **implemented on the main development branch**. They are not a claim of complete real-device validation.
