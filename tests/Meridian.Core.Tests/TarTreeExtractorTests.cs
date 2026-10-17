@@ -21,7 +21,7 @@ public sealed class TarTreeExtractorTests
                 {
                     DataStream = new MemoryStream(new byte[] { 5 })
                 });
-            await Assert.ThrowsAsync<InvalidDataException>(() =>
+            await Assert.ThrowsAsync<ArgumentException>(() =>
                 TarTreeExtractor.ExtractAsync(archive, root, "output"));
             Assert.False(Directory.Exists(Path.Combine(root, "output")));
             Assert.False(File.Exists(Path.Combine(root, "outside.txt")));
