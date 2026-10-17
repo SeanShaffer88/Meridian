@@ -37,7 +37,7 @@ public static class TarArchiveCreator
             var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Value, cancellationToken);
             if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Archive cannot contain itself.");
-            if (!sourcePaths.Add(source))
+            if (sourcePaths.Contains(source))
                 throw new InvalidDataException("A TAR source file was selected more than once.");
             var length = new FileInfo(source).Length;
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
@@ -53,6 +53,7 @@ public static class TarArchiveCreator
                 parentPaths.Add(parentPath);
             }
             names.Add(name);
+            sourcePaths.Add(source);
             totalBytes += length;
             plan.Add((name, source, length));
         }
