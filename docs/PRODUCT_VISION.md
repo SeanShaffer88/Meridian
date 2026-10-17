@@ -2,6 +2,10 @@
 
 > **Status: aspirational specification, not a feature-completion statement.** This document captures the intended direction for Meridian. The current application is an early-stage C#/.NET 10 and WinUI 3 project; most capabilities below are not implemented. The implementation and architecture may evolve as features are prototyped and evaluated.
 
+## Supported platform
+
+Meridian targets **Windows 11 only**, across its supported processor architectures: **x64 and ARM64**. Windows 10 is outside the support target. Architecture support must be verified with separate builds and, before release, runtime checks on suitable Windows 11 systems.
+
 ## Product goal
 
 Meridian aims to combine the speed and workflow depth of classic power-user file managers with a modern Windows 11 interface. It should make everyday file management efficient without sacrificing safety, clarity, accessibility, or user control.
