@@ -441,6 +441,73 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void PropertiesSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to view its properties.";
+            return;
+        }
+
+        try
+        {
+            FileSystemInfo info = selected.IsDirectory
+                ? new DirectoryInfo(selected.FullPath)
+                : new FileInfo(selected.FullPath);
+            info.Refresh();
+            if (!info.Exists)
+                throw new FileNotFoundException("The item no longer exists.", selected.FullPath);
+
+            var size = selected.IsDirectory
+                ? "Not calculated for folders"
+                : FormatFileSize(((FileInfo)info).Length);
+            var details = new StackPanel { Spacing = 8, MaxWidth = 520 };
+            AddPropertyRow(details, "Name", info.Name);
+            AddPropertyRow(details, "Type", selected.IsDirectory ? "Folder" : (string.IsNullOrWhiteSpace(info.Extension) ? "File (no extension)" : info.Extension + " file"));
+            AddPropertyRow(details, "Location", info.FullName);
+            AddPropertyRow(details, "Size", size);
+            AddPropertyRow(details, "Created", info.CreationTime.ToString("g"));
+            AddPropertyRow(details, "Modified", info.LastWriteTime.ToString("g"));
+            AddPropertyRow(details, "Last accessed", info.LastAccessTime.ToString("g"));
+            AddPropertyRow(details, "Attributes", info.Attributes.ToString());
+
+            var dialog = new ContentDialog
+            {
+                Title = "Properties · " + info.Name,
+                Content = new ScrollViewer { Content = details, MaxHeight = 440, MaxWidth = 560 },
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not read properties · " + ex.Message;
+        }
+    }
+
+    private static void AddPropertyRow(StackPanel panel, string label, string value)
+    {
+        var row = new StackPanel { Spacing = 2 };
+        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = Microsoft.UI.Colors.Gray });
+        row.Children.Add(new TextBlock { Text = value, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap });
+        panel.Children.Add(row);
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        double size = bytes;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+        return $"{size:0.##} {units[unit]} ({bytes:N0} bytes)";
+    }
+
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
