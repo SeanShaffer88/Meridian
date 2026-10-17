@@ -137,7 +137,8 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
 - [x] Rename files and folders in place with validation and no-overwrite behavior
-- [x] Basic cross-pane move flow with confirmation, destination collision checks, no-overwrite behavior, and cross-volume fallback (automated core tests added; Windows verification pending)
+- [x] Basic cross-pane move with confirmation, collision checks and a Windows rename without overwrite/copy fallback; unsupported cross-volume moves refused (core/local volume checks pass; interactive verification pending)
+- [ ] Verified cross-volume move with destination integrity, source stability, journal/partial-outcome handling and failure testing
 - [x] Confirmed deletion to the Windows Recycle Bin (subject to Windows/filesystem support)
 - [x] Read-only properties dialog for basic file/folder metadata (folder size intentionally not recursively calculated)
 - [x] Per-user Inno Setup installer and portable x64/ARM64 CI artifacts; portable settings beside executable remains planned

@@ -12,7 +12,7 @@ Normal file opening delegates to Windows shell associations and can execute code
 
 | Surface | Existing controls | Residual risk |
 | --- | --- | --- |
-| Copy/rename/move | No intentional overwrite, staged copy/cancel, existing ancestor checks, selected link/collision tests | Path swaps/aliases, crash/disk-full cleanup, source mutation and cross-volume copy-then-delete integrity; no universal rollback |
+| Copy/rename/move | No intentional overwrite, staged copy/cancel, existing ancestor checks, selected link/collision tests | Path swaps/aliases, crash/disk-full copy cleanup and source mutation; cross-volume moves are now refused through a no-copy native rename policy. No universal rollback |
 | New folder/delete/open | Name/conflict UI checks, confirmed Recycle Bin request, explicit shell open | These paths do not automatically share core guards. Handlers can execute code; Recycle Bin availability/recovery varies |
 | Archives | Path normalization, collisions/special entries rejected, entry/byte budgets, staging, ZIP length/CRC and TAR/gzip checks | In-process parsers, no authentication or complete ratio/time/nesting isolation. ZIP metadata may allocate before application limits are checked |
 | Text/hex | Bounded reads, strict decoding, repeated path inspection | No opened-handle identity guarantee; cooperative cancellation is not preemptive |
@@ -25,7 +25,7 @@ Normal file opening delegates to Windows shell associations and can execute code
 ## Verification priorities
 
 1. Test path replacement, junction/symlink/hard-link aliases, UNC/device/long/Unicode paths, permissions and publication races.
-2. Establish destination integrity and source stability before cross-volume source deletion; verify partial-result recovery.
+2. Keep cross-volume move disabled until destination integrity, source stability, journaling and partial-result recovery are implemented and tested; the previous copy/delete fallback has been removed.
 3. Inject disk-full, cancellation during active I/O, interruption and cleanup failure; unit tests do not establish full integration coverage.
 4. Exercise malformed archives/media and resource exhaustion; isolate risky parsers where practical.
 5. Verify clean deployment, artifact provenance, dependency/license obligations, local-data disclosure and actual network behavior.

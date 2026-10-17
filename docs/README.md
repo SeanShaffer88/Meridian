@@ -15,6 +15,7 @@ For current capabilities and evidence, start with [Implementation status](STATUS
 ## Engineering reference
 
 - [Architecture and persistence](ARCHITECTURE.md)
+- [File-operation policy and move restrictions](FILE_OPERATIONS.md)
 - [Archive Engine](ARCHIVE_ENGINE.md)
 - [Universal Viewer and media player](UNIVERSAL_VIEWER.md)
 - [TimeVault](TIMEVAULT.md)

@@ -728,7 +728,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             Title = "Move item?",
-            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
+            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original.",
             PrimaryButtonText = "Move",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,

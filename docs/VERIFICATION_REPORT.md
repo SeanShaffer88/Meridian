@@ -25,13 +25,19 @@ Pre-fix publish omitted the app XAML resource index and exited with `0xC000027B`
 
 Copy/move/rename now inspect existing reparse-point ancestors. Archive extraction retains the originating pane, refreshes it only if its path is unchanged and defaults confirmation to Cancel. Pane/focus behavior still needs hands-on testing.
 
+## Subsequent move-safety increment (local evidence)
+
+After the baseline above, Move/rename changed to MoveFileExW with no replacement/copy flags; the unsafe cross-volume copy/delete fallback is gone. The local Release core suite passed 343 tests, zero failures/skips. Four added cases cover same-volume drive aliases, failure with a source held against deletion, and long Unicode rename/move. The locked-source regression fails against the previous implementation because it leaves an unwanted destination copy.
+
+An isolated local generated-fixture check between C: and E: on Windows 11 x64 refused both a file and a directory with Windows error 17; source payloads remained intact and the destination stayed empty. Fixture cleanup was limited to the newly created unique directories. These two checks are separate from the 343 core tests and do not establish ARM64, UNC or race-free behavior. CI for the new application revision must be inspected separately; no new-head CI pass is inferred from baseline results.
+
 ## Remaining blockers
 
 | Area | Evidence still needed |
 | --- | --- |
 | Distribution | Clean install/launch without developer tools, upgrade/uninstall, per-user state, artifact hashes/version/signing policy |
 | Everyday workflows | Navigation, missing paths, bookmark/tab restoration, rename, copy/cancel, move, delete and properties with disposable data |
-| Data safety | Cross-volume destination verification/source stability; disk-full/interruption/access-denied/collision races, UNC/long/Unicode paths, aliases/path swaps and recovery |
+| Data safety | Cross-volume moves are now refused; future support requires destination verification/source stability; disk-full/interruption/access-denied/collision races, UNC/long/Unicode paths, aliases/path swaps and recovery |
 | Viewer | Real image/media play/pause/seek/failure/disposal, malformed inputs, resource limits and codec matrix |
 | TimeVault | Controlled real VSS snapshots, volume mapping, denied/expired access and export drills before UI recovery |
 | ARM64 | Runtime and installer execution on suitable Windows 11 ARM64 hardware/VM |

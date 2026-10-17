@@ -17,4 +17,5 @@
 - CI checks published resource indexes, starts the x64 app and generates unsigned per-user installers plus portable x64/ARM64 artifacts.
 - Application baseline `2eef02a`: 339 local core tests pass; all Windows CI jobs pass, including x64 startup. These are preview verification results, not a release announcement.
 - Documentation: dated capability/evidence inventory, user guide, expanded architecture/threat model/build guidance and corrected stale implementation/release claims.
-- Release blockers remain: cross-volume integrity/source stability, full workflow/failure testing, clean install/upgrade/uninstall, ARM64 runtime, accessibility, performance and dependency/license/security audit. See [verification](docs/VERIFICATION_REPORT.md).
+- Remove unsafe cross-volume move copy/delete fallback. Move/rename now use Windows rename without replacement or copy fallback, support extended paths and let Windows resolve volume identity. Four regressions and local C: to E: file/folder refusal checks pass; source data remains intact and destination empty.
+- Release blockers remain: a future verified cross-volume engine, full workflow/failure testing, clean install/upgrade/uninstall, ARM64 runtime, accessibility, performance and dependency/license/security audit. See [verification](docs/VERIFICATION_REPORT.md).

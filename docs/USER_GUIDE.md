@@ -27,7 +27,7 @@ Paired workspace tabs keep two folder locations together. Bookmarks store named 
 
 Copy and move use the opposite pane's current directory and refuse destination-name collisions. Copy stages data before final publication; **Cancel copy** requests cooperative cancellation. Rename supports case-only changes without intentional overwrite. New folder accepts one folder name. Properties shows basic metadata without calculating recursive folder size. Delete asks for confirmation and requests the Windows Recycle Bin; availability and recovery depend on the location and filesystem.
 
-Same-volume move uses a filesystem move. Cross-volume move copies first and then deletes the source; there is no post-copy checksum verification or reliable source-change protection. If deletion fails, both copies may remain. Avoid using this preview for important cross-volume moves. No operation provides general undo or a backup.
+Move and rename require a Windows rename without copy/delete fallback and without replacing an existing destination. A transfer between different volumes is refused with an explanatory error, without creating a copy or removing the source. Different drive letters can identify the same volume, so Windows decides whether the rename is supported. Use Copy to retain the original; no checksum-verified cross-volume move, general undo or backup is provided. See [file-operation policy](FILE_OPERATIONS.md).
 
 Copy/move/rename reject reparse-point paths and existing linked ancestors. These checks are path based and can race concurrent changes; they do not prove canonical identity or protect against every alias.
 

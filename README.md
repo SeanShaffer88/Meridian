@@ -390,7 +390,7 @@ Meridian is designed around conservative defaults, not irreversible surprises.
 | **No automatic elevation** | Meridian operates using the current user's access rights. |
 | **Local-first design** | No required account, advertising, or telemetry. |
 
-**Important limitations:** There is no general undo engine, automatic restore point, dedicated audit log, post-copy checksum verification, or guaranteed transactional rollback. Cross-volume moves copy first and then remove the source; if removal fails, **both copies may remain**. Reparse-point and filesystem edge cases still require additional validation.
+**Important limitations:** There is no general undo engine, automatic restore point, dedicated audit log, post-copy checksum verification, or guaranteed transactional rollback. Move now requires a Windows rename without copy fallback: transfers between volumes are refused without copying/removing the source. Use Copy to retain the original; a verified cross-volume transfer engine remains planned. Reparse-point and filesystem edge cases still require additional validation.
 
 **An Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
 

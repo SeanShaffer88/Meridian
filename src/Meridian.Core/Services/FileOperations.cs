@@ -1,7 +1,7 @@
 namespace Meridian.Services;
 
 /// <summary>Copy, move and rename without intentional replacement of existing destinations.</summary>
-/// <remarks>Path checks are not race-free; cross-volume moves copy then delete without checksum verification.</remarks>
+/// <remarks>Path checks are not race-free. Moves require a Windows rename without copy fallback.</remarks>
 public static class FileOperations
 {
     /// <summary>Renames a file or directory in place without replacing an existing item.</summary>
@@ -35,29 +35,51 @@ public static class FileOperations
         if (!caseOnlyRename && (File.Exists(destination) || Directory.Exists(destination)))
             throw new IOException($"'{newName}' already exists in this folder. Nothing was overwritten.");
 
-        var isDirectory = Directory.Exists(source);
         if (caseOnlyRename)
         {
             // Windows paths are case-insensitive; use a unique temporary sibling for case-only changes.
             var temporary = Path.Combine(parent, $".meridian-rename-{Guid.NewGuid():N}.tmp");
-            MoveItem(source, temporary, isDirectory);
-            try { MoveItem(temporary, destination, isDirectory); }
+            MoveWithoutCopy(source, temporary);
+            try { MoveWithoutCopy(temporary, destination); }
             catch
             {
-                try { MoveItem(temporary, source, isDirectory); }
+                try { MoveWithoutCopy(temporary, source); }
                 catch { /* Preserve the original failure if rollback is blocked. */ }
                 throw;
             }
         }
-        else MoveItem(source, destination, isDirectory);
+        else MoveWithoutCopy(source, destination);
 
         return destination;
     }
 
-    private static void MoveItem(string source, string destination, bool isDirectory)
+    // File.Move can emulate cross-volume moves with copy/delete. Do not enable
+    // MOVEFILE_COPY_ALLOWED or MOVEFILE_REPLACE_EXISTING: an unsupported rename
+    // must fail without staging a copy or removing the source.
+    private static void MoveWithoutCopy(string source, string destination)
     {
-        if (isDirectory) Directory.Move(source, destination);
-        else File.Move(source, destination);
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Move and rename require Windows.");
+        if (MoveFileEx(ForNativeMove(source), ForNativeMove(destination), 0)) return;
+        var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+        var detail = new System.ComponentModel.Win32Exception(error);
+        if (error == 17) // ERROR_NOT_SAME_DEVICE
+            throw new IOException("Move between volumes is not supported. No copy was made and the source was not removed. Use Copy to keep the original.", detail);
+        if (error == 5) // ERROR_ACCESS_DENIED
+            throw new UnauthorizedAccessException("The item could not be moved. " + detail.Message, detail);
+        throw new IOException("The item could not be moved. " + detail.Message, detail);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "MoveFileExW",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool MoveFileEx(string existingName, string newName, uint flags);
+
+    private static string ForNativeMove(string path)
+    {
+        if (path.Length < 260 || path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path;
+        return path.StartsWith(@"\\", StringComparison.Ordinal)
+            ? @"\\?\UNC\" + path[2..] : @"\\?\" + path;
     }
 
     /// <summary>Moves a file or directory to an existing destination folder without overwriting.</summary>
@@ -96,28 +118,8 @@ public static class FileOperations
         if (File.Exists(finalPath) || Directory.Exists(finalPath))
             throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
 
-        var sourceRoot = Path.GetPathRoot(source);
-        var destinationVolumeRoot = Path.GetPathRoot(destinationRoot);
-        if (string.Equals(sourceRoot, destinationVolumeRoot, StringComparison.OrdinalIgnoreCase))
-        {
-            if (isDirectory) Directory.Move(source, finalPath);
-            else File.Move(source, finalPath);
-            return finalPath;
-        }
-
-        // Cross-volume moves cannot be atomic. Copy completely first, then remove the original.
-        // If copying fails, the source remains untouched. If source cleanup fails, both copies may remain.
-        var copiedPath = CopyItem(source, destinationRoot);
-        try
-        {
-            if (isDirectory) Directory.Delete(source, recursive: true);
-            else File.Delete(source);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            throw new IOException($"The item was copied to '{copiedPath}', but the original could not be removed. Both copies may remain.", ex);
-        }
-        return copiedPath;
+        MoveWithoutCopy(source, finalPath);
+        return finalPath;
     }
 
     public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
