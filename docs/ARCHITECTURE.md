@@ -11,3 +11,7 @@ The current copy workflow has no progress reporting or UI cancellation. Do not t
 ## Workspace persistence
 
 The app stores the last successfully browsed left- and right-pane paths in `%LOCALAPPDATA%/Meridian/workspace.json`. The file is local to the current Windows user and contains paths only. Writes use a temporary file followed by a replacement move; malformed, missing, or unreadable saved state falls back to the default Documents/Downloads locations. Workspace persistence is best-effort and must not prevent browsing if the preference file cannot be read or written.
+
+## Workspace restoration and bookmarks
+
+Meridian stores the last successfully browsed left- and right-pane paths and named folder bookmarks in `%LOCALAPPDATA%/Meridian/workspace.json`. The file contains paths and bookmark labels only. Workspace writes use a temporary file followed by a replacement move; malformed, missing, or unreadable saved state falls back to the default Documents/Downloads locations. Bookmarks are user-managed and remain local to the current Windows user. Persistence is best-effort and must not prevent file browsing if the preference file cannot be read or written.
