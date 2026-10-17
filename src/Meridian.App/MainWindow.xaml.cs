@@ -466,6 +466,7 @@ public sealed partial class MainWindow : Window
         if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
         try
         {
+            GlobalStatus.Text = "Creating ZIP · " + selected.Name;
             await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
                 destination, new Dictionary<string, string> { [selected.Name] = selected.FullPath }));
             GlobalStatus.Text = "ZIP created · " + destination;
