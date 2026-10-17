@@ -20,7 +20,16 @@ jobs:
         run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release
 
   app-build:
+    name: Build Windows 11 (${{ matrix.architecture }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            runtime: win-x64
+          - architecture: ARM64
+            runtime: win-arm64
     steps:
       - uses: actions/checkout@v4
       - name: Set up .NET 10
@@ -29,5 +38,5 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore solution
         run: dotnet restore Meridian.sln
-      - name: Publish Windows x64 app
-        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:Platform=x64
+      - name: Publish Windows 11 app (${{ matrix.runtime }})
+        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
