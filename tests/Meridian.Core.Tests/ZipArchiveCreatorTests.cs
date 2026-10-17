@@ -54,6 +54,31 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task LargeSourceProgressIsThrottled()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-throttle-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.bin");
+            await File.WriteAllBytesAsync(source, new byte[5 * 1024 * 1024]);
+            var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(updates.Add);
+            await ZipArchiveCreator.CreateAsync(Path.Combine(root, "result.zip"),
+                new Dictionary<string, string> { ["source.bin"] = source }, progress: progress);
+            Assert.InRange(updates.Count, 3, 7);
+            Assert.Equal((0L, 5L * 1024 * 1024), updates[0]);
+            Assert.Equal((5L * 1024 * 1024, 5L * 1024 * 1024), updates[^1]);
+            for (var i = 1; i < updates.Count - 1; i++)
+            {
+                Assert.True(updates[i].CompletedBytes - updates[i - 1].CompletedBytes >= 1024 * 1024);
+                Assert.True(updates[i].CompletedBytes < updates[i].TotalBytes);
+            }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task PreCancelledRequestDoesNotCreateArchiveOrStage()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-zip-pre-cancel-" + Guid.NewGuid().ToString("N"));
