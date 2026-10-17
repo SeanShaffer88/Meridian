@@ -484,6 +484,10 @@ public sealed partial class MainWindow : Window
             GlobalStatus.Text = "ZIP created · " + destination;
             await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
         }
+        catch (OperationCanceledException)
+        {
+            GlobalStatus.Text = "ZIP creation cancelled.";
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             GlobalStatus.Text = "ZIP creation failed · " + ex.Message;
