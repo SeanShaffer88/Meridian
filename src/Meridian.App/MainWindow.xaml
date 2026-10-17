@@ -35,7 +35,7 @@
       <AppBarButton Icon="View" Label="Inspect Archive" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP, TAR, or TGZ contents" />
       <AppBarButton Icon="Save" Label="Create ZIP" Click="CreateZip_Click" ToolTipService.ToolTip="Create a no-overwrite ZIP from the selected file" />
       <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active ZIP creation" />
-      <AppBarButton Icon="OpenFolder" Label="Extract ZIP" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
+      <AppBarButton Icon="OpenFolder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
       <AppBarButton Icon="Cancel" Label="Cancel ZIP" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active ZIP extraction" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
       <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
