@@ -26,6 +26,7 @@ public static class TarArchiveCatalog
         using var reader = new TarReader(stream, leaveOpen: true);
         var entries = new List<Entry>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
         TarEntry? entry;
         while ((entry = reader.GetNextEntry(copyData: false)) is not null)
@@ -41,11 +42,10 @@ public static class TarArchiveCatalog
             while (parent.Contains('/'))
             {
                 parent = parent[..parent.LastIndexOf('/')];
-                if (entries.Any(existing => !existing.IsDirectory &&
-                    string.Equals(existing.Path, parent, StringComparison.OrdinalIgnoreCase)))
+                if (fileNames.Contains(parent))
                     throw new InvalidDataException("TAR entry conflicts with a parent file.");
             }
-            if (!directory && entries.Any(existing => existing.Path.StartsWith(name + "/",
+            if (!directory && names.Any(existing => existing.StartsWith(name + "/",
                 StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidDataException("TAR file conflicts with existing descendants.");
             if (entries.Count >= maxEntries || entry.Length < 0 || entry.Length > maxTotalBytes - total)
@@ -54,6 +54,7 @@ public static class TarArchiveCatalog
                 throw new InvalidDataException("Directory TAR entry has a payload.");
             total += entry.Length;
             entries.Add(new Entry(name, entry.Length, directory));
+            if (!directory) fileNames.Add(name);
         }
         return entries.AsReadOnly();
     }
