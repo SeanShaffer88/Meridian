@@ -27,6 +27,7 @@ public static class TarArchiveCatalog
         var entries = new List<Entry>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ancestors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
         TarEntry? entry;
         while ((entry = reader.GetNextEntry(copyData: false)) is not null)
