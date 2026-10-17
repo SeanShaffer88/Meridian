@@ -26,6 +26,8 @@ public static class TarTreeExtractor
             throw new IOException("Extraction destination exists.");
         var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(archivePath, cancellationToken);
         var stage = Path.Combine(parent, ".meridian-tar-extract-" + Guid.NewGuid().ToString("N"));
+        if (Directory.Exists(stage) || File.Exists(stage))
+            throw new IOException("Extraction staging path already exists.");
         var staged = false;
         try
         {
