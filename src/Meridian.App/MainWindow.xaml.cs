@@ -461,11 +461,11 @@ public sealed partial class MainWindow : Window
         }
         var sources = _activePane.List.SelectedItems.OfType<FileEntry>().Where(x => !x.IsDirectory).ToArray();
         var destination = Path.Combine(_activePane.CurrentPath,
-            Path.GetFileNameWithoutExtension(selected.Name) + ".zip");
+            (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
         var confirmation = new ContentDialog
         {
             Title = "Create ZIP?",
-            Content = new TextBlock { Text = "Source: " + selected.FullPath +
+            Content = new TextBlock { Text = "Selected files: " + sources.Length +
                 Environment.NewLine + "Destination: " + destination +
                 Environment.NewLine + "Existing archives will not be overwritten.",
                 TextWrapping = TextWrapping.Wrap },
