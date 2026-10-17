@@ -414,10 +414,25 @@ public sealed partial class MainWindow : Window
             }
             else if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Text or Meridian.Core.Viewer.ViewerKind.Hex)
             {
-                var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path);
-                var display = decision.Kind == Meridian.Core.Viewer.ViewerKind.Text
-                    ? System.Text.Encoding.UTF8.GetString(bytes)
-                    : Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes);
+                var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path,
+                    maxBytes: decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex ? 4096 : 65536);
+                string display;
+                if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex)
+                {
+                    display = Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes);
+                }
+                else
+                {
+                    try
+                    {
+                        display = new System.Text.UTF8Encoding(false, true).GetString(bytes);
+                    }
+                    catch (System.Text.DecoderFallbackException)
+                    {
+                        display = "File is not valid UTF-8. Showing the first 4 KiB as hexadecimal.\\n\\n" +
+                            Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes.AsSpan(0, Math.Min(bytes.Length, 4096)));
+                    }
+                }
                 panel.Children.Add(new ScrollViewer
                 {
                     MaxHeight = 420,
