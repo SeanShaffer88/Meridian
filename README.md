@@ -19,7 +19,7 @@ Free · Open source · Offline-first · Windows 11
 </div>
 
 > [!WARNING]
-> **Meridian is an early development preview, not a finished release.** Automated Windows x64/ARM64 builds and core tests exist, but hands-on runtime, installer, and accessibility testing is incomplete. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
+> **Meridian is an early development preview, not a finished release.** Windows x64/ARM64 CI build and core-test workflows are configured, but successful results for the latest development changes and hands-on runtime, installer, and accessibility testing have not been verified. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
 
 ---
 
@@ -37,6 +37,81 @@ Meridian is being built to answer more:
 
 The goal is not to clone File Explorer with more buttons. It's to make everyday file work **clearer, more capable, and safer**.
 
+## Complete feature & innovation atlas
+
+**How to read this tree:** **[MAIN]** = implemented in the main development experience (not necessarily device-verified); **[BRANCH]** = implemented or prototyped in [PR #37](https://github.com/SeanShaffer88/Meridian/pull/37), not released; **[PLANNED]** = design or roadmap only; **[PRINCIPLE]** = an engineering requirement, not a user-facing feature. Subitems inherit their parent's status unless marked otherwise. **No status means a feature has passed real Windows hardware testing.**
+
+```text
+MERIDIAN — BEYOND FILE MANAGEMENT
+|
++-- 01  Everyday file workspace
+|   +-- [MAIN] Two-pane browsing, folder navigation, history and refresh
+|   +-- [MAIN] Paired workspace tabs, bookmarks and session restoration
+|   +-- [MAIN] Per-pane filtering and independent sorting
+|   +-- [MAIN] Keyboard shortcuts and active-pane navigation
+|   +-- [MAIN] Copy, move, rename, create folder and basic properties
+|   +-- [MAIN] Confirmed Recycle Bin deletion (Windows-dependent)
+|   +-- [PLANNED] Flexible pane layouts, folder trees and view modes
+|   +-- [PLANNED] Advanced keyboard customization and shell integration
+|
++-- 02  Understand and organize
+|   +-- [MAIN] Folder DNA: immediate counts, sizes, dates and file types
+|   +-- [MAIN] Drop Shelf: temporary cross-folder path collection
+|   +-- [MAIN] Operation Simulator: advisory shelf-copy preflight
+|   +-- [MAIN] Confirmed sequential batch copy, progress and cancellation
+|   +-- [BRANCH] Consequence Engine: advisory plan/receipt contracts
+|   +-- [PLANNED] Virtual/Smart Collections, tags and saved rules
+|   +-- [PLANNED] FileGraph / Relationship View and explainable links
+|   +-- [PLANNED] Workspace Constellations and adaptive navigation
+|
++-- 03  Historical exploration — TimeVault
+|   +-- [BRANCH] Windows VSS snapshot metadata and WMI discovery
+|   +-- [BRANCH] Drive-volume GUID matching and scoped path resolution
+|   +-- [BRANCH] Toolbar snapshot picker and limited read-only folder list
+|   +-- [BRANCH] Backend-only, single-file no-overwrite recovery export
+|   |   +-- Staging file, final atomic no-overwrite publication
+|   |   +-- Cancellation and best-effort staging cleanup
+|   |   +-- Path, alternate-stream and reparse-point validation
+|   +-- [BRANCH] Backend export receipt model (not a UI history)
+|   +-- [PLANNED] Full Shadow Copy Explorer and historical file viewer
+|   +-- [PLANNED] File Time Machine timeline and snapshot search
+|   +-- [PLANNED] Recovery Studio UI, checksums and Difference Lens
+|   +-- [PLANNED] Snapshot health and timeline collections
+|
++-- 04  Search, inspect and automate
+|   +-- [PLANNED] OmniSearch: scoped search and optional indexing
+|   +-- [PLANNED] Storage X-Ray: disk-usage visualization
+|   +-- [PLANNED] HexLab: bounded binary and text inspection
+|   +-- [PLANNED] Archive Portal: safe archive browsing/extraction
+|   +-- [PLANNED] Integrity Guardian: opt-in checksum verification
+|   +-- [PLANNED] FlowForge / Workflow Recipes: inspectable automation
+|   +-- [PLANNED] Command Nexus: searchable command registry
+|   +-- [PLANNED] Optional explainable, local-first intelligence
+|
++-- 05  Connectivity and extension
+|   +-- [PLANNED] Device Bridge: removable, mobile and remote providers
+|   +-- [PLANNED] Network shares, SFTP and optional cloud connectors
+|   +-- [PLANNED] Developer tools, Git integration and comparisons
+|   +-- [PLANNED] Customizable views, themes and launchers
+|
++-- 06  Safety, privacy and engineering considerations
+    +-- [MAIN] No-overwrite defaults and explicit confirmations
+    +-- [MAIN] Staged copies and cancellable operations where supported
+    +-- [MAIN] Local-first workflow; no required account or telemetry
+    +-- [BRANCH] VSS read-only discovery and bounded folder enumeration
+    +-- [BRANCH] Recovery path validation and no-overwrite staging
+    +-- [PRINCIPLE] No silent elevation or snapshot modification
+    +-- [PRINCIPLE] Revalidate at execution; previews are not locks
+    +-- [PRINCIPLE] Treat paths, links, archives and metadata as untrusted
+    +-- [PRINCIPLE] Bound scans, memory use and background work
+    +-- [PRINCIPLE] Accessibility, keyboard use and error clarity
+    +-- [PRINCIPLE] Document cancellation, partial success and limits
+    +-- [PRINCIPLE] Test on Windows 11 x64 and ARM64 before release
+    +-- [PRINCIPLE] Audit dependencies, licenses, packaging and security
+```
+
+**Important distinctions:** The Drop Shelf is currently in-memory; Folder DNA analyzes only the loaded folder listing; preflight results can become stale; batch copy can leave earlier completed items after a failure or cancellation; and TimeVault's backend exporter is **not** a recovery button in the app. The VSS path checks are best-effort and do **not** eliminate filesystem race conditions. See the [detailed roadmap](docs/ROADMAP.md), [TimeVault engineering notes](docs/TIMEVAULT.md), [threat model](docs/THREAT_MODEL.md) and [release gate](docs/RELEASE_GATE.md).
+
 ## What you can use today
 
 These features are **implemented on the main development branch**. They are not a claim of complete real-device validation.
@@ -52,7 +127,7 @@ These features are **implemented on the main development branch**. They are not 
 | **Drop Shelf** | Collect paths from unrelated folders without moving the originals; remove, clear, or show the location of a collected item. The shelf is in-memory and does not survive an app restart. |
 | **Operation Simulator + confirmed batch copy** | Preview shelf items against the active pane’s destination folder, review ready/blocked counts and collisions, then explicitly confirm a no-overwrite sequential batch copy. |
 | **Conservative file actions** | Copy, move, rename, create folders, view basic properties, and request Recycle Bin deletion. |
-| **Windows preview packages** | CI produces portable application folders and per-user installers for x64 and ARM64. |
+| **Windows preview packages** | CI is configured to produce portable application folders and per-user installers for x64 and ARM64 when runs succeed. |
 
 ### Folder DNA: understand a folder at a glance
 
@@ -110,9 +185,9 @@ The ideas below define the direction of the project. **Unless explicitly listed 
 
 ### Meridian TimeVault — explore yesterday without risking today
 
-**TimeVault is in development, not a usable recovery tool yet.** The initial branch contains a snapshot metadata model and a volume-scoped path mapping helper; no snapshot enumeration, browsing interface, or restoration is available today.
+**TimeVault is in development, not a released recovery tool.** PR #37 includes Windows WMI snapshot discovery, volume matching, a toolbar snapshot picker with a limited read-only folder listing, and an unconnected backend-only single-file export service. None of these features has completed real Windows VSS verification.
 
-The proposed experience includes a read-only **Shadow Copy Explorer**, a **File Time Machine** timeline, **Recovery Studio** for explicit no-overwrite exports, snapshot-wide search, a **Difference Lens** for comparing versions, export receipts with checksums, and snapshot health diagnostics.
+The proposed experience includes a full read-only **Shadow Copy Explorer**, a **File Time Machine** timeline, **Recovery Studio** with explicit user confirmation, snapshot-wide search, a **Difference Lens** for comparing versions, verified export checksums, and snapshot health diagnostics. These remain planned.
 
 TimeVault will work only when Windows exposes accessible snapshots. VSS is **not a backup system**: snapshots can disappear, may require elevated access, and must not be treated as guaranteed recovery points. TimeVault will not silently create, delete, or modify snapshots.
 
