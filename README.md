@@ -15,6 +15,7 @@ Meridian is a free, open-source, offline-first dual-pane file manager for Window
 - In-place file and folder rename, including case-only changes, with validation and no-overwrite behavior.
 - Read-only properties dialog for file/folder name, type, path, file size, timestamps, and filesystem attributes (folder sizes are intentionally not recursively calculated).
 - Confirmed deletion that requests moving the selected item to the Windows Recycle Bin rather than permanently deleting it.
+- Confirmed cross-pane file and folder moves with destination collision checks and no-overwrite behavior.
 - Cross-pane file and directory copy with staging, cancellation, timestamp preservation, and refusal to overwrite existing destinations.
 - Reparse points are rejected by copy and rename operations rather than followed.
 - Dark UI with restrained red accents. The app does not implement telemetry or cloud services.
