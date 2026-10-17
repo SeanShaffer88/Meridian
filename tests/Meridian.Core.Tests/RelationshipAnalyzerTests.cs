@@ -82,4 +82,36 @@ public class RelationshipAnalyzerTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             RelationshipAnalyzer.Analyze(Array.Empty<string>(), maxRelationships: 100001));
     }
+
+    [Fact]
+    public void IndexPreservesInputPairOrderAndStemPriority()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "meridian-indexed"));
+        var paths = new[]
+        {
+            Path.Combine(root, "alpha.txt"),
+            Path.Combine(root, "beta.txt"),
+            Path.Combine(root, "alpha.png"),
+            Path.Combine(root, "sub", "alpha.csv")
+        };
+        var results = RelationshipAnalyzer.Analyze(paths);
+        Assert.Equal(4, results.Count);
+        Assert.Equal(new[] { paths[1], paths[2], paths[3], paths[2] },
+            results.Select(x => x.RelatedPath).ToArray());
+        Assert.Equal(new[] {
+            RelationshipEvidence.SameDirectory,
+            RelationshipEvidence.FilenameStem,
+            RelationshipEvidence.FilenameStem,
+            RelationshipEvidence.SameDirectory
+        }, results.Select(x => x.Evidence).ToArray());
+    }
+
+    [Fact]
+    public void DisjointDirectoriesAndStemsProduceNoCandidates()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "meridian-indexed"));
+        var paths = Enumerable.Range(0, 1000)
+            .Select(i => Path.Combine(root, $"folder-{i}", $"file-{i}.txt"));
+        Assert.Empty(RelationshipAnalyzer.Analyze(paths));
+    }
 }
