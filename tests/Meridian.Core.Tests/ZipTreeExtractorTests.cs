@@ -6,6 +6,33 @@ namespace Meridian.Core.Tests;
 public class ZipTreeExtractorTests
 {
     [Fact]
+    public async Task CancelledExtractionDoesNotPublishPartialTree()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "sample.zip");
+            using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("one.txt");
+                zip.CreateEntry("two.txt");
+            }
+            using var cancellation = new CancellationTokenSource();
+            var progress = new InlineProgress(value =>
+            {
+                if (value > 0) cancellation.Cancel();
+            });
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                ZipTreeExtractor.ExtractAsync(archive, root, "output",
+                    cancellationToken: cancellation.Token, progress: progress));
+            Assert.False(Directory.Exists(Path.Combine(root, "output")));
+            Assert.Empty(Directory.GetDirectories(root, ".meridian-extract-*"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public async Task ReportsProgressForCompletedEntries()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-progress-" + Guid.NewGuid().ToString("N"));
