@@ -40,7 +40,7 @@ Run from PowerShell at the repository root:
 ./scripts/build.ps1 -Configuration Release -Runtime win-arm64
 ```
 
-The Windows CI workflow runs core tests and publishes self-contained app outputs for both architectures. Successful workflow runs attach downloadable `meridian-portable-win-x64` and `meridian-portable-win-arm64` artifacts for 14 days. These are unpackaged portable publish folders, **not signed installers**. Download them from the run's Artifacts section after all jobs succeed.
+The Windows CI workflow runs core tests, publishes self-contained app outputs, and builds per-user Windows installers for both architectures. Successful workflow runs attach `meridian-portable-win-x64`, `meridian-portable-win-arm64`, `meridian-installer-win-x64`, and `meridian-installer-win-arm64` artifacts for 14 days. The installers use Inno Setup, install under the current user profile, and add Start Menu shortcuts (a desktop shortcut is optional). Installers are currently **unsigned preview builds**; Windows may warn before launch. Download artifacts from a successful run's Artifacts section.
 
 The publish path is under `src/Meridian.App/bin/<platform>/Release/net10.0-windows10.0.22000.0/<runtime>/publish`, where `<platform>` is `x64` or `ARM64`.
 
