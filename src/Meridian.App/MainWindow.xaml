@@ -21,6 +21,7 @@
       <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
       <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
+      <AppBarButton Icon="Delete" Label="Delete" Click="DeleteSelected_Click" />
       <AppBarSeparator />
       <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" />
       <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" />
