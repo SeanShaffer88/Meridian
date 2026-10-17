@@ -39,7 +39,16 @@ The goal is not to clone File Explorer with more buttons. It's to make everyday 
 
 ## Complete feature & innovation atlas
 
-**How to read this tree:** **[MAIN]** = implemented in the main development experience (not necessarily device-verified); **[BRANCH]** = implemented or prototyped in [PR #37](https://github.com/SeanShaffer88/Meridian/pull/37), not released; **[PLANNED]** = design or roadmap only; **[PRINCIPLE]** = an engineering requirement, not a user-facing feature. Subitems inherit their parent's status unless marked otherwise. **No status means a feature has passed real Windows hardware testing.**
+**Status legend — color used sparingly to convey meaning:**
+
+| Label | Status | Meaning |
+| --- | --- | --- |
+| **[MAIN]** | ![Implemented](https://img.shields.io/badge/implemented-22863a?style=flat-square) | Implemented on the main development branch; not necessarily hardware-verified |
+| **[BRANCH]** | ![Development](https://img.shields.io/badge/in_development-0969da?style=flat-square) | Prototype or code in [PR #37](https://github.com/SeanShaffer88/Meridian/pull/37); not released |
+| **[PLANNED]** | ![Planned](https://img.shields.io/badge/planned-8250df?style=flat-square) | Design or roadmap only |
+| **[PRINCIPLE]** | ![Quality gate](https://img.shields.io/badge/quality_gate-6e7781?style=flat-square) | Engineering requirement, not a product feature |
+
+Text labels remain in the tree for accessibility, monochrome display, and plain-text copies. Subitems inherit their parent's status unless noted. **None of these labels guarantees real Windows hardware verification.**
 
 ```text
 MERIDIAN — BEYOND FILE MANAGEMENT
