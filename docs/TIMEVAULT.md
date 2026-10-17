@@ -4,7 +4,7 @@
 
 ## Status
 
-**Backend discovery implementation in progress — not yet connected to the Meridian interface.** This branch contains immutable snapshot metadata, a drive-letter-scoped path resolver, and a Windows WMI-based snapshot catalog. The catalog has not yet passed Windows CI or real-device validation. It does **not** provide a working viewer, recovery, or snapshot creation. WMI VolumeName often uses volume GUID paths; drive-letter GUID matching has now been added but has not been verified on Windows; mount-point folders and volumes without drive letters remain unsupported.
+**Read-only snapshot discovery UI implemented in the development branch; Windows runtime verification pending.** This branch contains immutable snapshot metadata, a drive-letter-scoped path resolver, and a Windows WMI-based snapshot catalog. The catalog has not yet passed Windows CI or real-device validation. A toolbar button opens a metadata-only discovery dialog. It does **not** browse historical files, export recovery data, or create snapshots. WMI VolumeName often uses volume GUID paths; drive-letter GUID matching has now been added but has not been verified on Windows; mount-point folders and volumes without drive letters remain unsupported.
 
 ## Product direction
 
@@ -33,7 +33,7 @@
 - [x] Define snapshot metadata and scoped path resolution foundation.
 - [x] Implement a WMI-based read-only Windows VSS catalog behind an interface (Windows validation pending).
 - [ ] Complete tests for path normalization, volume GUID mapping, volume boundaries, and malformed device objects (additional tests added; Windows validation pending).
-- [ ] WinUI read-only snapshot explorer and timeline.
+- [ ] WinUI read-only snapshot explorer and timeline (metadata-only discovery dialog added).
 - [ ] Read-only metadata preview, search and compare.
 - [ ] Export with collision-safe naming and checksum verification.
 - [ ] Windows x64/ARM64 integration tests against controlled test snapshots.
