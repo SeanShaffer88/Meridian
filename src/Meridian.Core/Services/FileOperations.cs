@@ -59,6 +59,65 @@ public static class FileOperations
         else File.Move(source, destination);
     }
 
+    /// <summary>Moves a file or directory to an existing destination folder without overwriting.</summary>
+    public static string MoveItem(string sourcePath, string destinationDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+
+        var source = Path.GetFullPath(sourcePath);
+        var destinationRoot = Path.GetFullPath(destinationDirectory);
+        if (!File.Exists(source) && !Directory.Exists(source))
+            throw new FileNotFoundException("The selected source no longer exists.", source);
+        if (!Directory.Exists(destinationRoot))
+            throw new DirectoryNotFoundException($"The destination folder does not exist: {destinationRoot}");
+        RejectReparsePoint(source);
+
+        var isDirectory = Directory.Exists(source);
+        if (isDirectory)
+        {
+            var relativeDestination = Path.GetRelativePath(source, destinationRoot);
+            var isSelfOrDescendant = !Path.IsPathRooted(relativeDestination) &&
+                (relativeDestination == "." ||
+                 (relativeDestination != ".." &&
+                  !relativeDestination.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)));
+            if (isSelfOrDescendant)
+                throw new IOException("A folder cannot be moved into itself or one of its descendants.");
+        }
+
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(source));
+        if (string.IsNullOrWhiteSpace(name))
+            throw new IOException("The selected item cannot be moved from its current location.");
+        var finalPath = Path.Combine(destinationRoot, name);
+        if (string.Equals(source, finalPath, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("The source and destination are the same item.");
+        if (File.Exists(finalPath) || Directory.Exists(finalPath))
+            throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
+
+        var sourceRoot = Path.GetPathRoot(source);
+        var destinationVolumeRoot = Path.GetPathRoot(destinationRoot);
+        if (string.Equals(sourceRoot, destinationVolumeRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            if (isDirectory) Directory.Move(source, finalPath);
+            else File.Move(source, finalPath);
+            return finalPath;
+        }
+
+        // Cross-volume moves cannot be atomic. Copy completely first, then remove the original.
+        // If copying fails, the source remains untouched. If source cleanup fails, both copies may remain.
+        var copiedPath = CopyItem(source, destinationRoot);
+        try
+        {
+            if (isDirectory) Directory.Delete(source, recursive: true);
+            else File.Delete(source);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            throw new IOException($"The item was copied to '{copiedPath}', but the original could not be removed. Both copies may remain.", ex);
+        }
+        return copiedPath;
+    }
+
     public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);

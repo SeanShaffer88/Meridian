@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Meridian.Models;
 using Meridian.Services;
+using Microsoft.VisualBasic.FileIO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -319,6 +320,45 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         { GlobalStatus.Text = "Could not open file · " + ex.Message; }
     }
+    private async Task MoveSelectedAsync(PaneState source, PaneState destination)
+    {
+        if (source.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
+
+        var kind = selected.IsDirectory ? "folder" : "file";
+        var dialog = new ContentDialog
+        {
+            Title = "Move item?",
+            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
+            PrimaryButtonText = "Move",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var sourcePath = selected.FullPath;
+        var sourceFolder = source.CurrentPath;
+        var destinationPath = destination.CurrentPath;
+        try
+        {
+            var movedTo = await Task.Run(() => FileOperations.MoveItem(sourcePath, destinationPath));
+            if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(source, sourceFolder, addHistory: false);
+            if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(destination, destinationPath, addHistory: false);
+            GlobalStatus.Text = $"Moved successfully · {Path.GetFileName(movedTo)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Move failed · " + ex.Message;
+        }
+    }
+
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
         if (_copyCancellation is not null) { GlobalStatus.Text = "A copy is already in progress."; return; }
@@ -441,6 +481,112 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void PropertiesSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to view its properties.";
+            return;
+        }
+
+        try
+        {
+            FileSystemInfo info = selected.IsDirectory
+                ? new DirectoryInfo(selected.FullPath)
+                : new FileInfo(selected.FullPath);
+            info.Refresh();
+            if (!info.Exists)
+                throw new FileNotFoundException("The item no longer exists.", selected.FullPath);
+
+            var size = selected.IsDirectory
+                ? "Not calculated for folders"
+                : FormatFileSize(((FileInfo)info).Length);
+            var details = new StackPanel { Spacing = 8, MaxWidth = 520 };
+            AddPropertyRow(details, "Name", string.IsNullOrWhiteSpace(info.Name) ? info.FullName : info.Name);
+            var extension = Path.GetExtension(info.Name);
+            AddPropertyRow(details, "Type", selected.IsDirectory ? "Folder" : (string.IsNullOrWhiteSpace(extension) ? "File (no extension)" : extension + " file"));
+            AddPropertyRow(details, "Location", info.FullName);
+            AddPropertyRow(details, "Size", size);
+            AddPropertyRow(details, "Created", info.CreationTime.ToString("g"));
+            AddPropertyRow(details, "Modified", info.LastWriteTime.ToString("g"));
+            AddPropertyRow(details, "Last accessed", info.LastAccessTime.ToString("g"));
+            AddPropertyRow(details, "Attributes", info.Attributes.ToString());
+
+            var dialog = new ContentDialog
+            {
+                Title = "Properties · " + info.Name,
+                Content = new ScrollViewer { Content = details, MaxHeight = 440, MaxWidth = 560 },
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not read properties · " + ex.Message;
+        }
+    }
+
+    private static void AddPropertyRow(StackPanel panel, string label, string value)
+    {
+        var row = new StackPanel { Spacing = 2 };
+        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray) });
+        row.Children.Add(new TextBlock { Text = value, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap });
+        panel.Children.Add(row);
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        double size = bytes;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+        return $"{size:0.##} {units[unit]} ({bytes:N0} bytes)";
+    }
+
+    private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to delete.";
+            return;
+        }
+
+        var kind = selected.IsDirectory ? "folder" : "file";
+        var dialog = new ContentDialog
+        {
+            Title = "Move to Recycle Bin?",
+            Content = $"Move this {kind} to the Recycle Bin?\n\n{selected.FullPath}\n\nYou can restore it from the Recycle Bin unless Windows prevents doing so.",
+            PrimaryButtonText = "Move to Recycle Bin",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            if (selected.IsDirectory)
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            else
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+
+            var pane = _activePane;
+            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            GlobalStatus.Text = $"Moved to Recycle Bin · {selected.Name}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
+        {
+            GlobalStatus.Text = "Could not move item to Recycle Bin · " + ex.Message;
+        }
+    }
+
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
@@ -460,6 +606,8 @@ public sealed partial class MainWindow : Window
     private async void LeftForward_Click(object sender, RoutedEventArgs e) => await NavigateForwardAsync(_left);
     private async void RightForward_Click(object sender, RoutedEventArgs e) => await NavigateForwardAsync(_right);
     private async void CopyLeftToRight_Click(object sender, RoutedEventArgs e) => await CopySelectedAsync(_left, _right);
+    private async void MoveLeftToRight_Click(object sender, RoutedEventArgs e) => await MoveSelectedAsync(_left, _right);
+    private async void MoveRightToLeft_Click(object sender, RoutedEventArgs e) => await MoveSelectedAsync(_right, _left);
     private async void CopyRightToLeft_Click(object sender, RoutedEventArgs e) => await CopySelectedAsync(_right, _left);
     private async void RefreshBoth_Click(object sender, RoutedEventArgs e)
     {

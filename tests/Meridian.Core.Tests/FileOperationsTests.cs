@@ -207,6 +207,83 @@ public sealed class FileOperationsTests
         Assert.Empty(Directory.GetFileSystemEntries(destination));
     }
 
+    [Fact]
+    public void MoveItem_MovesFileAndPreservesContents()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFolder = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var source = Path.Combine(sourceFolder, "note.txt");
+        File.WriteAllText(source, "keep this");
+
+        var result = FileOperations.MoveItem(source, destination);
+
+        Assert.Equal(Path.Combine(destination, "note.txt"), result);
+        Assert.False(File.Exists(source));
+        Assert.Equal("keep this", File.ReadAllText(result));
+    }
+
+    [Fact]
+    public void MoveItem_MovesDirectoryWithChildren()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceParent = Directory.CreateDirectory(Path.Combine(temp.Path, "source-parent")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var source = Directory.CreateDirectory(Path.Combine(sourceParent, "bundle")).FullName;
+        File.WriteAllText(Path.Combine(source, "inside.txt"), "keep");
+
+        var result = FileOperations.MoveItem(source, destination);
+
+        Assert.False(Directory.Exists(source));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(result, "inside.txt")));
+    }
+
+    [Fact]
+    public void MoveItem_RefusesToOverwriteExistingFile()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFolder = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var source = Path.Combine(sourceFolder, "same.txt");
+        var existing = Path.Combine(destination, "same.txt");
+        File.WriteAllText(source, "source");
+        File.WriteAllText(existing, "destination");
+
+        Assert.Throws<IOException>(() => FileOperations.MoveItem(source, destination));
+        Assert.Equal("source", File.ReadAllText(source));
+        Assert.Equal("destination", File.ReadAllText(existing));
+    }
+
+    [Fact]
+    public void MoveItem_RefusesToOverwriteExistingDirectory()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceParent = Directory.CreateDirectory(Path.Combine(temp.Path, "source-parent")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var source = Directory.CreateDirectory(Path.Combine(sourceParent, "bundle")).FullName;
+        var existing = Directory.CreateDirectory(Path.Combine(destination, "bundle")).FullName;
+        File.WriteAllText(Path.Combine(source, "new.txt"), "new");
+        File.WriteAllText(Path.Combine(existing, "keep.txt"), "keep");
+
+        Assert.Throws<IOException>(() => FileOperations.MoveItem(source, destination));
+        Assert.True(File.Exists(Path.Combine(source, "new.txt")));
+        Assert.True(File.Exists(Path.Combine(existing, "keep.txt")));
+        Assert.False(File.Exists(Path.Combine(existing, "new.txt")));
+    }
+
+    [Fact]
+    public void MoveItem_RejectsMovingDirectoryIntoDescendant()
+    {
+        using var temp = new TemporaryDirectory();
+        var source = Directory.CreateDirectory(Path.Combine(temp.Path, "folder")).FullName;
+        var descendant = Directory.CreateDirectory(Path.Combine(source, "child")).FullName;
+        File.WriteAllText(Path.Combine(source, "note.txt"), "keep");
+
+        Assert.Throws<IOException>(() => FileOperations.MoveItem(source, descendant));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(source, "note.txt")));
+        Assert.Empty(Directory.GetDirectories(descendant));
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         public string Path { get; } = System.IO.Path.Combine(

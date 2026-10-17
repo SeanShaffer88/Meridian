@@ -17,7 +17,7 @@ Keep the first public release focused on a dependable daily-use workflow rather 
 
 1. Keep the current branch green: fix compile/test/publish failures and retain the Windows x64/ARM64 CI artifacts.
 2. Finish and verify the everyday file workflow: dual-pane navigation, bookmarks/session state, new folder, rename, copy/cancel, move, delete with confirmation, and useful properties.
-3. Add multi-tab browsing and restore tabs/panes/focus as one coherent session feature.
+3. Keep the implemented paired workspace tabs stable and verify session restoration, including invalid/missing saved paths.
 4. Deliver both deployment paths: a portable publish folder and a documented installable package. Do not call an unsigned package production-ready.
 5. Complete the release gate: test on Windows 11 x64 and ARM64, run filesystem safety checks, verify keyboard/accessibility basics, and publish a versioned changelog/release.
 
@@ -37,7 +37,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 ## Phase 1 — Everyday workflow
 
-- [ ] Workspace tabs with independent left/right locations and session restoration (initial implementation under review); later: reordering, locking, pinning, close-left/right, and color accents
+- [x] Paired workspace tabs with independent left/right locations and session persistence; later: reordering, locking, pinning, close-left/right, and color accents
 - [ ] Flexible one-, two-, and four-pane layouts, including horizontal/vertical splits and adjustable split ratios
 - [ ] Bookmarks/favorites and named workspaces; persist and restore tabs, pane layout, locations, and focus
 - [ ] Folder tree sidebar, with shared focus-synchronized or independent per-pane trees
@@ -46,7 +46,9 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
 - [x] Rename files and folders in place with validation and no-overwrite behavior
-- [ ] Move, delete, properties, and open-with flows with clear error handling
+- [x] Basic cross-pane move flow with confirmation, destination collision checks, no-overwrite behavior, and cross-volume fallback (automated core tests added; Windows verification pending)
+- [x] Confirmed deletion to the Windows Recycle Bin (subject to Windows/filesystem support)
+- [x] Read-only properties dialog for basic file/folder metadata (folder size intentionally not recursively calculated)
 - [ ] Portable configuration and settings persistence; installer/package path
 
 ## Phase 2 — Navigation and organization depth
