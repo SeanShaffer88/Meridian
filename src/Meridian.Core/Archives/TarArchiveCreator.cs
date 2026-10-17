@@ -26,6 +26,7 @@ public static class TarArchiveCreator
             throw new IOException("Archive destination already exists.");
         var plan = new List<(string Name, string Source, long Length)>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var parentPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0;
         var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in sourceFiles)
