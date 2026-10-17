@@ -24,7 +24,7 @@ public static class TarArchiveCreator
         if (!Directory.Exists(parent)) throw new DirectoryNotFoundException(parent);
         if (File.Exists(target) || Directory.Exists(target))
             throw new IOException("Archive destination already exists.");
-        var plan = new List<(string Name, string Source)>();
+        var plan = new List<(string Name, string Source, long Length)>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0;
         foreach (var item in sourceFiles)
@@ -39,7 +39,7 @@ public static class TarArchiveCreator
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
                 throw new InvalidDataException("TAR source exceeds 4 GiB aggregate budget.");
             totalBytes += length;
-            plan.Add((name, source));
+            plan.Add((name, source, length));
         }
         var ancestor = parent;
         while (!string.IsNullOrEmpty(ancestor))
@@ -65,7 +65,7 @@ public static class TarArchiveCreator
                         cancellationToken.ThrowIfCancellationRequested();
                         Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Source, cancellationToken);
                         var currentLength = new FileInfo(item.Source).Length;
-                        if (currentLength > 4L * 1024 * 1024 * 1024)
+                        if (currentLength != item.Length)
                             throw new InvalidDataException("TAR source file exceeds budget.");
                         writer.WriteEntry(item.Source, item.Name);
                     }
