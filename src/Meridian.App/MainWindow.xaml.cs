@@ -350,6 +350,20 @@ public sealed partial class MainWindow : Window
         await NavigateAsync(pane, target, addHistory: false);
     }
 
+    private async void InspectZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory) return;
+        try
+        {
+            var entries = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath));
+            GlobalStatus.Text = $"ZIP contains {entries.Count:N0} entries.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            GlobalStatus.Text = "ZIP inspection failed · " + ex.Message;
+        }
+    }
+
     private bool _previewDialogOpen;
 
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
