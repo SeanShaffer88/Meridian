@@ -13,7 +13,21 @@ public static class SafeFilePreview
             throw new ArgumentOutOfRangeException(nameof(maxBytes));
         if (!Path.IsPathFullyQualified(path))
             throw new ArgumentException("Preview requires an absolute path.", nameof(path));
+        cancellationToken.ThrowIfCancellationRequested();
         var full = Path.GetFullPath(path);
+        // Reject link-bearing ancestors as well as the final file. This is a
+        // pre-open check, not a race-free filesystem identity guarantee.
+        var ancestor = Path.GetDirectoryName(full);
+        while (!string.IsNullOrEmpty(ancestor))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((File.GetAttributes(ancestor) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Preview cannot traverse reparse-point directories.");
+            var parent = Path.GetDirectoryName(ancestor);
+            if (string.IsNullOrEmpty(parent) || string.Equals(parent, ancestor, StringComparison.Ordinal))
+                break;
+            ancestor = parent;
+        }
         if ((File.GetAttributes(full) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
             throw new IOException("Preview requires a regular file.");
         await using var stream = new FileStream(full, FileMode.Open, FileAccess.Read,
@@ -26,6 +40,7 @@ public static class SafeFilePreview
             if (read == 0) break;
             total += read;
         }
+        cancellationToken.ThrowIfCancellationRequested();
         return bytes[..total];
     }
 
