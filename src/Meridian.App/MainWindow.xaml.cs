@@ -992,16 +992,16 @@ public sealed partial class MainWindow : Window
             var snapshots = await catalog.ListAsync();
             var lines = snapshots
                 .OrderByDescending(s => s.CreatedAt)
-                .Select(s => $"Created: {(s.CreatedAt == DateTimeOffset.MinValue ? "Unknown" : s.CreatedAt.ToLocalTime().ToString("g"))}\\nVolume: {s.OriginalVolume}\\nDevice: {s.DeviceObject}\\nState: {s.State}\\n");
+                .Select(s => $"Created: {(s.CreatedAt == DateTimeOffset.MinValue ? "Unknown" : s.CreatedAt.ToLocalTime().ToString("g"))}\nVolume: {s.OriginalVolume}\nDevice: {s.DeviceObject}\nState: {s.State}\n");
             var message = snapshots.Count == 0
                 ? "Windows did not report any accessible shadow copies. Snapshots may be absent, expired, or inaccessible."
-                : string.Join("\\n", lines);
+                : string.Join("\n", lines);
             var content = new ScrollViewer
             {
                 MaxHeight = 440,
                 Content = new TextBlock
                 {
-                    Text = message + "\\nRead-only discovery. Recovery and browsing are not available yet.",
+                    Text = message + "\nRead-only discovery. Recovery and browsing are not available yet.",
                     TextWrapping = TextWrapping.Wrap,
                     IsTextSelectionEnabled = true
                 }
@@ -1023,7 +1023,7 @@ public sealed partial class MainWindow : Window
             await new ContentDialog
             {
                 Title = "TimeVault discovery unavailable",
-                Content = "Windows could not enumerate shadow copies. This may be caused by permissions, WMI availability, or VSS configuration.\\n\\n" + ex.Message,
+                Content = "Windows could not enumerate shadow copies. This may be caused by permissions, WMI availability, or VSS configuration.\n\n" + ex.Message,
                 CloseButtonText = "Close",
                 XamlRoot = LeftPath.XamlRoot
             }.ShowAsync();
