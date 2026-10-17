@@ -71,6 +71,7 @@ public static class FileOperations
             throw new FileNotFoundException("The selected source no longer exists.", source);
         if (!Directory.Exists(destinationRoot))
             throw new DirectoryNotFoundException($"The destination folder does not exist: {destinationRoot}");
+        RejectReparsePoint(destinationRoot);
         RejectReparsePoint(source);
 
         var isDirectory = Directory.Exists(source);
@@ -128,6 +129,7 @@ public static class FileOperations
             throw new FileNotFoundException("The selected source no longer exists.", source);
         if (!Directory.Exists(destinationRoot))
             throw new DirectoryNotFoundException($"The destination folder does not exist: {destinationRoot}");
+        RejectReparsePoint(destinationRoot);
         RejectReparsePoint(source);
         if (Directory.Exists(source))
         {
