@@ -389,9 +389,15 @@ public sealed partial class MainWindow : Window
         finally { _zipInspectionOpen = false; }
     }
 
+    private bool _zipExtractionBusy;
+
     private async void ExtractZip_Click(object sender, RoutedEventArgs e)
     {
+        if (_zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory) return;
+        _zipExtractionBusy = true;
+        try
+        {
         var archivePath = selected.FullPath;
         var parent = _activePane.CurrentPath;
         var folder = Path.GetFileNameWithoutExtension(archivePath);
@@ -407,6 +413,12 @@ public sealed partial class MainWindow : Window
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         var receipt = await Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(archivePath, parent, folder);
         GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            GlobalStatus.Text = "ZIP extraction failed · " + ex.Message;
+        }
+        finally { _zipExtractionBusy = false; }
     }
 
     private bool _previewDialogOpen;
