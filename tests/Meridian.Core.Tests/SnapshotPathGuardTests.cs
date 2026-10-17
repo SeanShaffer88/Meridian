@@ -29,6 +29,7 @@ public class SnapshotPathGuardTests
     [InlineData(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy7\folder\file.txt:stream")]
     [InlineData(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy7\folder.\file.txt")]
     [InlineData(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy7\folder \file.txt")]
+    [InlineData(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy7\folder\\file.txt")]
     public void RejectsUnsafeComponentsBeforeOpeningSnapshot(string mappedPath)
     {
         if (!OperatingSystem.IsWindows()) return;
