@@ -22,7 +22,7 @@ public class ZipTreeExtractorTests
             var values = new List<int>();
             var observer = new InlineProgress(value => values.Add(value));
             await ZipTreeExtractor.ExtractAsync(archive, root, "output", progress: observer);
-            Assert.Equal(new[] { 50, 100 }, values);
+            Assert.Equal(new[] { 50, 99, 100 }, values);
         }
         finally { Directory.Delete(root, recursive: true); }
     }
