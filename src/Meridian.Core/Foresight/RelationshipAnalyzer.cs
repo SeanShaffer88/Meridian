@@ -22,7 +22,7 @@ public static class RelationshipAnalyzer
 {
     public static IReadOnlyList<FileRelationship> Analyze(
         IEnumerable<string> paths, int maxPaths = 1000, int maxRelationships = 10000,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, TimeSpan? timeBudget = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         if (maxPaths is < 1 or > 10000)
@@ -31,6 +31,17 @@ public static class RelationshipAnalyzer
         if (maxRelationships is < 1 or > 100000)
             throw new ArgumentOutOfRangeException(nameof(maxRelationships));
 
+        if (timeBudget is { } budget && (budget <= TimeSpan.Zero || budget > TimeSpan.FromMinutes(5)))
+            throw new ArgumentOutOfRangeException(nameof(timeBudget));
+        var stopwatch = timeBudget.HasValue ? System.Diagnostics.Stopwatch.StartNew() : null;
+        void CheckBudget()
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (stopwatch is not null && stopwatch.Elapsed > timeBudget!.Value)
+                throw new TimeoutException("Foresight analysis time budget exceeded; narrow the input set.");
+        }
+
+        CheckBudget();
         var comparer = OperatingSystem.IsWindows()
             ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var items = new List<string>();
