@@ -40,6 +40,49 @@ These are **aspirations, not implemented capabilities or promised release dates*
 
 This north star **expands rather than replaces** the existing feature inventory and phase ordering below. Continue incremental pull requests, x64/ARM64 CI, tests, and truthful release gating.
 
+## Meridian expansion program — approved design scope
+
+**Status: planned unless specifically identified as implemented elsewhere.** Approval of a concept does not mean it is shipped. Work remains gated by reliability, measured performance, accessibility, security and real Windows validation. No dates are promised.
+
+| Initiative | First independently testable increment | Longer-term ambition |
+| --- | --- | --- |
+| **TimeVault Deep Recovery** | Read-only Windows VSS discovery and browsing | File History adapters, historical search, recovery receipts, and unified version timelines |
+| **FileGraph** | Explainable local path/name/metadata associations | Interactive graph of duplicates, references and project relationships |
+| **Storage X-Ray** | Cancellable directory-size scan with explicit scope | Treemap, growth trends, duplicate review and cleanup simulation |
+| **FlowForge** | Typed workflow definitions and dry-run validation | Visual automation designer with preview and explicitly approved execution |
+| **OmniSearch** | Bounded metadata query parser and streaming search | Optional local indexing, content search and TimeVault integration |
+| **File DNA** | Read-only hashes, signatures and format mismatch reporting | Extensible metadata and provenance analysis |
+| **Archive Portal** | Read-only ZIP virtual provider and extraction safety tests | Additional formats with audited libraries and sandboxed preview |
+| **Transfer Engine** | Structured transfer plans, progress and safe collision handling | Queues, selective pause/resume, verification and reports |
+| **Workspace Constellations** | Named layout snapshots and safe restore | Task-oriented workspace collections and portable profiles |
+| **File Provenance** | Local operation receipt with clearly defined coverage | Explainable file lineage without claiming to observe all external changes |
+| **Virtual Collections** | Metadata-backed cross-folder groups | Rules, tags and dynamic collections without moving originals |
+| **HexLab** | Bounded read-only hex and text encoding viewer | Binary diff, byte search and signature inspection |
+| **Integrity Guardian** | Opt-in SHA-256 manifest creation and verification | Periodic local checks with privacy-conscious notifications |
+| **Device Bridge** | Provider interface and reliable SMB/network handling | Optional MTP, removable-device and remote providers |
+| **Command Nexus** | Searchable command registry with shortcuts | Context-aware keyboard-driven workflows |
+| **Consequence Engine** | Immutable dry-run plan and collision report | Dependency-aware previews, durable operation receipts and constrained undo |
+
+### Shared architecture contracts
+
+- **Providers** expose capabilities, identity, path rules, cancellation and permissions explicitly; local, archive, snapshot, network and device sources must not be conflated.
+- **Planning and execution are separate.** A preview never grants authority to execute; every action revalidates sources, targets, symlinks and destination state.
+- **No universal undo promise.** Operation receipts record observed outcomes and only offer reversal when preconditions can be verified.
+- **Read-only by default** for history, analysis, binary inspection and remote sources. Scans have bounded memory, scope, progress and cancellation.
+- **No invisible privilege escalation or remote data transmission.** Elevated helpers, indexing, hashing and cloud integrations are opt-in and auditable.
+- **Each increment needs tests and an honest status** (proposed, implemented, CI-tested, device-verified). Cross-volume operations are not atomic.
+- **A small default interface, powerful optional surfaces.** Feature flags and modular services should prevent advanced features from slowing normal browsing.
+
+### Suggested integration sequence
+
+1. Stabilize everyday operations and add shared plan/receipt contracts for the Consequence Engine.
+2. Complete TimeVault's read-only provider and introduce provider abstractions.
+3. Deliver Command Nexus, File DNA, bounded OmniSearch and Storage X-Ray.
+4. Add Virtual Collections, Workspace Constellations, HexLab and Archive Portal.
+5. Layer FileGraph, Integrity Guardian, FlowForge and Device Bridge onto verified foundations.
+
+See [TimeVault design](TIMEVAULT.md) for its separate safety gates.
+
 ## Delivery principles
 
 - [ ] Keep the core experience fast, dependable, keyboard-friendly, and useful for everyday file management.
