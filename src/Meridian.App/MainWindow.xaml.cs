@@ -48,7 +48,10 @@ public sealed partial class MainWindow : Window
         if (saved?.Tabs is { Length: > 0 })
         {
             foreach (var tab in saved.Tabs)
-                _workspaceTabs.Add(new WorkspaceTab(tab.Name, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight));
+            {
+                var tabName = string.IsNullOrWhiteSpace(tab.Name) ? $"Workspace {_workspaceTabs.Count + 1}" : tab.Name;
+                _workspaceTabs.Add(new WorkspaceTab(tabName, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight));
+            }
             _activeWorkspaceTabIndex = Math.Clamp(saved.ActiveTabIndex, 0, _workspaceTabs.Count - 1);
         }
         else
@@ -95,6 +98,14 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private string NextWorkspaceTabName()
+    {
+        string name;
+        do { name = $"Workspace {_nextWorkspaceTabNumber++}"; }
+        while (_workspaceTabs.Any(tab => string.Equals(tab.Name, name, StringComparison.OrdinalIgnoreCase)));
+        return name;
+    }
+
     private void StoreCurrentWorkspaceTab()
     {
         if (_workspaceTabs.Count == 0 || _activeWorkspaceTabIndex < 0 || _activeWorkspaceTabIndex >= _workspaceTabs.Count) return;
@@ -139,7 +150,7 @@ public sealed partial class MainWindow : Window
         StoreCurrentWorkspaceTab();
         var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
         var rightPath = string.IsNullOrWhiteSpace(_right.CurrentPath) ? leftPath : _right.CurrentPath;
-        var tab = new WorkspaceTab($"Workspace {_nextWorkspaceTabNumber++}", leftPath, rightPath);
+        var tab = new WorkspaceTab(NextWorkspaceTabName(), leftPath, rightPath);
         _workspaceTabs.Add(tab);
         _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
         RefreshWorkspaceTabs();
@@ -179,8 +190,13 @@ public sealed partial class MainWindow : Window
 
     private async Task LoadWorkspaceTabAsync(WorkspaceTab tab)
     {
-        var leftPath = Directory.Exists(tab.LeftPath) ? tab.LeftPath : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        var rightPath = Directory.Exists(tab.RightPath) ? tab.RightPath : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!Directory.Exists(documents)) documents = profile;
+        var downloads = Path.Combine(profile, "Downloads");
+        if (!Directory.Exists(downloads)) downloads = documents;
+        var leftPath = Directory.Exists(tab.LeftPath) ? tab.LeftPath : documents;
+        var rightPath = Directory.Exists(tab.RightPath) ? tab.RightPath : downloads;
         _left.List.SelectedItem = null;
         _right.List.SelectedItem = null;
         _restoringWorkspace = true;
