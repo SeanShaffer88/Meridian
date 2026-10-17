@@ -49,7 +49,7 @@ These features are **implemented on the main development branch**. They are not 
 | **Keyboard-first navigation** | Switch panes, focus location or filter fields, refresh, and navigate history with shortcuts. |
 | **Folder DNA — first signature experience** | See a quick profile of the active folder: file/folder counts, known file sizes, date range, and largest type groups. |
 | **Drop Shelf** | Collect paths from unrelated folders without moving the originals; remove, clear, or show the location of a collected item. The shelf is in-memory and does not survive an app restart. |
-| **Operation Simulator — read-only batch preview** | Check shelf items against the active pane’s destination folder and see ready/blocked counts and collision explanations before copying anything. |
+| **Operation Simulator + confirmed batch copy** | Preview shelf items against the active pane’s destination folder, review ready/blocked counts and collisions, then explicitly confirm a no-overwrite sequential batch copy. |
 | **Conservative file actions** | Copy, move, rename, create folders, view basic properties, and request Recycle Bin deletion. |
 | **Windows preview packages** | CI produces portable application folders and per-user installers for x64 and ARM64. |
 
@@ -70,7 +70,7 @@ It does **not** recursively calculate folder sizes, hash files, or scan nested d
 
 Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview lists up to 100 individual results while counting the whole batch.
 
-**Currently preview-only:** Batch execution is not yet merged into the main branch. The shelf does not persist between launches. The preview is advisory, not a guarantee: filesystem contents can change after the check. A future copy command must recheck every item before writing.
+**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Live batch progress and cancellation are being developed separately.
 
 ### A workspace that follows your thinking
 
