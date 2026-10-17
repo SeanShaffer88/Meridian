@@ -480,7 +480,8 @@ public sealed partial class MainWindow : Window
         {
             GlobalStatus.Text = "Creating ZIP · " + selected.Name;
             await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
-                destination, new Dictionary<string, string> { [selected.Name] = selected.FullPath },
+                destination, sources.ToDictionary(entry => entry.Name, entry => entry.FullPath,
+                    StringComparer.OrdinalIgnoreCase),
                 cancellationToken: _zipCreationCancellation.Token));
             GlobalStatus.Text = "ZIP created · " + destination;
             await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
