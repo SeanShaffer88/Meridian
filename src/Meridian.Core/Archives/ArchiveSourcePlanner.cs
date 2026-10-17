@@ -61,8 +61,9 @@ public static class ArchiveSourcePlanner
             var length = new FileInfo(safePath).Length;
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
                 throw new InvalidDataException("Archive source size budget exceeded.");
-            if (files.Count >= 10000 || !files.TryAdd(safeName, safePath))
+            if (files.Count >= 10000 || files.ContainsKey(safeName))
                 throw new InvalidDataException("Archive entry count or name collision.");
+            files.Add(safeName, safePath);
             sourceFiles.Add(safePath);
             totalBytes += length;
         }
