@@ -459,6 +459,7 @@ public sealed partial class MainWindow : Window
             GlobalStatus.Text = "Select a regular file to archive.";
             return;
         }
+        var sources = _activePane.List.SelectedItems.OfType<FileEntry>().Where(x => !x.IsDirectory).ToArray();
         var destination = Path.Combine(_activePane.CurrentPath,
             Path.GetFileNameWithoutExtension(selected.Name) + ".zip");
         var confirmation = new ContentDialog
