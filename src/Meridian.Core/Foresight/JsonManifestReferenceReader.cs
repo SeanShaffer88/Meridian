@@ -32,7 +32,8 @@ public sealed class JsonManifestReferenceReader
             FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
         if (stream.Length > maxBytes)
             throw new IOException("Manifest exceeds read limit.");
-        using var document = await JsonDocument.ParseAsync(stream,
+        using var boundedStream = new BoundedReadStream(stream, maxBytes);
+        using var document = await JsonDocument.ParseAsync(boundedStream,
             new JsonDocumentOptions { MaxDepth = 32, AllowTrailingCommas = false },
             cancellationToken);
         var names = new HashSet<string>(referencePropertyNames, StringComparer.Ordinal);
@@ -73,5 +74,48 @@ public sealed class JsonManifestReferenceReader
             foreach (var item in element.EnumerateArray())
                 Walk(item, manifest, directory, names, results, token);
         }
+    }
+
+    /// <summary>Caps actual bytes read, including when a file grows after the length check.</summary>
+    private sealed class BoundedReadStream : Stream
+    {
+        private readonly Stream _inner;
+        private long _remaining;
+        public BoundedReadStream(Stream inner, long limit) { _inner = inner; _remaining = limit; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count) =>
+            Read(buffer.AsSpan(offset, count));
+        public override int Read(Span<byte> buffer)
+        {
+            if (_remaining == 0)
+            {
+                if (_inner.ReadByte() != -1) throw new IOException("Manifest read limit exceeded.");
+                return 0;
+            }
+            var read = _inner.Read(buffer[..(int)Math.Min(buffer.Length, _remaining)]);
+            _remaining -= read;
+            return read;
+        }
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_remaining == 0)
+            {
+                var one = new byte[1];
+                if (await _inner.ReadAsync(one, cancellationToken) != 0)
+                    throw new IOException("Manifest read limit exceeded.");
+                return 0;
+            }
+            var read = await _inner.ReadAsync(buffer[..(int)Math.Min(buffer.Length, _remaining)], cancellationToken);
+            _remaining -= read;
+            return read;
+        }
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
