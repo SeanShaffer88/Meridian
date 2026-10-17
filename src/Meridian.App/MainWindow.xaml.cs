@@ -381,6 +381,20 @@ public sealed partial class MainWindow : Window
                 player.MediaPlayer.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
                 panel.Children.Add(player);
             }
+            else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
+            {
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                using var stream = await file.OpenReadAsync();
+                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                await bitmap.SetSourceAsync(stream);
+                panel.Children.Add(new Microsoft.UI.Xaml.Controls.Image
+                {
+                    Source = bitmap,
+                    MaxHeight = 440,
+                    MaxWidth = 780,
+                    Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+                });
+            }
             else if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Text or Meridian.Core.Viewer.ViewerKind.Hex)
             {
                 var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path);
