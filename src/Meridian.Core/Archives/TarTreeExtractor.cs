@@ -73,7 +73,7 @@ public static class TarTreeExtractor
                     }
                     count++;
                 }
-                progress?.Report(Math.Min(99, (i + 1) * 100 / Math.Max(1, catalog.Count)));
+                progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / Math.Max(1, catalog.Count)));
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (reader.GetNextEntry(copyData: false) is not null)
