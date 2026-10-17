@@ -94,7 +94,8 @@ MERIDIAN — BEYOND FILE MANAGEMENT
 |   +-- [PLANNED] Storage Reclaimer: Windows scanning and cleanup UI
 |   +-- [PLANNED] Meridian Vaults: encrypted, lockable file storage
 |   +-- [PLANNED] Storage X-Ray: disk-usage visualization
-|   +-- [PLANNED] HexLab: bounded binary and text inspection
+|   +-- [BRANCH] Universal Viewer: text, hex and image preview; native audio/video playback prototype
+|   +-- [PLANNED] HexLab: advanced binary inspection beyond bounded preview
 |   +-- [PLANNED] Archive Portal: safe archive browsing/extraction
 |   +-- [PLANNED] Integrity Guardian: opt-in checksum verification
 |   +-- [PLANNED] FlowForge / Workflow Recipes: inspectable automation
@@ -149,6 +150,10 @@ These features are **implemented on the main development branch**. They are not 
 | **Operation Simulator + confirmed batch copy** | Preview shelf items against the active pane’s destination folder, review ready/blocked counts and collisions, then explicitly confirm a no-overwrite sequential batch copy. |
 | **Conservative file actions** | Copy, move, rename, create folders, view basic properties, and request Recycle Bin deletion. |
 | **Windows preview packages** | CI is configured to produce portable application folders and per-user installers for x64 and ARM64 when runs succeed. |
+
+### Universal Viewer and media player (development branch)
+
+The [Universal Viewer prototype](docs/UNIVERSAL_VIEWER.md) includes bounded text/hex preview, image decoding, and native Windows audio/video controls. It is **not yet Windows-build or playback verified**; PDF rendering and stronger decoder safeguards remain incomplete. A real screenshot will be added here only after verification.
 
 ### Folder DNA: understand a folder at a glance
 
