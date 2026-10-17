@@ -496,6 +496,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void CancelZipCreation_Click(object sender, RoutedEventArgs e)
+    {
+        _zipCreationCancellation?.Cancel();
+        if (_zipCreationCancellation is not null)
+            GlobalStatus.Text = "Cancelling ZIP creation…";
+    }
+
     private bool _previewDialogOpen;
 
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
