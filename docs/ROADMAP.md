@@ -56,7 +56,7 @@ This north star **expands rather than replaces** the existing feature inventory 
 | **FlowForge** | Typed workflow definitions and dry-run validation | Visual automation designer with preview and explicitly approved execution |
 | **OmniSearch** | Bounded metadata query parser and streaming search | Optional local indexing, content search and TimeVault integration |
 | **File DNA** | Read-only hashes, signatures and format mismatch reporting | Extensible metadata and provenance analysis |
-| **Archive Portal** | Read-only ZIP virtual provider and extraction safety tests | Additional formats with audited libraries and sandboxed preview |
+| **Archive Portal** | Read-only ZIP virtual provider and extraction safety tests, with no external archive-manager installation | Self-contained bundled multi-format archive engine (ZIP, 7z, RAR extraction where permitted, TAR and compression streams), safe creation and encrypted-format support by capability; see [archive contract](ARCHIVE_ENGINE.md) |
 | **Transfer Engine** | Structured transfer plans, progress and safe collision handling | Queues, selective pause/resume, verification and reports |
 | **Workspace Constellations** | Named layout snapshots and safe restore | Task-oriented workspace collections and portable profiles |
 | **File Provenance** | Local operation receipt with clearly defined coverage | Explainable file lineage without claiming to observe all external changes |
