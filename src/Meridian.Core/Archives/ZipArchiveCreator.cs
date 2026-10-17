@@ -56,18 +56,6 @@ public static class ZipArchiveCreator
             total += length;
             plan.Add((name, source, length));
         }
-        var fileNames = new HashSet<string>(plan.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
-        foreach (var item in plan)
-        {
-            var slash = item.Name.IndexOf('/');
-            while (slash >= 0)
-            {
-                if (fileNames.Contains(item.Name[..slash]))
-                    throw new InvalidDataException("File entry conflicts with another entry's parent.");
-                slash = item.Name.IndexOf('/', slash + 1);
-            }
-        }
-
         var target = Path.GetFullPath(destinationArchive);
         if (plan.Any(item => string.Equals(item.Source, target, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Archive destination cannot also be a source file.", nameof(destinationArchive));
