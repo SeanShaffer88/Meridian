@@ -490,6 +490,13 @@ public sealed partial class MainWindow : Window
             XamlRoot = LeftPath.XamlRoot
         };
         if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+        var extension = formatPicker.SelectedIndex switch
+        {
+            1 => ".tar",
+            2 => ".tar.gz",
+            _ => ".zip"
+        };
+        destination = Path.ChangeExtension(destination, extension);
         _zipCreationBusy = true;
         _zipCreationCancellation = new CancellationTokenSource();
         try
