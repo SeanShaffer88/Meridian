@@ -42,3 +42,7 @@ The `DependencyImpactAnalyzer` additionally accepts explicit, provenance-bearing
 ## Experimental JSON reference extraction
 
 The branch includes `JsonManifestReferenceReader`, an explicitly invoked, read-only parser that inspects only named JSON string properties. It limits file size, JSON depth and extracted reference count, and rejects reparse points in the manifest path's existing ancestors. It does **not** verify that a property is a real dependency, and its path checks are not race-free. No automatic directory scan or AI model is involved.
+
+## Relationship output budget
+
+The metadata-only relationship analyzer now defaults to a maximum of **10,000 emitted relationships** (configurable from 1 to 100,000). If the limit would be exceeded, it fails explicitly rather than returning a misleading partial result. The path input ceiling remains separate (default 1,000; maximum 10,000). This bounds retained relationship objects but **does not yet bound pairwise comparison time**: worst-case comparison complexity remains O(n²). Future work should use indexed/grouped candidate generation, cancellation, and time budgets before broad automatic analysis.
