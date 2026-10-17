@@ -355,7 +355,12 @@ public sealed partial class MainWindow : Window
     private async void InspectZip_Click(object sender, RoutedEventArgs e)
     {
         if (_zipInspectionOpen || _previewDialogOpen) return;
-        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory) return;
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
+            !string.Equals(Path.GetExtension(selected.FullPath), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            GlobalStatus.Text = "Select a ZIP file to inspect.";
+            return;
+        }
         _zipInspectionOpen = true;
         try
         {
