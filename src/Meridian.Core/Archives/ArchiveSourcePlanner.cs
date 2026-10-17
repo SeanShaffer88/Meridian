@@ -43,9 +43,7 @@ public static class ArchiveSourcePlanner
                     if ((attrs & FileAttributes.ReparsePoint) != 0)
                         throw new IOException("Linked archive source rejected.");
                     if ((attrs & FileAttributes.Directory) != 0)
-                    {
                         pending.Push(child);
-                    }
                     else
                         Add(prefix + "/" + Path.GetRelativePath(root, child).Replace('\\', '/'), child);
                 }
