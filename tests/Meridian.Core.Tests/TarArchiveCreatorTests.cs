@@ -132,6 +132,25 @@ public sealed class TarArchiveCreatorTests
 
     [Theory]
     [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task RejectsMissingSourceWithoutPublishingArchive(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-missing-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var missing = Path.Combine(root, "missing.txt");
+            var archive = Path.Combine(root, "bundle" + extension);
+            await Assert.ThrowsAnyAsync<IOException>(() => TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["missing.txt"] = missing }));
+            Assert.False(File.Exists(archive));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData(".tar")]
     [InlineData(".tar.gz")]
     [InlineData(".tgz")]
     public async Task CreatesCatalogReadableArchive(string extension)
