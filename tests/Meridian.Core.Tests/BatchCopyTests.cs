@@ -68,4 +68,71 @@ public sealed class BatchCopyTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+    [Fact]
+    public void Execute_ReportsCompletedItemCounts()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-progress-{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "one.txt");
+        var destination = Path.Combine(root, "target");
+        Directory.CreateDirectory(destination);
+        try
+        {
+            File.WriteAllText(source, "one");
+            var updates = new List<BatchCopy.Progress>();
+            var progress = new SynchronousProgress<BatchCopy.Progress>(updates.Add);
+            var result = BatchCopy.Execute([source], destination, progress: progress);
+            Assert.True(result.Succeeded);
+            Assert.Contains(updates, x => x.Completed == 0 && x.Total == 1);
+            Assert.Contains(updates, x => x.Completed == 1 && x.Total == 1);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Execute_CancelAfterFirstCompletedItem_PreservesPartialResult()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-cancel-{Guid.NewGuid():N}");
+        var sourceDir = Path.Combine(root, "source");
+        var destination = Path.Combine(root, "target");
+        Directory.CreateDirectory(sourceDir);
+        Directory.CreateDirectory(destination);
+        try
+        {
+            var first = Path.Combine(sourceDir, "one.txt");
+            var second = Path.Combine(sourceDir, "two.txt");
+            File.WriteAllText(first, "one");
+            File.WriteAllText(second, "two");
+            using var cts = new CancellationTokenSource();
+            var progress = new SynchronousProgress<BatchCopy.Progress>(update =>
+            {
+                if (update.Completed == 1) cts.Cancel();
+            });
+            var result = BatchCopy.Execute([first, second], destination, cts.Token, progress);
+            Assert.True(result.Cancelled);
+            Assert.Single(result.CompletedTargets);
+            Assert.True(File.Exists(Path.Combine(destination, "one.txt")));
+            Assert.False(File.Exists(Path.Combine(destination, "two.txt")));
+            Assert.True(File.Exists(first));
+            Assert.True(File.Exists(second));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Execute_RejectsEmptyBatchWithoutChanges()
+    {
+        var destination = Path.Combine(Path.GetTempPath(), $"meridian-empty-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(destination);
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => BatchCopy.Execute([], destination));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(destination));
+        }
+        finally { Directory.Delete(destination); }
+    }
+
+    private sealed class SynchronousProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
 }
