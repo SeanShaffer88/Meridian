@@ -32,7 +32,8 @@ Meridian is an early-stage, offline-first file manager targeting Windows 11 only
 - [ ] Live type-ahead filtering, sorting, selection, and useful keyboard shortcuts
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
-- [ ] Rename, move, delete, properties, and open-with flows with clear error handling
+- [x] Rename files and folders in place with validation and no-overwrite behavior
+- [ ] Move, delete, properties, and open-with flows with clear error handling
 - [ ] Portable configuration and settings persistence; installer/package path
 
 ## Phase 2 — Navigation and organization depth
