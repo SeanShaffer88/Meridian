@@ -142,7 +142,7 @@ public class RelationshipAnalyzerTests
     }
 
     [Fact]
-    public void CancellationDuringRelationshipEmissionStopsWithoutReturningPartialResults()
+    public void CancellationAtEndOfInputEnumerationStopsBeforeReturningResults()
     {
         using var cancellation = new CancellationTokenSource();
         var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-cancel"));
