@@ -61,6 +61,8 @@ internal sealed class WorkspaceStore
     }
 }
 
-internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath, BookmarkSnapshot[]? Bookmarks = null);
+internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath, BookmarkSnapshot[]? Bookmarks = null, WorkspaceTabSnapshot[]? Tabs = null, int ActiveTabIndex = 0);
+
+internal sealed record WorkspaceTabSnapshot(string Name, string? LeftPath, string? RightPath);
 
 internal sealed record BookmarkSnapshot(string Name, string Path);

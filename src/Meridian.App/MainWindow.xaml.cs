@@ -14,6 +14,10 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
+    private readonly List<WorkspaceTab> _workspaceTabs = [];
+    private int _activeWorkspaceTabIndex;
+    private int _nextWorkspaceTabNumber = 1;
+    private bool _switchingWorkspaceTab;
     private PaneState _activePane;
     private bool _restoringWorkspace;
     private CancellationTokenSource? _copyCancellation;
@@ -39,8 +43,29 @@ public sealed partial class MainWindow : Window
         var saved = await _workspaceStore.LoadAsync();
         _bookmarks.Clear();
         foreach (var bookmark in saved?.Bookmarks ?? []) _bookmarks.Add(bookmark);
-        var leftPath = saved?.LeftPath is { Length: > 0 } savedLeft && Directory.Exists(savedLeft) ? savedLeft : documents;
-        var rightPath = saved?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
+
+        var defaultLeft = saved?.LeftPath is { Length: > 0 } savedLeft && Directory.Exists(savedLeft) ? savedLeft : documents;
+        var defaultRight = saved?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
+        if (saved?.Tabs is { Length: > 0 })
+        {
+            foreach (var tab in saved.Tabs)
+            {
+                if (tab is null) continue;
+                var tabName = string.IsNullOrWhiteSpace(tab.Name) ? $"Workspace {_workspaceTabs.Count + 1}" : tab.Name;
+                _workspaceTabs.Add(new WorkspaceTab(tabName, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight));
+            }
+        }
+        if (_workspaceTabs.Count == 0)
+            _workspaceTabs.Add(new WorkspaceTab("Workspace 1", defaultLeft, defaultRight));
+        _activeWorkspaceTabIndex = Math.Clamp(saved?.ActiveTabIndex ?? 0, 0, _workspaceTabs.Count - 1);
+        _nextWorkspaceTabNumber = _workspaceTabs.Count + 1;
+        RefreshWorkspaceTabs();
+
+        var activeTab = _workspaceTabs[_activeWorkspaceTabIndex];
+        var leftPath = Directory.Exists(activeTab.LeftPath) ? activeTab.LeftPath : defaultLeft;
+        var rightPath = Directory.Exists(activeTab.RightPath) ? activeTab.RightPath : defaultRight;
+        activeTab.LeftPath = leftPath;
+        activeTab.RightPath = rightPath;
 
         _restoringWorkspace = true;
         try
@@ -61,13 +86,136 @@ public sealed partial class MainWindow : Window
         if (_restoringWorkspace) return;
         try
         {
-            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray()));
+            StoreCurrentWorkspaceTab();
+            var tabs = _workspaceTabs.Select(tab => new WorkspaceTabSnapshot(tab.Name, tab.LeftPath, tab.RightPath)).ToArray();
+            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(), tabs, _activeWorkspaceTabIndex));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             // Workspace persistence is a convenience; file browsing must continue if it fails.
             GlobalStatus.Text = "Workspace could not be saved · " + ex.Message;
         }
+    }
+
+    private string NextWorkspaceTabName()
+    {
+        string name;
+        do { name = $"Workspace {_nextWorkspaceTabNumber++}"; }
+        while (_workspaceTabs.Any(tab => string.Equals(tab.Name, name, StringComparison.OrdinalIgnoreCase)));
+        return name;
+    }
+
+    private void StoreCurrentWorkspaceTab()
+    {
+        if (_workspaceTabs.Count == 0 || _activeWorkspaceTabIndex < 0 || _activeWorkspaceTabIndex >= _workspaceTabs.Count) return;
+        var active = _workspaceTabs[_activeWorkspaceTabIndex];
+        if (!string.IsNullOrWhiteSpace(_left.CurrentPath)) active.LeftPath = _left.CurrentPath;
+        if (!string.IsNullOrWhiteSpace(_right.CurrentPath)) active.RightPath = _right.CurrentPath;
+    }
+
+    private void RefreshWorkspaceTabs()
+    {
+        WorkspaceTabsPanel.Children.Clear();
+        for (var i = 0; i < _workspaceTabs.Count; i++)
+        {
+            var tab = _workspaceTabs[i];
+            var tabButton = new Button
+            {
+                Content = (i == _activeWorkspaceTabIndex ? "▸ " : "") + tab.Name,
+                Tag = tab,
+                MinWidth = 110,
+                Padding = new Thickness(10, 4, 10, 4)
+            };
+            tabButton.Click += WorkspaceTab_Click;
+            WorkspaceTabsPanel.Children.Add(tabButton);
+            if (_workspaceTabs.Count > 1)
+            {
+                var closeButton = new Button
+                {
+                    Content = "×",
+                    Tag = tab,
+                    MinWidth = 28,
+                    Padding = new Thickness(4, 2, 4, 2)
+                };
+                ToolTipService.SetToolTip(closeButton, "Close " + tab.Name);
+                closeButton.Click += CloseWorkspaceTab_Click;
+                WorkspaceTabsPanel.Children.Add(closeButton);
+            }
+        }
+    }
+
+    private async void AddWorkspaceTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (_switchingWorkspaceTab) return;
+        StoreCurrentWorkspaceTab();
+        var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
+        var rightPath = string.IsNullOrWhiteSpace(_right.CurrentPath) ? leftPath : _right.CurrentPath;
+        var tab = new WorkspaceTab(NextWorkspaceTabName(), leftPath, rightPath);
+        _workspaceTabs.Add(tab);
+        _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
+        RefreshWorkspaceTabs();
+        await PersistWorkspaceAsync();
+        GlobalStatus.Text = $"Opened {tab.Name}";
+    }
+
+    private async void WorkspaceTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (_switchingWorkspaceTab || (sender as Button)?.Tag is not WorkspaceTab tab) return;
+        var index = _workspaceTabs.IndexOf(tab);
+        if (index < 0 || index == _activeWorkspaceTabIndex) return;
+        StoreCurrentWorkspaceTab();
+        _activeWorkspaceTabIndex = index;
+        RefreshWorkspaceTabs();
+        await LoadWorkspaceTabAsync(tab);
+    }
+
+    private async void CloseWorkspaceTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (_switchingWorkspaceTab || (sender as Button)?.Tag is not WorkspaceTab tab) return;
+        var index = _workspaceTabs.IndexOf(tab);
+        if (index < 0 || _workspaceTabs.Count <= 1) return;
+
+        var wasActive = index == _activeWorkspaceTabIndex;
+        if (wasActive) StoreCurrentWorkspaceTab();
+        _workspaceTabs.RemoveAt(index);
+        if (index < _activeWorkspaceTabIndex) _activeWorkspaceTabIndex--;
+        else if (wasActive) _activeWorkspaceTabIndex = Math.Min(index, _workspaceTabs.Count - 1);
+        RefreshWorkspaceTabs();
+
+        if (wasActive)
+            await LoadWorkspaceTabAsync(_workspaceTabs[_activeWorkspaceTabIndex]);
+        else
+            await PersistWorkspaceAsync();
+    }
+
+    private async Task LoadWorkspaceTabAsync(WorkspaceTab tab)
+    {
+        if (_switchingWorkspaceTab) return;
+        _switchingWorkspaceTab = true;
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!Directory.Exists(documents)) documents = profile;
+        var downloads = Path.Combine(profile, "Downloads");
+        if (!Directory.Exists(downloads)) downloads = documents;
+        var leftPath = Directory.Exists(tab.LeftPath) ? tab.LeftPath : documents;
+        var rightPath = Directory.Exists(tab.RightPath) ? tab.RightPath : downloads;
+        _left.List.SelectedItem = null;
+        _right.List.SelectedItem = null;
+        _restoringWorkspace = true;
+        try
+        {
+            await NavigateAsync(_left, leftPath, addHistory: false);
+            await NavigateAsync(_right, rightPath, addHistory: false);
+        }
+        finally
+        {
+            _restoringWorkspace = false;
+            _switchingWorkspaceTab = false;
+        }
+        tab.LeftPath = _left.CurrentPath;
+        tab.RightPath = _right.CurrentPath;
+        await PersistWorkspaceAsync();
+        GlobalStatus.Text = $"Switched to {tab.Name}";
     }
 
     private async Task AddBookmarkAsync()
@@ -328,6 +476,13 @@ public sealed partial class MainWindow : Window
     private async void RightItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_right);
     private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); } }
     private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
+
+    private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
+    {
+        public string Name { get; } = name;
+        public string LeftPath { get; set; } = leftPath;
+        public string RightPath { get; set; } = rightPath;
+    }
 
     private sealed class PaneState(string name, TextBox pathBox, ListView list, TextBlock status)
     {
