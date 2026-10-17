@@ -63,18 +63,7 @@ public sealed class SnapshotFileExporter
             ?? throw new ArgumentException("A local drive path is required.", nameof(originalFile));
         var source = ShadowPath.ResolveForDrive(snapshot, original, root);
 
-        // Reject reparse points at every ancestor of the snapshot source.
-        var deviceRoot = snapshot.DeviceObject.TrimEnd('\\');
-        var relative = source[deviceRoot.Length..].TrimStart('\\');
-        if ((File.GetAttributes(deviceRoot + @"\\") & FileAttributes.ReparsePoint) != 0)
-            throw new IOException("Snapshot device root is a reparse point.");
-        var current = deviceRoot;
-        foreach (var part in relative.Split('\\', StringSplitOptions.RemoveEmptyEntries))
-        {
-            current = Path.Combine(current, part);
-            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Snapshot path contains a reparse point.");
-        }
+        SnapshotPathGuard.RejectReparsePoints(snapshot, source);
         if ((File.GetAttributes(source) & FileAttributes.Directory) != 0)
             throw new ArgumentException("Only regular files can be exported.", nameof(originalFile));
 
