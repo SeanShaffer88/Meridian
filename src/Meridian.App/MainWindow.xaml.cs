@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Meridian.Models;
 using Meridian.Services;
+using Microsoft.VisualBasic.FileIO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -507,6 +508,44 @@ public sealed partial class MainWindow : Window
             unit++;
         }
         return $"{size:0.##} {units[unit]} ({bytes:N0} bytes)";
+    }
+
+    private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to delete.";
+            return;
+        }
+
+        var kind = selected.IsDirectory ? "folder" : "file";
+        var dialog = new ContentDialog
+        {
+            Title = "Move to Recycle Bin?",
+            Content = $"Move this {kind} to the Recycle Bin?\n\n{selected.FullPath}\n\nYou can restore it from the Recycle Bin unless Windows prevents doing so.",
+            PrimaryButtonText = "Move to Recycle Bin",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            if (selected.IsDirectory)
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            else
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+
+            var pane = _activePane;
+            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            GlobalStatus.Text = $"Moved to Recycle Bin · {selected.Name}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
+        {
+            GlobalStatus.Text = "Could not move item to Recycle Bin · " + ex.Message;
+        }
     }
 
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
