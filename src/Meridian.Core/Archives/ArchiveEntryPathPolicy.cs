@@ -11,8 +11,8 @@ public static class ArchiveEntryPathPolicy
         if (entryName.StartsWith('/') || entryName.StartsWith('\\') || entryName.Contains(':'))
             throw new ArgumentException("Archive entry is rooted or contains a stream/drive prefix.", nameof(entryName));
 
-        var segments = entryName.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0 || segments.Length > 128)
+        var segments = entryName.Replace('\\', '/').Split('/');
+        if (segments.Length == 0 || segments.Length > 128 || segments.Any(string.IsNullOrEmpty))
             throw new ArgumentException("Archive entry has invalid path depth.", nameof(entryName));
 
         foreach (var segment in segments)
