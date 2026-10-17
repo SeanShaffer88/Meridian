@@ -64,6 +64,9 @@ public static class TarArchiveCreator
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Source, cancellationToken);
+                        var currentLength = new FileInfo(item.Source).Length;
+                        if (currentLength > 4L * 1024 * 1024 * 1024)
+                            throw new InvalidDataException("TAR source file exceeds budget.");
                         writer.WriteEntry(item.Source, item.Name);
                     }
                 }
