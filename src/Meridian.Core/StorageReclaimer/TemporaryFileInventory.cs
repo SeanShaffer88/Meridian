@@ -16,6 +16,18 @@ public sealed class TemporaryFileInventory
         {
             cancellationToken.ThrowIfCancellationRequested();
             var full = Path.GetFullPath(directory);
+            // Best-effort ancestor link validation; path-swap races remain possible.
+            var root = Path.GetPathRoot(full)
+                ?? throw new ArgumentException("Directory must be rooted.", nameof(directory));
+            var cursor = root;
+            foreach (var component in full[root.Length..].Split(
+                Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                cursor = Path.Combine(cursor, component);
+                if ((File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Inventory directory contains a reparse point.");
+            }
             var directoryAttributes = File.GetAttributes(full);
             if ((directoryAttributes & FileAttributes.Directory) == 0 ||
                 (directoryAttributes & FileAttributes.ReparsePoint) != 0)
