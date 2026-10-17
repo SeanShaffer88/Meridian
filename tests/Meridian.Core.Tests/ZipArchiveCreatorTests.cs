@@ -6,6 +6,23 @@ namespace Meridian.Core.Tests;
 public class ZipArchiveCreatorTests
 {
     [Fact]
+    public async Task RejectsDuplicateSource()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.txt");
+            File.WriteAllText(source, "data");
+            var target = Path.Combine(root, "result.zip");
+            await Assert.ThrowsAsync<InvalidDataException>(() => ZipArchiveCreator.CreateAsync(target,
+                new Dictionary<string, string> { ["one.txt"] = source, ["two.txt"] = source }));
+            Assert.False(File.Exists(target));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CreatesArchiveFromExplicitFileMap()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-create-" + Guid.NewGuid().ToString("N"));
