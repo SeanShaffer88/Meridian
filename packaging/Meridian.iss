@@ -12,7 +12,7 @@
 #endif
 
 [Setup]
-AppId={{B2A67D23-8A64-4CF3-9E5D-0D3F8A91C62B}
+AppId={{B2A67D23-8A64-4CF3-9E5D-0D3F8A91C62B}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Meridian contributors
