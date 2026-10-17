@@ -16,6 +16,9 @@ public static class SafeFilePreview
         var full = PreviewPathPolicy.ValidateRegularFile(path, cancellationToken);
         await using var stream = new FileStream(full, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        // Revalidate after opening: narrows (but does not eliminate) the window
+        // in which a directory or file link could change between inspection and open.
+        PreviewPathPolicy.ValidateRegularFile(full, cancellationToken);
         var bytes = new byte[maxBytes];
         var total = 0;
         while (total < bytes.Length)
