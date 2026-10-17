@@ -77,7 +77,7 @@ public static class ZipArchiveCreator
             throw new IOException("Archive destination already exists.");
 
         long completedBytes = 0;
-        progress?.Report((0, total));
+        ReportProgress(0, total);
         var stage = Path.Combine(parent, ".meridian-zip-" + Guid.NewGuid().ToString("N") + ".tmp");
         var created = false;
         try
@@ -109,7 +109,7 @@ public static class ZipArchiveCreator
                             await compressed.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
                             copied += count;
                             completedBytes += count;
-                            progress?.Report((Math.Min(completedBytes, Math.Max(0, total - 1)), total));
+                            ReportProgress(Math.Min(completedBytes, Math.Max(0, total - 1)), total);
                         }
                         if (copied != item.Length)
                             throw new InvalidDataException("Source file changed size during archive creation.");
@@ -131,10 +131,7 @@ public static class ZipArchiveCreator
             }
             File.Move(stage, target, overwrite: false);
             created = false;
-            // Progress observers are advisory; a callback failure must not turn a
-            // successfully published archive into a reported creation failure.
-            try { progress?.Report((total, total)); }
-            catch (Exception) { /* Archive publication already succeeded. */ }
+            ReportProgress(total, total);
         }
         finally
         {
@@ -142,6 +139,13 @@ public static class ZipArchiveCreator
             {
                 try { File.Delete(stage); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
+        }
+
+        void ReportProgress(long completed, long totalBytes)
+        {
+            // Observer failures must never interrupt the staged archive transaction.
+            try { progress?.Report((completed, totalBytes)); }
+            catch (Exception) { /* Progress is advisory. */ }
         }
     }
 }
