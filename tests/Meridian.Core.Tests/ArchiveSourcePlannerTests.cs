@@ -91,6 +91,18 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsSelectionContainingOnlyEmptyFolders()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-empty-folder-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => ArchiveSourcePlanner.Plan(new[] { root }));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void RejectsMissingSources()
     {
         Assert.Throws<FileNotFoundException>(() =>
