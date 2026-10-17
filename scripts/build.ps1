@@ -5,9 +5,9 @@ $root = Split-Path -Parent $PSScriptRoot
 $platform = if ($Runtime -eq 'win-arm64') { 'ARM64' } else { 'x64' }
 Push-Location $root
 try {
-    dotnet restore .\Meridian.sln
+    dotnet restore .\src\Meridian.App\Meridian.App.csproj --locked-mode -p:Platform=$platform -p:RuntimeIdentifier=$Runtime -p:SelfContained=true
     if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE" }
-    dotnet publish .\src\Meridian.App\Meridian.App.csproj -c $Configuration -r $Runtime --self-contained true -p:Platform=$platform
+    dotnet publish .\src\Meridian.App\Meridian.App.csproj -c $Configuration -r $Runtime --self-contained true --no-restore -p:Platform=$platform
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
     Write-Host "Publish output is under src\Meridian.App\bin\$platform\$Configuration\net10.0-windows10.0.22000.0\$Runtime\publish."
 }

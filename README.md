@@ -402,7 +402,7 @@ For detailed risks and verification requirements, see the [threat model](docs/TH
 
 Meridian uses **C#**, **.NET 10**, **WinUI 3**, and the Windows App SDK.
 
-On a Windows development machine, install the .NET 10 SDK and the WinUI 3 / Windows App SDK prerequisites. From the repository root in PowerShell:
+On a Windows development machine, install the .NET SDK pinned in `global.json` (currently `10.0.402`) and the WinUI 3 / Windows App SDK prerequisites. Build/test scripts use committed NuGet lock files; see [Contributing](CONTRIBUTING.md) for intentional dependency updates. From the repository root in PowerShell:
 
 ```powershell
 ./scripts/test.ps1

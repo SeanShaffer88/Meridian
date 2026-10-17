@@ -20,11 +20,11 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
       - name: Restore core tests
-        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj
+        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --locked-mode
       - name: Test core library
-        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
+        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -53,13 +53,13 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
       - name: Restore Windows app for target architecture
-        run: dotnet restore src/Meridian.App/Meridian.App.csproj -p:Platform=${{ matrix.architecture }} -p:RuntimeIdentifier=${{ matrix.runtime }}
+        run: dotnet restore src/Meridian.App/Meridian.App.csproj --locked-mode -p:Platform=${{ matrix.architecture }} -p:RuntimeIdentifier=${{ matrix.runtime }} -p:SelfContained=true
       - name: Compile Windows app before packaging
-        run: dotnet build src/Meridian.App/Meridian.App.csproj --configuration Release --no-restore -p:Platform=${{ matrix.architecture }} -p:RuntimeIdentifier=${{ matrix.runtime }}
+        run: dotnet build src/Meridian.App/Meridian.App.csproj --configuration Release --no-restore -p:Platform=${{ matrix.architecture }} -p:RuntimeIdentifier=${{ matrix.runtime }} -p:SelfContained=true
       - name: Publish Windows 11 app (${{ matrix.runtime }})
-        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
+        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --no-restore --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
 
       - name: Verify published XAML resource index
         shell: pwsh

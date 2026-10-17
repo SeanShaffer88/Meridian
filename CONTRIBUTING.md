@@ -11,7 +11,7 @@ Thanks for considering Meridian. The project is early-stage; correctness and saf
 - Avoid telemetry, advertising, paywalls, or mandatory paid services.
 
 ## Local checks
-Use Windows 11, a .NET 10 SDK and the WinUI/Windows App SDK build prerequisites. The application is Windows-specific; cross-compiling ARM64 on x64 does not verify ARM64 execution. CI currently selects the latest `10.0.x` SDK, so record `dotnet --info` with local evidence rather than assuming an exact patch is pinned.
+Use Windows 11, the .NET SDK version pinned in `global.json` (currently `10.0.402`) and the WinUI/Windows App SDK build prerequisites. SDK roll-forward is disabled. The application is Windows-specific; cross-compiling ARM64 on x64 does not verify ARM64 execution. Record `dotnet --info` with local evidence.
 
 From the repository root in PowerShell:
 
@@ -21,7 +21,9 @@ From the repository root in PowerShell:
 ./scripts/build.ps1 -Configuration Release -Runtime win-arm64
 ```
 
-`test.ps1` runs the core test project and fails on a nonzero result. `build.ps1` restores the solution, selects the matching x64/ARM64 platform and publishes self-contained output under `src/Meridian.App/bin/<platform>/Release/net10.0-windows10.0.22000.0/<runtime>/publish/`. It does not build the Inno Setup installer or execute runtime tests. Run each architecture build separately.
+`test.ps1` restores the core test project in locked mode, runs it without another restore and fails on a nonzero result. `build.ps1` restores the app and its project dependencies in locked mode for the selected x64/ARM64 runtime, then publishes self-contained output without another restore under `src/Meridian.App/bin/<platform>/Release/net10.0-windows10.0.22000.0/<runtime>/publish/`. It does not build the Inno Setup installer or execute runtime tests. Run each architecture build separately.
+
+Commit NuGet lock files with dependency changes. Runtime-specific restores use `packages.win-x64.lock.json` or `packages.win-arm64.lock.json`; non-runtime restores use `packages.lock.json`. To intentionally update dependencies, run the corresponding restore without `--locked-mode`, review the resolved versions/content hashes and commit the affected lock files. Generate the app locks with the matching `Platform`, `RuntimeIdentifier` and `SelfContained=true` properties used by CI. Restore audits direct/transitive dependencies and fails on NU1900–NU1905 warnings, including known vulnerabilities and unavailable audit information. A clean audit does not replace license review or a complete security assessment.
 
 For retained test evidence:
 
