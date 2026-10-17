@@ -32,6 +32,7 @@
       <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
       <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" />
       <AppBarButton Icon="View" Label="Preview" Click="PreviewSelected_Click" ToolTipService.ToolTip="Read-only viewer and integrated media player" />
+      <AppBarButton Icon="View" Label="Inspect ZIP" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP catalog summary" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
       <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
       <AppBarButton Icon="View" Label="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
