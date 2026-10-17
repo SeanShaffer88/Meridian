@@ -95,14 +95,15 @@ public class RelationshipAnalyzerTests
             Path.Combine(root, "sub", "alpha.csv")
         };
         var results = RelationshipAnalyzer.Analyze(paths);
-        Assert.Equal(4, results.Count);
-        Assert.Equal(new[] { paths[1], paths[2], paths[3], paths[2] },
+        Assert.Equal(5, results.Count);
+        Assert.Equal(new[] { paths[1], paths[2], paths[3], paths[2], paths[3] },
             results.Select(x => x.RelatedPath).ToArray());
         Assert.Equal(new[] {
             RelationshipEvidence.SameDirectory,
             RelationshipEvidence.FilenameStem,
             RelationshipEvidence.FilenameStem,
-            RelationshipEvidence.SameDirectory
+            RelationshipEvidence.SameDirectory,
+            RelationshipEvidence.FilenameStem
         }, results.Select(x => x.Evidence).ToArray());
     }
 
