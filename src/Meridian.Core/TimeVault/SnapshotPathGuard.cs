@@ -12,6 +12,9 @@ public static class SnapshotPathGuard
         var root = snapshot.DeviceObject.TrimEnd('\\');
         if (!mappedPath.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Path does not belong to this snapshot.", nameof(mappedPath));
+        if (mappedPath[(root.Length + 1)..].Split('\\', StringSplitOptions.RemoveEmptyEntries).Any(part =>
+            part is "." or ".." || part.Contains(':')))
+            throw new ArgumentException("Unsafe snapshot path component.", nameof(mappedPath));
         if ((File.GetAttributes(root + "\\") & FileAttributes.ReparsePoint) != 0)
             throw new IOException("Snapshot device root is a reparse point.");
         var current = root;
