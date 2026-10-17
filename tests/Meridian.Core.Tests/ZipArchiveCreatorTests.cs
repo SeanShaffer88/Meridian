@@ -54,6 +54,26 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task StreamingProgressObserverFailureDoesNotAbortArchive()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-stream-observer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.bin");
+            await File.WriteAllBytesAsync(source, new byte[20000]);
+            var target = Path.Combine(root, "result.zip");
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(_ =>
+                throw new InvalidOperationException("Observer failed"));
+            await ZipArchiveCreator.CreateAsync(target,
+                new Dictionary<string, string> { ["source.bin"] = source }, progress: progress);
+            Assert.True(File.Exists(target));
+            Assert.Single(ZipArchiveCatalog.List(target));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task FinalProgressObserverFailureDoesNotInvalidatePublishedArchive()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-zip-observer-" + Guid.NewGuid().ToString("N"));
