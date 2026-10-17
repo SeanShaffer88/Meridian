@@ -57,6 +57,8 @@ public static class ZipStagedExtractor
             throw new InvalidDataException("Archive entry changed after listing.");
 
         var final = Path.Combine(directory, name);
+        if (File.Exists(final) || Directory.Exists(final))
+            throw new IOException("Destination already exists.");
         var staging = Path.Combine(directory, ".meridian-" + Guid.NewGuid().ToString("N") + ".tmp");
         var stagingCreated = false;
         try
@@ -83,6 +85,18 @@ public static class ZipStagedExtractor
                 await output.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
+            // Repeat ancestor checks before publishing. This reduces but cannot
+            // eliminate races without handle-relative filesystem operations.
+            ancestor = directory;
+            while (!string.IsNullOrEmpty(ancestor))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((File.GetAttributes(ancestor) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Destination path changed to a reparse point.");
+                var parent = Path.GetDirectoryName(ancestor);
+                if (string.IsNullOrEmpty(parent) || parent == ancestor) break;
+                ancestor = parent;
+            }
             // File.Move without overwrite refuses an existing final destination.
             // The stage remains in the same directory/volume for atomic rename.
             File.Move(staging, final, overwrite: false);
