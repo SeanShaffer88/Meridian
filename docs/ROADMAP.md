@@ -122,7 +122,7 @@ Meridian is an early-stage, offline-first file manager targeting Windows 11 only
 - [ ] Large-directory, network-share, slow-drive, cancellation, and low-resource benchmarks
 - [ ] Security review of path traversal, reparse points, archive extraction, links, previews, scripts, credentials, and destructive actions
 - [ ] Dependency/license/security audit and attribution updates
-- [ ] Automated unit/integration tests plus Windows 11 x64 CI; evaluate ARM64 when practical
+- [ ] Automated unit/integration tests plus Windows 11 x64 and ARM64 CI
 - [ ] Portable and installable deployment testing
 - [ ] Reproducible release artifacts, checksums, versioning, release notes, and documented rollback
 - [ ] Keep documentation aligned with actual behavior and clearly label planned, implemented, tested, and platform-dependent features
