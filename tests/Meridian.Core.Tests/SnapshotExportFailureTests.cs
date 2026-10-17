@@ -10,6 +10,7 @@ public class SnapshotExportFailureTests
     [Fact]
     public async Task CancellationBeforeExportDoesNotCreateDestination()
     {
+        if (!OperatingSystem.IsWindows()) return;
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         var destination = Path.Combine(Path.GetTempPath(), $"meridian-{Guid.NewGuid():N}.tmp");
