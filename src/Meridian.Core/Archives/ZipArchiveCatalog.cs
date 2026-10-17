@@ -24,6 +24,7 @@ public static class ZipArchiveCatalog
         var entries = new List<Entry>();
         var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
         foreach (var item in zip.Entries)
         {
@@ -48,9 +49,13 @@ public static class ZipArchiveCatalog
                 item.Length > maxTotalUncompressedBytes - total)
                 throw new InvalidDataException("Archive declared size exceeds the listing budget.");
             total += item.Length;
-            if (!directory) files.Add(normalized);
+            if (directory) folders.Add(normalized);
+            else files.Add(normalized);
             entries.Add(new Entry(normalized, item.Length, item.CompressedLength, directory));
         }
+        // Explicit directory entries must not collide with regular files.
+        if (folders.Overlaps(files))
+            throw new InvalidDataException("Archive contains a file-directory collision.");
         // A file cannot also be an ancestor of another archive entry.
         foreach (var entry in entries)
         {
