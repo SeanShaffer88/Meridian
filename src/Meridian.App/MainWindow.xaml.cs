@@ -735,6 +735,60 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void CopyShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dropShelf.Paths.Count == 0)
+        {
+            GlobalStatus.Text = "Add files to the Drop Shelf first.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
+        {
+            GlobalStatus.Text = "Open the destination folder in the active pane.";
+            return;
+        }
+        var sources = _dropShelf.Paths.ToArray();
+        var destination = _activePane.CurrentPath;
+        try
+        {
+            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
+            if (plan.HasBlockers)
+            {
+                GlobalStatus.Text = $"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.";
+                return;
+            }
+            var confirmation = new ContentDialog
+            {
+                Title = "Confirm Drop Shelf batch copy",
+                Content = new TextBlock
+                {
+                    Text = $"Copy {plan.Items.Count:N0} collected items to:\n{plan.DestinationDirectory}\n\n" +
+                           "Files will be copied, not moved. Existing destinations will never be overwritten. " +
+                           "A later error or cancellation can leave earlier items copied; there is no automatic rollback. " +
+                           "The destination is rechecked during execution.",
+                    TextWrapping = TextWrapping.Wrap
+                },
+                PrimaryButtonText = "Copy items",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+            if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+            GlobalStatus.Text = "Copying Drop Shelf items…";
+            var result = await Task.Run(() => BatchCopy.Execute(sources, destination));
+            await NavigateAsync(_activePane, destination, addHistory: false);
+            GlobalStatus.Text = result.Succeeded
+                ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
+                : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
+                  (result.Cancelled ? "Cancelled" : result.Failure);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+            ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Batch copy did not start · " + ex.Message;
+        }
+    }
+
     private void ClearShelf_Click(object sender, RoutedEventArgs e)
     {
         _dropShelf.Clear();
