@@ -24,6 +24,27 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsFileThroughLinkedAncestor()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-linked-file-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var actual = Path.Combine(root, "actual");
+            Directory.CreateDirectory(actual);
+            File.WriteAllText(Path.Combine(actual, "data.txt"), "data");
+            var link = Path.Combine(root, "linked");
+            try { Directory.CreateSymbolicLink(link, actual); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+            {
+                return;
+            }
+            Assert.Throws<IOException>(() => ArchiveSourcePlanner.Plan(new[] { Path.Combine(link, "data.txt") }));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void RejectsFolderThroughLinkedAncestor()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-linked-" + Guid.NewGuid().ToString("N"));
