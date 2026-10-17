@@ -73,6 +73,7 @@ public static class ZipTreeExtractor
                 if (item.IsDirectory)
                 {
                     Directory.CreateDirectory(outputPath);
+                    progress?.Report((i + 1) * 100 / catalog.Count);
                     continue;
                 }
                 var containing = Path.GetDirectoryName(outputPath)!;
@@ -96,6 +97,7 @@ public static class ZipTreeExtractor
                 if (written != item.UncompressedBytes)
                     throw new InvalidDataException("ZIP decompressed size did not match catalog.");
                 fileCount++;
+                progress?.Report((i + 1) * 100 / catalog.Count);
             }
             cancellationToken.ThrowIfCancellationRequested();
             CheckDirectoryChain(parent, cancellationToken);
