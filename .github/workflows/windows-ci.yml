@@ -21,6 +21,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Restore core tests
+        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj
       - name: Test core library
         run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
       - name: Upload test results
@@ -54,6 +56,8 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore solution
         run: dotnet restore Meridian.sln
+      - name: Compile Windows app before packaging
+        run: dotnet build src/Meridian.App/Meridian.App.csproj --configuration Release --no-restore -p:Platform=${{ matrix.architecture }}
       - name: Publish Windows 11 app (${{ matrix.runtime }})
         run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
 
