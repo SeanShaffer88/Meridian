@@ -38,7 +38,8 @@ public static class FolderDna
             }
 
             files++;
-            knownBytes = knownBytes > long.MaxValue - item.SizeBytes ? long.MaxValue : knownBytes + item.SizeBytes;
+            var size = Math.Max(0L, item.SizeBytes);
+            knownBytes = knownBytes > long.MaxValue - size ? long.MaxValue : knownBytes + size;
             if (item.ModifiedUtc != default)
             {
                 if (oldest is null || item.ModifiedUtc < oldest) oldest = item.ModifiedUtc;
@@ -48,7 +49,7 @@ public static class FolderDna
             var label = string.IsNullOrWhiteSpace(item.TypeLabel) ? "File" : item.TypeLabel;
             groups.TryGetValue(label, out var previous);
             groups[label] = (previous.Count + 1,
-                previous.Bytes > long.MaxValue - item.SizeBytes ? long.MaxValue : previous.Bytes + item.SizeBytes);
+                previous.Bytes > long.MaxValue - size ? long.MaxValue : previous.Bytes + size);
         }
 
         var types = groups
