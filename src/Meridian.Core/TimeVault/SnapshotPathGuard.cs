@@ -1,7 +1,7 @@
 namespace Meridian.Core.TimeVault;
 
 /// <summary>Validates a historical path without opening it. Does not prevent filesystem races.</summary>
-internal static class SnapshotPathGuard
+public static class SnapshotPathGuard
 {
     public static void RejectReparsePoints(ShadowCopy snapshot, string mappedPath)
     {
