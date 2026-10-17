@@ -14,6 +14,7 @@ on:
 jobs:
   core-tests:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Set up .NET 10
@@ -21,11 +22,20 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Test core library
-        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release
+        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-core-test-results
+          path: TestResults/*.trx
+          if-no-files-found: warn
+          retention-days: 14
 
   app-build:
     name: Build Windows 11 (${{ matrix.architecture }})
     runs-on: windows-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
