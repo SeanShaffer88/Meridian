@@ -92,9 +92,12 @@ public static class TarArchiveCreator
                             FileAccess.Read, FileShare.Read, 8192, FileOptions.SequentialScan);
                         if (input.Length != item.Length)
                             throw new InvalidDataException("TAR source length changed.");
+                        // TarWriter copies the DataStream synchronously. A cancellation-aware
+                        // wrapper ensures long file writes can stop between reads.
+                        using var cancellableInput = new CancellationAwareReadStream(input, cancellationToken);
                         writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, item.Name)
                         {
-                            DataStream = input
+                            DataStream = cancellableInput
                         });
                     }
                 }
@@ -118,6 +121,33 @@ public static class TarArchiveCreator
         finally
         {
             try { File.Delete(stage); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+    private sealed class CancellationAwareReadStream(Stream inner, CancellationToken token) : Stream
+    {
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            token.ThrowIfCancellationRequested();
+            return inner.Read(buffer, offset, count);
+        }
+        public override int Read(Span<byte> buffer)
+        {
+            token.ThrowIfCancellationRequested();
+            return inner.Read(buffer);
+        }
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+        public override void Flush() => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) inner.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
