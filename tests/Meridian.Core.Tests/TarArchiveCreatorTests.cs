@@ -6,6 +6,27 @@ namespace Meridian.Core.Tests;
 
 public sealed class TarArchiveCreatorTests
 {
+    [Fact]
+    public async Task RejectsDuplicatePhysicalSourceUnderDifferentEntryNames()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-duplicate-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var input = Path.Combine(root, "input.txt");
+            await File.WriteAllTextAsync(input, "content");
+            var archive = Path.Combine(root, "bundle.tar");
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                TarArchiveCreator.CreateAsync(archive, new Dictionary<string, string>
+                {
+                    ["first.txt"] = input,
+                    ["second.txt"] = input
+                }));
+            Assert.False(File.Exists(archive));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData(".tar")]
     [InlineData(".tar.gz")]
