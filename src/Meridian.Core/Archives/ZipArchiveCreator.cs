@@ -11,7 +11,8 @@ public static class ZipArchiveCreator
     public static async Task CreateAsync(
         string destinationArchive, IReadOnlyDictionary<string, string> sourceFiles,
         long maxTotalBytes = 4L * 1024 * 1024 * 1024,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<(long CompletedBytes, long TotalBytes)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationArchive);
         ArgumentNullException.ThrowIfNull(sourceFiles);
@@ -75,6 +76,8 @@ public static class ZipArchiveCreator
         if (File.Exists(target) || Directory.Exists(target))
             throw new IOException("Archive destination already exists.");
 
+        long completedBytes = 0;
+        progress?.Report((0, total));
         var stage = Path.Combine(parent, ".meridian-zip-" + Guid.NewGuid().ToString("N") + ".tmp");
         var created = false;
         try
@@ -105,6 +108,8 @@ public static class ZipArchiveCreator
                                 throw new InvalidDataException("Source file grew during archive creation.");
                             await compressed.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
                             copied += count;
+                            completedBytes += count;
+                            progress?.Report((completedBytes, total));
                         }
                         if (copied != item.Length)
                             throw new InvalidDataException("Source file changed size during archive creation.");
