@@ -101,6 +101,9 @@ public static class ZipTreeExtractor
             CheckDirectoryChain(parent, cancellationToken);
             if ((File.GetAttributes(stage) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Extraction stage became a reparse point.");
+            // The stage must remain a regular directory, not a file or redirect.
+            if ((File.GetAttributes(stage) & FileAttributes.Directory) == 0)
+                throw new IOException("Extraction staging path is not a directory.");
             // Recheck for destination conflicts before publishing the complete tree.
             if (File.Exists(target) || Directory.Exists(target))
                 throw new IOException("Extraction destination appeared during staging.");
