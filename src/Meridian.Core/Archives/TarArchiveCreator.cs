@@ -75,6 +75,16 @@ public static class TarArchiveCreator
             cancellationToken.ThrowIfCancellationRequested();
             if (File.Exists(target) || Directory.Exists(target))
                 throw new IOException("TAR destination appeared during creation.");
+            var currentParent = parent;
+            while (!string.IsNullOrEmpty(currentParent))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((File.GetAttributes(currentParent) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("TAR destination became a reparse point.");
+                var nextParent = Path.GetDirectoryName(currentParent);
+                if (string.IsNullOrEmpty(nextParent) || nextParent == currentParent) break;
+                currentParent = nextParent;
+            }
             File.Move(stage, target, overwrite: false);
         }
         finally
