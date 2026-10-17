@@ -7,6 +7,7 @@ public static class ArchiveSourcePlanner
     {
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sourceFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0;
         foreach (var path in paths)
         {
@@ -55,6 +56,8 @@ public static class ArchiveSourcePlanner
             cancellationToken.ThrowIfCancellationRequested();
             var safeName = ArchiveEntryPathPolicy.Normalize(name);
             var safePath = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(path, cancellationToken);
+            if (!sourceFiles.Add(safePath))
+                throw new InvalidDataException("Archive source file selected more than once.");
             var length = new FileInfo(safePath).Length;
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
                 throw new InvalidDataException("Archive source size budget exceeded.");
