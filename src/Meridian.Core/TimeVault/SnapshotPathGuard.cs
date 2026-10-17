@@ -12,16 +12,15 @@ public static class SnapshotPathGuard
         var root = snapshot.DeviceObject.TrimEnd('\\');
         if (!mappedPath.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Path does not belong to this snapshot.", nameof(mappedPath));
-        if (mappedPath[(root.Length + 1)..].Split('\\', StringSplitOptions.RemoveEmptyEntries).Any(part =>
-            part is "." or ".." || part.Contains(':')))
+        var components = mappedPath[(root.Length + 1)..].Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        if (components.Any(part =>
+            part is "." or ".." || part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.')))
             throw new ArgumentException("Unsafe snapshot path component.", nameof(mappedPath));
         if ((File.GetAttributes(root + "\\") & FileAttributes.ReparsePoint) != 0)
             throw new IOException("Snapshot device root is a reparse point.");
         var current = root;
-        foreach (var part in mappedPath[(root.Length + 1)..].Split('\\', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in components)
         {
-            if (part is "." or ".." || part.Contains(':'))
-                throw new ArgumentException("Unsafe snapshot path component.", nameof(mappedPath));
             current = Path.Combine(current, part);
             if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Snapshot path contains a reparse point.");
