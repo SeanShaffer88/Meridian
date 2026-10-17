@@ -5,6 +5,7 @@ public static class ArchiveSourcePlanner
     public static IReadOnlyDictionary<string, string> Plan(IEnumerable<string> paths,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(paths);
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sourceFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
