@@ -17,6 +17,7 @@ public sealed partial class MainWindow : Window
     private readonly List<WorkspaceTab> _workspaceTabs = [];
     private int _activeWorkspaceTabIndex;
     private int _nextWorkspaceTabNumber = 1;
+    private bool _switchingWorkspaceTab;
     private PaneState _activePane;
     private bool _restoringWorkspace;
     private CancellationTokenSource? _copyCancellation;
@@ -145,6 +146,7 @@ public sealed partial class MainWindow : Window
 
     private async void AddWorkspaceTab_Click(object sender, RoutedEventArgs e)
     {
+        if (_switchingWorkspaceTab) return;
         StoreCurrentWorkspaceTab();
         var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
         var rightPath = string.IsNullOrWhiteSpace(_right.CurrentPath) ? leftPath : _right.CurrentPath;
@@ -158,7 +160,7 @@ public sealed partial class MainWindow : Window
 
     private async void WorkspaceTab_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as Button)?.Tag is not WorkspaceTab tab) return;
+        if (_switchingWorkspaceTab || (sender as Button)?.Tag is not WorkspaceTab tab) return;
         var index = _workspaceTabs.IndexOf(tab);
         if (index < 0 || index == _activeWorkspaceTabIndex) return;
         StoreCurrentWorkspaceTab();
@@ -169,7 +171,7 @@ public sealed partial class MainWindow : Window
 
     private async void CloseWorkspaceTab_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as Button)?.Tag is not WorkspaceTab tab) return;
+        if (_switchingWorkspaceTab || (sender as Button)?.Tag is not WorkspaceTab tab) return;
         var index = _workspaceTabs.IndexOf(tab);
         if (index < 0 || _workspaceTabs.Count <= 1) return;
 
@@ -188,6 +190,8 @@ public sealed partial class MainWindow : Window
 
     private async Task LoadWorkspaceTabAsync(WorkspaceTab tab)
     {
+        if (_switchingWorkspaceTab) return;
+        _switchingWorkspaceTab = true;
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (!Directory.Exists(documents)) documents = profile;
@@ -206,6 +210,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _restoringWorkspace = false;
+            _switchingWorkspaceTab = false;
         }
         tab.LeftPath = _left.CurrentPath;
         tab.RightPath = _right.CurrentPath;
