@@ -21,3 +21,7 @@ Do not describe the application as tested, best-in-class, race-free, universal i
 ## Status
 
 The branch contains prototype viewer and player UI, Foresight and TimeVault foundations. Windows builds and hands-on validation have not yet been confirmed. The CI workflow is intended to exercise core tests and Windows builds; check its run results before claiming success.
+
+## CI evidence rule
+
+A workflow with GitHub status `pending` and an empty jobs list is **not** evidence of compilation or test success. Do not mark build, packaging, accessibility, playback, or safety gates as passed until a completed run with inspectable successful jobs and appropriate test artifacts is available. If GitHub Actions remains pending without jobs, inspect repository Actions settings, workflow approval requirements, runner availability and billing/usage status using authorized repository administration; do not infer a cause from the empty job list alone.
