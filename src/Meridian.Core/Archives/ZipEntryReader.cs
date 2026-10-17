@@ -25,7 +25,7 @@ public static class ZipEntryReader
             8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         var entry = zip.Entries.SingleOrDefault(e =>
-            string.Equals(ArchiveEntryPathPolicy.Normalize(e.FullName.TrimEnd('/')), normalized,
+            string.Equals(ArchiveEntryPathPolicy.Normalize(e.FullName.TrimEnd('/', (char)92)), normalized,
                 StringComparison.OrdinalIgnoreCase));
         if (entry is null)
             throw new FileNotFoundException("Archive entry changed since catalog validation.", entryPath);
