@@ -8,7 +8,6 @@ public static class ArchiveSourcePlanner
         ArgumentNullException.ThrowIfNull(paths);
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var selectedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sourceFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0;
         foreach (var path in paths)
@@ -27,7 +26,7 @@ public static class ArchiveSourcePlanner
             if (string.Equals(Path.TrimEndingDirectorySeparator(root),
                 Path.TrimEndingDirectorySeparator(Path.GetPathRoot(root)!), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Select folders within a drive, not the drive root itself.");
-            if (!selectedRoots.Add(root) || visitedDirectories.Contains(root))
+            if (visitedDirectories.Contains(root))
                 throw new InvalidDataException("Archive source folder was selected more than once.");
             var prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(root));
             if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
