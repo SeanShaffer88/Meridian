@@ -26,6 +26,8 @@ public sealed class SnapshotFileExporter
         // Reject reparse points at every ancestor of the snapshot source.
         var deviceRoot = snapshot.DeviceObject.TrimEnd('\\');
         var relative = source[deviceRoot.Length..].TrimStart('\\');
+        if ((File.GetAttributes(deviceRoot + @"\\") & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("Snapshot device root is a reparse point.");
         var current = deviceRoot;
         foreach (var part in relative.Split('\\', StringSplitOptions.RemoveEmptyEntries))
         {
