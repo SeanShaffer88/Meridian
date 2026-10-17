@@ -430,15 +430,11 @@ public sealed partial class MainWindow : Window
                 }
                 else
                 {
-                    try
-                    {
-                        display = new System.Text.UTF8Encoding(false, true).GetString(bytes);
-                    }
-                    catch (System.Text.DecoderFallbackException)
-                    {
-                        display = "File is not valid UTF-8. Showing the first 4 KiB as hexadecimal.\n\n" +
+                    if (Meridian.Core.Viewer.PreviewTextDecoder.TryDecode(bytes, out var decoded))
+                        display = decoded;
+                    else
+                        display = "Text encoding is unsupported or binary content detected. Showing the first 4 KiB as hexadecimal.\\n\\n" +
                             Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes.AsSpan(0, Math.Min(bytes.Length, 4096)));
-                    }
                 }
                 panel.Children.Add(new ScrollViewer
                 {
