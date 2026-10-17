@@ -14,13 +14,20 @@ public static class CleanupPreviewRevalidator
             if (!current.TryAdd(item.FullPath, item)) return false;
         if (preview.ItemCount != preview.Items.Count) return false;
         var seen = new HashSet<string>(comparer);
+        long estimated = 0;
+        var reviewRequired = 0;
         foreach (var previous in preview.Items)
         {
             if (!seen.Add(previous.FullPath) ||
                 !current.TryGetValue(previous.FullPath, out var item) ||
-                item != previous)
+                item != previous || item.Risk == CleanupRisk.Protected)
                 return false;
+            estimated = item.EstimatedBytes > long.MaxValue - estimated
+                ? long.MaxValue : estimated + item.EstimatedBytes;
+            if (item.Risk == CleanupRisk.ReviewRequired) reviewRequired++;
         }
-        return true;
+        return preview.EstimatedBytes == estimated &&
+            preview.ReviewRequiredCount == reviewRequired &&
+            preview.ItemCount == seen.Count;
     }
 }
