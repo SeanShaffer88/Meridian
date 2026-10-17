@@ -205,6 +205,42 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void Rename_Click(object sender, RoutedEventArgs e)
+    {
+        var pane = _activePane;
+        if (pane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to rename.";
+            return;
+        }
+
+        var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
+        var dialog = new ContentDialog
+        {
+            Title = "Rename item",
+            Content = nameBox,
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            var renamedPath = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
+            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            var renamedName = Path.GetFileName(renamedPath);
+            var renamedItem = pane.Items.FirstOrDefault(item => string.Equals(item.FullPath, renamedPath, StringComparison.OrdinalIgnoreCase));
+            if (renamedItem is not null) pane.List.SelectedItem = renamedItem;
+            GlobalStatus.Text = $"Renamed · {selected.Name} → {renamedName}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not rename item · " + ex.Message;
+        }
+    }
+
     private async void NewFolder_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
