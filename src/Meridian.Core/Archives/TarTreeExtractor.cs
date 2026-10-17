@@ -73,7 +73,7 @@ public static class TarTreeExtractor
                     }
                     count++;
                 }
-                progress?.Report((i + 1) * 100 / Math.Max(1, catalog.Count));
+                progress?.Report(Math.Min(99, (i + 1) * 100 / Math.Max(1, catalog.Count)));
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (reader.GetNextEntry(copyData: false) is not null)
@@ -88,6 +88,7 @@ public static class TarTreeExtractor
                 throw new IOException("Extraction destination appeared.");
             Directory.Move(stage, target);
             staged = false;
+            progress?.Report(100);
             return new Receipt(target, count, total);
         }
         finally
