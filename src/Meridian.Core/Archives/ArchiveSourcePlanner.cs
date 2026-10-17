@@ -18,6 +18,7 @@ public static class ArchiveSourcePlanner
                 throw new ArgumentException("Archive sources must be absolute paths.");
             if (File.Exists(path))
             {
+                RejectLinkedAncestors(Path.GetFullPath(path), cancellationToken);
                 Add(Path.GetFileName(path), path);
                 continue;
             }
