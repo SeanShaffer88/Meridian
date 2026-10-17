@@ -30,6 +30,10 @@ public static class ZipEntryReader
         if (entry is null)
             throw new FileNotFoundException("Archive entry changed since catalog validation.", entryPath);
 
+        if (entry.Length != matches[0].UncompressedBytes ||
+            entry.CompressedLength != matches[0].CompressedBytes)
+            throw new InvalidDataException("Archive entry metadata changed since validation.");
+
         await using var input = entry.Open();
         using var output = new MemoryStream(Math.Min(maxBytes, 65536));
         var buffer = new byte[Math.Min(maxBytes, 8192)];
