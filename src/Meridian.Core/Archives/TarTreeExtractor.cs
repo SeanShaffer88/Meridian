@@ -13,6 +13,7 @@ public static class TarTreeExtractor
         IProgress<int>? progress = null)
     {
         var catalog = TarArchiveCatalog.List(archivePath, cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!Path.IsPathFullyQualified(destinationDirectory))
             throw new ArgumentException("Destination parent must be absolute.", nameof(destinationDirectory));
         var folder = ArchiveEntryPathPolicy.Normalize(newFolderName);
