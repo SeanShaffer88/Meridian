@@ -54,6 +54,31 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task CancellationAtFinalNotificationDoesNotUndoPublishedArchive()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-final-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.txt");
+            await File.WriteAllTextAsync(source, "content");
+            var target = Path.Combine(root, "result.zip");
+            using var cts = new CancellationTokenSource();
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(update =>
+            {
+                if (update.CompletedBytes == update.TotalBytes) cts.Cancel();
+            });
+            await ZipArchiveCreator.CreateAsync(target,
+                new Dictionary<string, string> { ["source.txt"] = source },
+                cancellationToken: cts.Token, progress: progress);
+            Assert.True(cts.IsCancellationRequested);
+            Assert.Single(ZipArchiveCatalog.List(target));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-zip-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CancellationDuringStreamingRemovesStagingArchive()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-zip-cancel-" + Guid.NewGuid().ToString("N"));
