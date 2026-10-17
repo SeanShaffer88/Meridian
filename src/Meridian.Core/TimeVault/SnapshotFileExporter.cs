@@ -52,6 +52,11 @@ public sealed class SnapshotFileExporter
                 throw new IOException("Destination path contains a reparse point.");
         }
 
+        // Do not allow a caller to publish over an existing recovery file.
+        // File.Move below enforces this again atomically against races.
+        if (File.Exists(destination) || Directory.Exists(destination))
+            throw new IOException("Recovery destination already exists.");
+
         // Stage in the destination directory, then publish atomically with no overwrite.
         // Failures leave the requested destination untouched.
         var staging = Path.Combine(parent, ".meridian-recovery-" + Guid.NewGuid().ToString("N") + ".tmp");
