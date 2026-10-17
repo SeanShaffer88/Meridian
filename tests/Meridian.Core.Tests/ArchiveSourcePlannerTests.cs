@@ -24,6 +24,13 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsDriveRootBeforeEnumeratingIt()
+    {
+        var root = Path.GetPathRoot(Path.GetTempPath())!;
+        Assert.Throws<InvalidDataException>(() => ArchiveSourcePlanner.Plan(new[] { root }));
+    }
+
+    [Fact]
     public void PlansFilesAndNestedFolderContents()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-plan-" + Guid.NewGuid().ToString("N"));
