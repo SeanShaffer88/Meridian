@@ -62,12 +62,15 @@ public static class RelationshipAnalyzer
 
         // Index candidates by stem and directory instead of comparing every input pair.
         // Lists retain input order, preserving the previous deterministic output order.
+        var stems = new string[items.Count];
+        var directories = new string[items.Count];
         var byStem = new Dictionary<string, List<int>>(comparer);
         var byDirectory = new Dictionary<string, List<int>>(comparer);
         for (var i = 0; i < items.Count; i++)
         {
             CheckBudget();
             var stem = Path.GetFileNameWithoutExtension(items[i]);
+            stems[i] = stem;
             if (stem.Length > 0)
             {
                 if (!byStem.TryGetValue(stem, out var stemIndices))
@@ -76,6 +79,7 @@ public static class RelationshipAnalyzer
             }
 
             var directory = Path.GetDirectoryName(items[i]) ?? string.Empty;
+            directories[i] = directory;
             if (!byDirectory.TryGetValue(directory, out var directoryIndices))
                 byDirectory[directory] = directoryIndices = new List<int>();
             directoryIndices.Add(i);
@@ -84,9 +88,9 @@ public static class RelationshipAnalyzer
         var result = new List<FileRelationship>();
         for (var i = 0; i < items.Count; i++)
         {
-            var stem = Path.GetFileNameWithoutExtension(items[i]);
+            var stem = stems[i];
             var stemIndices = stem.Length > 0 ? byStem[stem] : null;
-            var directoryIndices = byDirectory[Path.GetDirectoryName(items[i]) ?? string.Empty];
+            var directoryIndices = byDirectory[directories[i]];
             var stemPosition = stemIndices is null ? 0 : stemIndices.BinarySearch(i) + 1;
             var directoryPosition = directoryIndices.BinarySearch(i) + 1;
 
