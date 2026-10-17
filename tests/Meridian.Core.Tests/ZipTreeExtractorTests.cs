@@ -6,6 +6,33 @@ namespace Meridian.Core.Tests;
 public class ZipTreeExtractorTests
 {
     [Fact]
+    public async Task ReportsProgressForCompletedEntries()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "progress.zip");
+            using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("folder/");
+                using var writer = new StreamWriter(zip.CreateEntry("folder/file.txt").Open());
+                writer.Write("data");
+            }
+            var values = new List<int>();
+            var observer = new InlineProgress(value => values.Add(value));
+            await ZipTreeExtractor.ExtractAsync(archive, root, "output", progress: observer);
+            Assert.Equal(new[] { 50, 100 }, values);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private sealed class InlineProgress(Action<int> callback) : IProgress<int>
+    {
+        public void Report(int value) => callback(value);
+    }
+
+    [Fact]
     public async Task ExtractsNestedTreeAndPublishesCompletedFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-tree-" + Guid.NewGuid().ToString("N"));
