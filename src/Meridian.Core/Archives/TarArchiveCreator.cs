@@ -25,14 +25,26 @@ public static class TarArchiveCreator
         if (File.Exists(target) || Directory.Exists(target))
             throw new IOException("Archive destination already exists.");
         var plan = new List<(string Name, string Source)>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in sourceFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var name = ArchiveEntryPathPolicy.Normalize(item.Key);
+            if (!names.Add(name)) throw new InvalidDataException("Duplicate TAR entry name.");
             var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Value, cancellationToken);
             if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Archive cannot contain itself.");
             plan.Add((name, source));
+        }
+        var ancestor = parent;
+        while (!string.IsNullOrEmpty(ancestor))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((File.GetAttributes(ancestor) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("TAR destination contains a reparse point.");
+            var next = Path.GetDirectoryName(ancestor);
+            if (string.IsNullOrEmpty(next) || next == ancestor) break;
+            ancestor = next;
         }
         var stage = Path.Combine(parent, ".meridian-tar-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
