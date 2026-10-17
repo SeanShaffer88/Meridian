@@ -489,7 +489,12 @@ public sealed partial class MainWindow : Window
             CloseButtonText = "Cancel",
             XamlRoot = LeftPath.XamlRoot
         };
-        if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+        _zipCreationBusy = true;
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+        {
+            _zipCreationBusy = false;
+            return;
+        }
         var extension = formatPicker.SelectedIndex switch
         {
             1 => ".tar",
@@ -497,7 +502,6 @@ public sealed partial class MainWindow : Window
             _ => ".zip"
         };
         destination = Path.ChangeExtension(destination, extension);
-        _zipCreationBusy = true;
         _zipCreationCancellation = new CancellationTokenSource();
         try
         {
