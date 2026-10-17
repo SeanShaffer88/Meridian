@@ -740,7 +740,6 @@ public sealed partial class MainWindow : Window
     private async void CopyShelf_Click(object sender, RoutedEventArgs e)
     {
         if (_batchCancellation is not null || _batchPreparing) return;
-        _batchPreparing = true;
         if (_dropShelf.Paths.Count == 0)
         {
             GlobalStatus.Text = "Add files to the Drop Shelf first.";
@@ -753,6 +752,7 @@ public sealed partial class MainWindow : Window
         }
         var sources = _dropShelf.Paths.ToArray();
         var destination = _activePane.CurrentPath;
+        _batchPreparing = true;
         try
         {
             var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
