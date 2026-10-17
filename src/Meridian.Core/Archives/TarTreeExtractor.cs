@@ -75,6 +75,8 @@ public static class TarTreeExtractor
                         written += read;
                         total += read;
                     }
+                    if (written != expected.Bytes)
+                        throw new InvalidDataException("TAR entry size did not match the catalog.");
                     count++;
                 }
                 progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / Math.Max(1, catalog.Count)));
