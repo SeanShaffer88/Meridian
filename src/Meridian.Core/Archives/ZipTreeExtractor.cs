@@ -73,7 +73,7 @@ public static class ZipTreeExtractor
                 if (item.IsDirectory)
                 {
                     Directory.CreateDirectory(outputPath);
-                    progress?.Report((i + 1) * 100 / catalog.Count);
+                    progress?.Report(Math.Min(99, (i + 1) * 100 / catalog.Count));
                     continue;
                 }
                 var containing = Path.GetDirectoryName(outputPath)!;
@@ -112,6 +112,7 @@ public static class ZipTreeExtractor
             // Atomic on the same volume when the filesystem supports rename.
             Directory.Move(stage, target);
             staged = false;
+            progress?.Report(100);
             return new Receipt(target, fileCount, total);
         }
         finally
