@@ -462,8 +462,9 @@ public sealed partial class MainWindow : Window
                 ? "Not calculated for folders"
                 : FormatFileSize(((FileInfo)info).Length);
             var details = new StackPanel { Spacing = 8, MaxWidth = 520 };
-            AddPropertyRow(details, "Name", info.Name);
-            AddPropertyRow(details, "Type", selected.IsDirectory ? "Folder" : (string.IsNullOrWhiteSpace(info.Extension) ? "File (no extension)" : info.Extension + " file"));
+            AddPropertyRow(details, "Name", string.IsNullOrWhiteSpace(info.Name) ? info.FullName : info.Name);
+            var extension = Path.GetExtension(info.Name);
+            AddPropertyRow(details, "Type", selected.IsDirectory ? "Folder" : (string.IsNullOrWhiteSpace(extension) ? "File (no extension)" : extension + " file"));
             AddPropertyRow(details, "Location", info.FullName);
             AddPropertyRow(details, "Size", size);
             AddPropertyRow(details, "Created", info.CreationTime.ToString("g"));
