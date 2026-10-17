@@ -46,4 +46,39 @@ public class ZipArchiveCreatorTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    [Fact]
+    public async Task RejectsDestinationUsedAsSource()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-create-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var target = Path.Combine(root, "archive.zip");
+            await File.WriteAllTextAsync(target, "existing");
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                ZipArchiveCreator.CreateAsync(target,
+                    new Dictionary<string, string> { ["input.txt"] = target }));
+            Assert.Equal("existing", await File.ReadAllTextAsync(target));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public async Task RejectsSourceBudgetBeforeCreatingArchive()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-create-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var input = Path.Combine(root, "input.txt");
+            var target = Path.Combine(root, "archive.zip");
+            await File.WriteAllTextAsync(input, "larger than limit");
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                ZipArchiveCreator.CreateAsync(target,
+                    new Dictionary<string, string> { ["input.txt"] = input }, maxTotalBytes: 2));
+            Assert.False(File.Exists(target));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 }
