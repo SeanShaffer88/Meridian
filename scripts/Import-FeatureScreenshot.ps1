@@ -30,6 +30,9 @@ if ($width -lt 640 -or $height -lt 360 -or $width -gt 12000 -or $height -gt 1200
     throw "Unexpected PNG dimensions: $width x $height"
 }
 $repo = Split-Path -Parent $PSScriptRoot
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git is required to validate the captured build commit.' }
+& git -C $repo cat-file -e "$VerifiedCommit^{commit}" 2>$null
+if ($LASTEXITCODE -ne 0) { throw "Commit is not present in this repository: $VerifiedCommit" }
 $destinationDirectory = Join-Path $repo 'docs/images/screenshots'
 New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
 $destination = Join-Path $destinationDirectory "$Feature.png"
