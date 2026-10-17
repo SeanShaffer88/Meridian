@@ -1,7 +1,9 @@
 # Changelog
 
 ## Unreleased
-- Initial Windows dual-pane UI and directory navigation foundation.
-- Conservative copy implementation that refuses destination overwrite and rejects reparse points.
-- Initial unit-test source and project documentation.
-- Build/runtime validation remains outstanding.
+
+- Dual-pane browsing, folder navigation, bookmarks, and local workspace persistence.
+- New-folder creation and validated in-place file/folder rename, including case-only renames.
+- Conservative cross-pane copy with staging, cancellation, timestamp preservation, and no-overwrite behavior.
+- Windows CI publishes downloadable self-contained portable outputs for x64 and ARM64.
+- Release blockers remain: green CI for the current revision, device/runtime verification, multi-tab session restoration, move/delete/properties, and an installable package.

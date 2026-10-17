@@ -44,3 +44,11 @@ jobs:
         run: dotnet restore Meridian.sln
       - name: Publish Windows 11 app (${{ matrix.runtime }})
         run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
+
+      - name: Upload portable publish output
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-portable-${{ matrix.runtime }}
+          path: src/Meridian.App/bin/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish/
+          if-no-files-found: error
+          retention-days: 14

@@ -11,6 +11,18 @@ Meridian is an early-stage, offline-first file manager targeting Windows 11 only
 - [ ] Maintain portable and installable deployment paths; portable mode should keep settings and history beside the executable when feasible.
 - [ ] Do not mark features complete until implementation, relevant automated tests, and appropriate Windows verification are recorded.
 
+## Release acceleration plan
+
+Keep the first public release focused on a dependable daily-use workflow rather than implementing every advanced idea in this document. Work in this order:
+
+1. Keep the current branch green: fix compile/test/publish failures and retain the Windows x64/ARM64 CI artifacts.
+2. Finish and verify the everyday file workflow: dual-pane navigation, bookmarks/session state, new folder, rename, copy/cancel, move, delete with confirmation, and useful properties.
+3. Add multi-tab browsing and restore tabs/panes/focus as one coherent session feature.
+4. Deliver both deployment paths: a portable publish folder and a documented installable package. Do not call an unsigned package production-ready.
+5. Complete the release gate: test on Windows 11 x64 and ARM64, run filesystem safety checks, verify keyboard/accessibility basics, and publish a versioned changelog/release.
+
+Avoid starting large Phase 2/3 experiments until these release blockers are resolved.
+
 ## Phase 0 — Foundation and verification
 
 - [x] Initial dual-pane shell and path navigation
@@ -18,7 +30,8 @@ Meridian is an early-stage, offline-first file manager targeting Windows 11 only
 - [x] Conservative copy path that refuses overwrite
 - [x] Core unit-test source
 - [ ] Build and run on Windows 11 x64 and ARM64; resolve compiler/runtime issues and record actual CI results
-- [ ] Expand safety tests: nested directory copy, collisions, self/descendant copy prevention, cancellation and staging cleanup, disappearing files, and access-denied cases
+- [x] Cover nested directory copy, destination collisions, self/descendant prevention, and cancellation before a copy starts
+- [ ] Test cancellation during an active copy and staging cleanup, disappearing sources, access-denied cases, and reparse-point edge cases
 - [ ] Establish operation contracts, structured error reporting, cancellation semantics, and path/reparse-point safety
 - [ ] Audit dependencies, permissions, threat model, and supported Windows versions
 
