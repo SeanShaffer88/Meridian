@@ -66,7 +66,7 @@ public static class RelationshipAnalyzer
         var byDirectory = new Dictionary<string, List<int>>(comparer);
         for (var i = 0; i < items.Count; i++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            CheckBudget();
             var stem = Path.GetFileNameWithoutExtension(items[i]);
             if (stem.Length > 0)
             {
@@ -95,7 +95,7 @@ public static class RelationshipAnalyzer
             while ((stemIndices is not null && stemPosition < stemIndices.Count) ||
                    directoryPosition < directoryIndices.Count)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                CheckBudget();
                 var nextStem = stemIndices is not null && stemPosition < stemIndices.Count
                     ? stemIndices[stemPosition] : int.MaxValue;
                 var nextDirectory = directoryPosition < directoryIndices.Count
