@@ -90,7 +90,8 @@ MERIDIAN — BEYOND FILE MANAGEMENT
 +-- 04  Search, inspect and automate
 |   +-- [PLANNED] OmniSearch: scoped search and optional indexing
 |   +-- [PLANNED] Restore Center: System Restore points and protection
-|   +-- [PLANNED] Storage Reclaimer: reviewable Windows cleanup/slimming
+|   +-- [BRANCH] Storage Reclaimer: read-only cleanup plan data model
+|   +-- [PLANNED] Storage Reclaimer: Windows scanning and cleanup UI
 |   +-- [PLANNED] Meridian Vaults: encrypted, lockable file storage
 |   +-- [PLANNED] Storage X-Ray: disk-usage visualization
 |   +-- [PLANNED] HexLab: bounded binary and text inspection
@@ -205,7 +206,7 @@ TimeVault will work only when Windows exposes accessible snapshots. VSS is **not
 
 Explore the [TimeVault engineering plan](docs/TIMEVAULT.md) and [development pull request](https://github.com/SeanShaffer88/Meridian/pull/37).
 
-The planned **Restore Center**, **Storage Reclaimer**, and **Meridian Vaults** add system recovery management, transparent Windows cleanup, and genuinely encrypted storage—not merely hidden folders. These are **not yet implemented**; privileged actions and vault security require separate verification. See the [system utilities design](docs/ROADMAP.md#proposed-system-utilities--restore-center-storage-reclaimer-and-meridian-vaults).
+The planned **Restore Center**, **Storage Reclaimer**, and **Meridian Vaults** add system recovery management, transparent Windows cleanup, and genuinely encrypted storage—not merely hidden folders. Only a **backend-only, read-only cleanup planning data model** is prototyped in PR #37; Windows cleanup scanning, deletion, restore-point management and vault encryption are **not implemented**. Privileged actions and vault security require separate verification. See the [system utilities design](docs/ROADMAP.md#proposed-system-utilities--restore-center-storage-reclaimer-and-meridian-vaults).
 
 The [expanded engineering roadmap](docs/ROADMAP.md#meridian-expansion-program--approved-design-scope) now tracks 16 major initiatives, including FileGraph, Storage X-Ray, FlowForge, OmniSearch, HexLab, File DNA, Archive Portal, Integrity Guardian, Virtual Collections, Device Bridge and Command Nexus. **These are planned capabilities, not currently available features.**
 
