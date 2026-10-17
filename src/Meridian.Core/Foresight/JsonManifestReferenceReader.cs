@@ -91,6 +91,7 @@ public sealed class JsonManifestReferenceReader
             Read(buffer.AsSpan(offset, count));
         public override int Read(Span<byte> buffer)
         {
+            if (buffer.IsEmpty) return 0;
             if (_remaining == 0)
             {
                 if (_inner.ReadByte() != -1) throw new IOException("Manifest read limit exceeded.");
@@ -102,6 +103,7 @@ public sealed class JsonManifestReferenceReader
         }
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
+            if (buffer.IsEmpty) return 0;
             if (_remaining == 0)
             {
                 var one = new byte[1];
