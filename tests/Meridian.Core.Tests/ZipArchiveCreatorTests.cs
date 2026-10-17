@@ -54,6 +54,31 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task MultipleFilesReportMonotonicAggregateProgress()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-multi-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var first = Path.Combine(root, "first.bin");
+            var second = Path.Combine(root, "second.bin");
+            await File.WriteAllBytesAsync(first, new byte[1024 * 1024]);
+            await File.WriteAllBytesAsync(second, new byte[2 * 1024 * 1024]);
+            var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(updates.Add);
+            var archive = Path.Combine(root, "result.zip");
+            await ZipArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["first.bin"] = first, ["second.bin"] = second }, progress: progress);
+            Assert.Equal(2, ZipArchiveCatalog.List(archive).Count);
+            Assert.Equal((3L * 1024 * 1024, 3L * 1024 * 1024), updates[^1]);
+            Assert.All(updates, update => Assert.Equal(3L * 1024 * 1024, update.TotalBytes));
+            for (var i = 1; i < updates.Count; i++)
+                Assert.True(updates[i].CompletedBytes >= updates[i - 1].CompletedBytes);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task EmptyFileProgressCompletesOnlyAfterPublication()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-zip-empty-" + Guid.NewGuid().ToString("N"));
