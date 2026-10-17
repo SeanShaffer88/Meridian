@@ -249,4 +249,34 @@ public class RelationshipAnalyzerTests
             Assert.Equal(expected, actual.Select(x => (x.SourcePath, x.RelatedPath, x.Evidence)));
         }
     }
+
+    [Fact]
+    public void StemEvidenceWinsWhenFilesAlsoShareDirectory()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-priority"));
+        var paths = new[]
+        {
+            Path.Combine(root, "diagram.svg"),
+            Path.Combine(root, "diagram.png"),
+            Path.Combine(root, "notes.txt")
+        };
+        var result = RelationshipAnalyzer.Analyze(paths);
+        Assert.Equal(3, result.Count);
+        Assert.Equal(RelationshipEvidence.FilenameStem, result[0].Evidence);
+        Assert.Equal(RelationshipEvidence.SameDirectory, result[1].Evidence);
+        Assert.Equal(RelationshipEvidence.SameDirectory, result[2].Evidence);
+    }
+
+    [Fact]
+    public void EmptyStemStillAllowsDirectoryRelationship()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-empty-stem"));
+        var result = RelationshipAnalyzer.Analyze(new[]
+        {
+            Path.Combine(root, ".config"),
+            Path.Combine(root, "notes.txt")
+        });
+        Assert.Single(result);
+        Assert.Equal(RelationshipEvidence.SameDirectory, result[0].Evidence);
+    }
 }
