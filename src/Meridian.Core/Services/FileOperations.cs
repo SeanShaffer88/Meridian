@@ -3,6 +3,44 @@ namespace Meridian.Services;
 /// <summary>Conservative copy operations. Existing destinations are never overwritten.</summary>
 public static class FileOperations
 {
+    /// <summary>Renames a file or directory in its current parent without overwriting another item.</summary>
+    public static string RenameItem(string sourcePath, string newName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+
+        var source = Path.GetFullPath(sourcePath);
+        var name = newName.Trim();
+        if (name.Length == 0 || name is "." or ".." ||
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            name.Contains(Path.DirectorySeparatorChar) ||
+            name.Contains(Path.AltDirectorySeparatorChar) ||
+            Path.IsPathRooted(name))
+            throw new ArgumentException("Enter a valid file or folder name without path separators.", nameof(newName));
+
+        if (!File.Exists(source) && !Directory.Exists(source))
+            throw new FileNotFoundException("The selected item no longer exists.", source);
+        RejectReparsePoint(source);
+
+        var parent = Path.GetDirectoryName(source);
+        if (string.IsNullOrWhiteSpace(parent))
+            throw new IOException("The selected item cannot be renamed from its current location.");
+
+        var destination = Path.Combine(parent, name);
+        if (string.Equals(source, destination, StringComparison.Ordinal))
+            return source;
+        if (File.Exists(destination) || Directory.Exists(destination))
+        {
+            if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Changing only the letter casing of a name is not supported yet.");
+            throw new IOException($"'{name}' already exists in this folder. Nothing was overwritten.");
+        }
+
+        if (Directory.Exists(source)) Directory.Move(source, destination);
+        else File.Move(source, destination);
+        return destination;
+    }
+
     public static string CopyItem(string sourcePath, string destinationDirectory, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
