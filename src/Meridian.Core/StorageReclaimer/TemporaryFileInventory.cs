@@ -12,6 +12,15 @@ public sealed class TemporaryFileInventory
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         if (maxEntries < 1 || maxEntries > 100000)
             throw new ArgumentOutOfRangeException(nameof(maxEntries));
+        if (!Path.IsPathFullyQualified(directory))
+            throw new ArgumentException("Inventory requires an absolute directory path.", nameof(directory));
+        if (OperatingSystem.IsWindows() &&
+            (directory.Length < 3 || !char.IsLetter(directory[0]) ||
+             directory[1] != ':' || directory[2] != '\\'))
+            throw new ArgumentException("Inventory requires a local drive-letter path.", nameof(directory));
+        if (directory.Split(Path.DirectorySeparatorChar).Any(component =>
+                component is "." or ".."))
+            throw new ArgumentException("Inventory cannot contain traversal components.", nameof(directory));
         return await Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
