@@ -60,6 +60,8 @@ public class SnapshotExportFailureTests
     [InlineData("source.txt")]
     [InlineData(@"C:\Recovered\file.txt:stream")]
     [InlineData(@"C:\Recovered\trailing.")]
+    [InlineData(@"C:\Recovered\\source.txt")]
+    [InlineData(@"C:\Recovered\")]
     public async Task RejectsUnsafeOriginalSourcePaths(string source)
     {
         if (!OperatingSystem.IsWindows()) return;
