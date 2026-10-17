@@ -27,6 +27,25 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public async Task RejectsFileAndDescendantEntries()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var one = Path.Combine(root, "one.txt");
+            var two = Path.Combine(root, "two.txt");
+            await File.WriteAllTextAsync(one, "one");
+            await File.WriteAllTextAsync(two, "two");
+            var archive = Path.Combine(root, "invalid.tar");
+            await Assert.ThrowsAsync<InvalidDataException>(() => TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["folder/file.txt"] = one, ["folder"] = two }));
+            Assert.False(File.Exists(archive));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Theory]
     [InlineData(".tar")]
     [InlineData(".tar.gz")]
