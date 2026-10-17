@@ -50,6 +50,11 @@ public static class TarArchiveCreator
                 parentPath = parentPath[..parentPath.LastIndexOf('/')];
                 if (names.Contains(parentPath))
                     throw new InvalidDataException("TAR file entry conflicts with a parent path.");
+            }
+            parentPath = name;
+            while (parentPath.Contains('/'))
+            {
+                parentPath = parentPath[..parentPath.LastIndexOf('/')];
                 parentPaths.Add(parentPath);
             }
             names.Add(name);
