@@ -33,6 +33,7 @@ Meridian is being built to answer more:
 - **How is it connected?** Work across locations without losing your context.
 - **What will happen?** Understand the consequences of an operation before making changes.
 - **Can I do this again?** Eventually turn repetitive work into understandable, reusable workflows.
+- **What used to be here?** Explore available historical snapshots and recover earlier files with TimeVault (in development).
 
 The goal is not to clone File Explorer with more buttons. It's to make everyday file work **clearer, more capable, and safer**.
 
@@ -99,13 +100,23 @@ The ideas below define the direction of the project. **Unless explicitly listed 
 | **Drop Shelf improvements** | Build on the implemented temporary collection with persistence options, clearer batch management, and stronger workflow integration. |
 | **Operation Simulator improvements** | Extend the implemented read-only copy preflight into richer previews, additional operations, and safe execution with explicit confirmation. |
 | **Smart Collections** | Create dynamic, rule-based views without rearranging the files on disk. |
-| **File Time Machine** | Understand recorded changes and available recovery paths, without pretending an operation log is a backup. |
+| **Meridian TimeVault** | Explore Windows VSS snapshots, historical file versions, safe recovery exports, timeline views, and snapshot differences. Foundation code exists on the [TimeVault development branch](https://github.com/SeanShaffer88/Meridian/pull/37); the viewer and recovery UI are not implemented yet. |
 | **Relationship View** | Discover explainable connections between files, projects, and metadata. |
 | **Workflow Recipes** | Save understandable, reviewable sequences for repetitive tasks. |
 | **Adaptive navigation** | Choose the best way to explore: dual pane, Miller columns, comparisons, galleries, and more. |
 | **Optional local intelligence** | Get useful suggestions without mandatory cloud processing or silent file modifications. |
 
 **Our rule for innovation:** a feature should solve a real problem, stay understandable, and earn its complexity. Speed, privacy, accessibility, and file safety matter more than spectacle.
+
+### Meridian TimeVault — explore yesterday without risking today
+
+**TimeVault is in development, not a usable recovery tool yet.** The initial branch contains a snapshot metadata model and a volume-scoped path mapping helper; no snapshot enumeration, browsing interface, or restoration is available today.
+
+The proposed experience includes a read-only **Shadow Copy Explorer**, a **File Time Machine** timeline, **Recovery Studio** for explicit no-overwrite exports, snapshot-wide search, a **Difference Lens** for comparing versions, export receipts with checksums, and snapshot health diagnostics.
+
+TimeVault will work only when Windows exposes accessible snapshots. VSS is **not a backup system**: snapshots can disappear, may require elevated access, and must not be treated as guaranteed recovery points. TimeVault will not silently create, delete, or modify snapshots.
+
+Explore the [TimeVault engineering plan](docs/TIMEVAULT.md) and [development pull request](https://github.com/SeanShaffer88/Meridian/pull/37).
 
 See the full [innovation-first roadmap](docs/ROADMAP.md).
 
