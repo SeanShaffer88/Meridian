@@ -442,6 +442,40 @@ public sealed partial class MainWindow : Window
             GlobalStatus.Text = "Cancelling ZIP extraction…";
     }
 
+    private async void CreateZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
+        {
+            GlobalStatus.Text = "Select a regular file to archive.";
+            return;
+        }
+        var destination = Path.Combine(_activePane.CurrentPath,
+            Path.GetFileNameWithoutExtension(selected.Name) + ".zip");
+        var confirmation = new ContentDialog
+        {
+            Title = "Create ZIP?",
+            Content = new TextBlock { Text = "Source: " + selected.FullPath +
+                Environment.NewLine + "Destination: " + destination +
+                Environment.NewLine + "Existing archives will not be overwritten.",
+                TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            XamlRoot = LeftPath.XamlRoot
+        };
+        if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
+                destination, new Dictionary<string, string> { [selected.Name] = selected.FullPath }));
+            GlobalStatus.Text = "ZIP created · " + destination;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            GlobalStatus.Text = "ZIP creation failed · " + ex.Message;
+        }
+    }
+
     private bool _previewDialogOpen;
 
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
