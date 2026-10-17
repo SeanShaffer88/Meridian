@@ -29,12 +29,14 @@ public static class ZipArchiveCreator
         {
             cancellationToken.ThrowIfCancellationRequested();
             var name = ArchiveEntryPathPolicy.Normalize(item.Key);
-            if (!names.Add(name)) throw new InvalidDataException("Archive entry names collide.");
+            if (names.Contains(name)) throw new InvalidDataException("Archive entry names collide.");
             var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Value, cancellationToken);
             var length = new FileInfo(source).Length;
             if (length < 0 || length > maxTotalBytes - total)
                 throw new InvalidDataException("Archive source size budget exceeded.");
-            if (!sourcePaths.Add(source)) throw new InvalidDataException("Duplicate archive source.");
+            if (sourcePaths.Contains(source)) throw new InvalidDataException("Duplicate archive source.");
+            names.Add(name);
+            sourcePaths.Add(source);
             total += length;
             plan.Add((name, source, length));
         }
