@@ -19,15 +19,11 @@ public static class ArchiveSourcePlanner
                 throw new ArgumentException("Archive sources must be absolute paths.");
             if (File.Exists(path))
             {
-                if (!Path.IsPathFullyQualified(path))
-                    throw new ArgumentException("Archive sources must be absolute paths.");
                 Add(Path.GetFileName(path), path);
                 continue;
             }
             if (!Directory.Exists(path)) throw new FileNotFoundException("Missing archive source.", path);
             var root = Path.GetFullPath(path);
-            if (!Path.IsPathFullyQualified(path))
-                throw new ArgumentException("Archive sources must be absolute paths.");
             var prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(root));
             if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked archive root rejected.");
