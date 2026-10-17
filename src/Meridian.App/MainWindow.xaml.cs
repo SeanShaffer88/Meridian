@@ -707,12 +707,13 @@ public sealed partial class MainWindow : Window
             var sources = _dropShelf.Paths.ToArray();
             var destination = _activePane.CurrentPath;
             var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
-            var lines = plan.Items.Select(item =>
+            var lines = plan.Items.Take(100).Select(item =>
                 $"[{item.Result}] {Path.GetFileName(item.Source)}\n  {item.Explanation}\n  → {item.Target ?? "(unavailable)"}");
             var summary = $"Destination: {plan.DestinationDirectory}\n" +
                 $"Collected: {plan.Items.Count:N0} · Ready: {plan.ReadyCount:N0} · " +
                 $"Blocked: {plan.Items.Count - plan.ReadyCount:N0}\n\n" +
                 string.Join("\n\n", lines) +
+                (plan.Items.Count > 100 ? $"\n\n…and {plan.Items.Count - 100:N0} more items not shown." : "") +
                 "\n\nREAD-ONLY PREVIEW: No files were copied, moved, or deleted. " +
                 "A preview cannot reserve paths or guarantee a later operation will succeed.";
             var dialog = new ContentDialog
