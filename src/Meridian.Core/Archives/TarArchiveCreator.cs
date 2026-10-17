@@ -116,6 +116,7 @@ public static class TarArchiveCreator
                 if (string.IsNullOrEmpty(nextParent) || nextParent == currentParent) break;
                 currentParent = nextParent;
             }
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(stage, target, overwrite: false);
         }
         finally
