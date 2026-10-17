@@ -135,15 +135,18 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
-    [Fact]
-    public async Task RefusesToOverwriteExistingArchive()
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tar.gz")]
+    [InlineData(".tgz")]
+    public async Task RefusesToOverwriteExistingArchive(string extension)
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-tar-existing-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
             var input = Path.Combine(root, "source.txt");
-            var archive = Path.Combine(root, "existing.tar");
+            var archive = Path.Combine(root, "existing" + extension);
             await File.WriteAllTextAsync(input, "source");
             await File.WriteAllTextAsync(archive, "original");
             await Assert.ThrowsAsync<IOException>(() =>
