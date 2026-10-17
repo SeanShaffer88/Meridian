@@ -22,6 +22,8 @@ public static class OperationPreview
         var destination = Path.GetFullPath(destinationDirectory);
         if (!Directory.Exists(destination))
             throw new DirectoryNotFoundException($"Destination folder does not exist: {destination}");
+        if ((File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("Destination folder is a reparse point and cannot be used for batch copying.");
 
         var results = new List<Item>();
         var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

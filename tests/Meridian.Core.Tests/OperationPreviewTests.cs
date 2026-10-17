@@ -84,4 +84,27 @@ public sealed class OperationPreviewTests
         }
         finally { Directory.Delete(root); }
     }
+    [Fact]
+    public void PreviewCopy_RejectsReparsePointDestination()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-preview-link-{Guid.NewGuid():N}");
+        var real = Path.Combine(root, "real");
+        var link = Path.Combine(root, "link");
+        Directory.CreateDirectory(real);
+        try
+        {
+            try { Directory.CreateSymbolicLink(link, real); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+            {
+                return; // Symlink creation can be restricted on some Windows CI hosts.
+            }
+            Assert.Throws<InvalidOperationException>(() => OperationPreview.PreviewCopy([], link));
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
 }
