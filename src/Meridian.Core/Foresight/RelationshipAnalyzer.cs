@@ -58,6 +58,7 @@ public static class RelationshipAnalyzer
                 throw new ArgumentException("Duplicate path in Foresight input.", nameof(paths));
             items.Add(full);
         }
+        CheckBudget();
 
         // Index candidates by stem and directory instead of comparing every input pair.
         // Lists retain input order, preserving the previous deterministic output order.
