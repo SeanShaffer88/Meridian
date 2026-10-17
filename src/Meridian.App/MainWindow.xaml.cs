@@ -276,22 +276,29 @@ public sealed partial class MainWindow : Window
 
     private async Task NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
     {
+        pane.ReadCancellation?.Cancel();
+        pane.ReadCancellation?.Dispose();
+        pane.ReadCancellation = new CancellationTokenSource();
+        var token = pane.ReadCancellation.Token;
+        SetPaneStatus(pane, "Checking folder…");
         string fullPath;
         try
         {
             fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(requestedPath.Trim().Trim('"')));
-            if (!Directory.Exists(fullPath)) throw new DirectoryNotFoundException($"Folder not found: {fullPath}");
+            var exists = await Task.Run(() => Directory.Exists(fullPath), token);
+            if (token.IsCancellationRequested) return;
+            if (!exists) throw new DirectoryNotFoundException($"Folder not found: {fullPath}");
         }
+        catch (OperationCanceledException) { return; }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
+            if (token.IsCancellationRequested) return;
             SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return;
         }
         if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
         {
             pane.BackHistory.Push(pane.CurrentPath); pane.ForwardHistory.Clear();
         }
-        pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
-        var token = pane.ReadCancellation.Token;
         pane.AllItems = Array.Empty<FileEntry>();
         pane.Items.Clear();
         pane.List.SelectedItem = null;
