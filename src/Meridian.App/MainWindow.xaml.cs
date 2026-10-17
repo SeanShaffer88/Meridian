@@ -502,10 +502,15 @@ public sealed partial class MainWindow : Window
         try
         {
             GlobalStatus.Text = "Creating ZIP · " + selected.Name;
-            await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
-                destination, Meridian.Core.Archives.ArchiveSourcePlanner.Plan(
-                    sources.Select(entry => entry.FullPath), _zipCreationCancellation.Token),
-                cancellationToken: _zipCreationCancellation.Token));
+            var token = _zipCreationCancellation.Token;
+            var planned = await Task.Run(() => Meridian.Core.Archives.ArchiveSourcePlanner.Plan(
+                sources.Select(entry => entry.FullPath), token), token);
+            if (extension == ".zip")
+                await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
+                    destination, planned, cancellationToken: token), token);
+            else
+                await Task.Run(() => Meridian.Core.Archives.TarArchiveCreator.CreateAsync(
+                    destination, planned, cancellationToken: token), token);
             GlobalStatus.Text = "ZIP created · " + destination;
             await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
         }
