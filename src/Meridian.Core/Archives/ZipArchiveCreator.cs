@@ -131,7 +131,10 @@ public static class ZipArchiveCreator
             }
             File.Move(stage, target, overwrite: false);
             created = false;
-            progress?.Report((total, total));
+            // Progress observers are advisory; a callback failure must not turn a
+            // successfully published archive into a reported creation failure.
+            try { progress?.Report((total, total)); }
+            catch (Exception) { /* Archive publication already succeeded. */ }
         }
         finally
         {
