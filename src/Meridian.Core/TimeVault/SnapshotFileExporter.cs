@@ -52,24 +52,32 @@ public sealed class SnapshotFileExporter
                 throw new IOException("Destination path contains a reparse point.");
         }
 
-        // CreateNew is atomic: an existing destination is never overwritten.
-        // The caller must choose an explicit destination and confirm the operation.
+        // Stage in the destination directory, then publish atomically with no overwrite.
+        // Failures leave the requested destination untouched.
+        var staging = Path.Combine(parent, ".meridian-recovery-" + Guid.NewGuid().ToString("N") + ".tmp");
         await using var input = new FileStream(source, FileMode.Open, FileAccess.Read,
             FileShare.Read, 128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         cancellationToken.ThrowIfCancellationRequested();
-        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write,
-            FileShare.None, 128 * 1024, FileOptions.Asynchronous);
         try
         {
-            await input.CopyToAsync(output, 128 * 1024, cancellationToken);
-            await output.FlushAsync(cancellationToken);
-            return output.Length;
+            long copied;
+            await using (var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 128 * 1024, FileOptions.Asynchronous))
+            {
+                await input.CopyToAsync(output, 128 * 1024, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+                copied = output.Length;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(staging, destination, overwrite: false);
+            return copied;
         }
-        catch
+        finally
         {
-            await output.DisposeAsync();
-            try { File.Delete(destination); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-            throw;
+            // Cleanup only our unique staging name, never the requested destination.
+            try { File.Delete(staging); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
     }
 }
