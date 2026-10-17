@@ -846,6 +846,21 @@ public sealed partial class MainWindow : Window
         GlobalStatus.Text = "Cancelling batch copy…";
     }
 
+    private void PruneShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_batchCancellation is not null || _batchPreparing)
+        {
+            GlobalStatus.Text = "Wait until the batch copy is finished before pruning the shelf.";
+            return;
+        }
+        var removed = _dropShelf.RemoveMissing();
+        _shelfPaths.Clear();
+        foreach (var path in _dropShelf.Paths) _shelfPaths.Add(path);
+        GlobalStatus.Text = removed == 0
+            ? "Drop Shelf · No missing references found."
+            : $"Drop Shelf · Removed {removed:N0} missing references; no files were deleted.";
+    }
+
     private void ClearShelf_Click(object sender, RoutedEventArgs e)
     {
         _dropShelf.Clear();
