@@ -52,6 +52,34 @@ public sealed class FileOperationsTests
     }
 
     [Fact]
+    public void RenameItem_RenamesDirectoryAndKeepsChildren()
+    {
+        using var temp = new TemporaryDirectory();
+        var parent = Directory.CreateDirectory(Path.Combine(temp.Path, "parent")).FullName;
+        var source = Directory.CreateDirectory(Path.Combine(parent, "before")).FullName;
+        File.WriteAllText(Path.Combine(source, "inside.txt"), "keep");
+
+        var result = FileOperations.RenameItem(source, "after");
+
+        Assert.False(Directory.Exists(source));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(result, "inside.txt")));
+    }
+
+    [Fact]
+    public void RenameItem_SupportsCaseOnlyRename()
+    {
+        using var temp = new TemporaryDirectory();
+        var parent = Directory.CreateDirectory(Path.Combine(temp.Path, "parent")).FullName;
+        var source = Path.Combine(parent, "before.txt");
+        File.WriteAllText(source, "keep");
+
+        var result = FileOperations.RenameItem(source, "Before.txt");
+
+        Assert.Equal("Before.txt", Path.GetFileName(result));
+        Assert.Equal("keep", File.ReadAllText(result));
+    }
+
+    [Fact]
     public void CopyItem_CopiesFileAndPreservesContents()
     {
         using var temp = new TemporaryDirectory();
