@@ -31,6 +31,12 @@ After the baseline above, Move/rename changed to MoveFileExW with no replacement
 
 An isolated local generated-fixture check between C: and E: on Windows 11 x64 refused both a file and a directory with Windows error 17; source payloads remained intact and the destination stayed empty. Fixture cleanup was limited to the newly created unique directories. These two checks are separate from the 343 core tests and do not establish ARM64, UNC or race-free behavior. CI for the new application revision must be inspected separately; no new-head CI pass is inferred from baseline results.
 
+## ZIP tree integrity and observer failures (2026-10-17)
+
+Complete ZIP extraction now streams explicit directory entries through the same length/CRC checks as file entries, rejecting nonempty or corrupt directory payloads before publication. Catalog listing remains metadata-only. Progress callbacks are advisory: ordinary observer failures cannot turn an already-published tree into a failed operation, and cancellation requested by an observer still aborts before publication and removes staging. Cancellation after publication does not undo a completed extraction.
+
+Local Windows x64 validation with pinned SDK 10.0.402 and locked restore passed 462 core tests, zero failures/skips. Nine added regressions exercise observer failures during staging and after publication, cancellation from throwing observers, concurrent destination preservation, false directory CRCs and hidden stored directory data. These checks do not establish crash durability, real disk-full recovery, race-free path identity or general malformed ZIP compatibility. Latest-head Windows CI must be checked separately.
+
 ## Remaining blockers
 
 | Area | Evidence still needed |

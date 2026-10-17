@@ -72,8 +72,10 @@ public static class ZipTreeExtractor
                 var outputPath = Path.Combine(new[] { stage }.Concat(segments).ToArray());
                 if (item.IsDirectory)
                 {
+                    // Directory payloads must also be empty and pass CRC validation.
+                    await ZipEntryCopy.CopyAsync(archive.Entries[i], Stream.Null, 0, cancellationToken);
                     Directory.CreateDirectory(outputPath);
-                    progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
+                    ReportProgressSafely(progress, (int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
                     continue;
                 }
                 var containing = Path.GetDirectoryName(outputPath)!;
@@ -83,7 +85,7 @@ public static class ZipTreeExtractor
                 total += await ZipEntryCopy.CopyAsync(archive.Entries[i], output,
                     maxTotalBytes - total, cancellationToken);
                 fileCount++;
-                progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
+                ReportProgressSafely(progress, (int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
             }
             cancellationToken.ThrowIfCancellationRequested();
             CheckDirectoryChain(parent, cancellationToken);
@@ -95,10 +97,11 @@ public static class ZipTreeExtractor
             // Recheck for destination conflicts before publishing the complete tree.
             if (File.Exists(target) || Directory.Exists(target))
                 throw new IOException("Extraction destination appeared during staging.");
+            cancellationToken.ThrowIfCancellationRequested();
             // Atomic on the same volume when the filesystem supports rename.
             Directory.Move(stage, target);
             staged = false;
-            progress?.Report(100);
+            ReportProgressSafely(progress, 100);
             return new Receipt(target, fileCount, total);
         }
         finally
@@ -115,6 +118,13 @@ public static class ZipTreeExtractor
                 catch (UnauthorizedAccessException) { }
             }
         }
+    }
+
+    private static void ReportProgressSafely(IProgress<int>? progress, int value)
+    {
+        // Observers cannot invalidate publication receipts or prevent cancellation cleanup.
+        try { progress?.Report(value); }
+        catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException) { }
     }
 
     private static void CheckDirectoryChain(string directory, CancellationToken token)
