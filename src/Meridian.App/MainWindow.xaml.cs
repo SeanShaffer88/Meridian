@@ -978,6 +978,59 @@ public sealed partial class MainWindow : Window
     private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); } }
     private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
 
+
+    private bool _timeVaultBusy;
+
+    private async void TimeVault_Click(object sender, RoutedEventArgs e)
+    {
+        if (_timeVaultBusy) return;
+        _timeVaultBusy = true;
+        GlobalStatus.Text = "TimeVault · discovering existing snapshots…";
+        try
+        {
+            Meridian.Core.TimeVault.IShadowCopyCatalog catalog = new Meridian.Core.TimeVault.WindowsShadowCopyCatalog();
+            var snapshots = await catalog.ListAsync();
+            var lines = snapshots
+                .OrderByDescending(s => s.CreatedAt)
+                .Select(s => $"Created: {(s.CreatedAt == DateTimeOffset.MinValue ? "Unknown" : s.CreatedAt.ToLocalTime().ToString("g"))}\\nVolume: {s.OriginalVolume}\\nDevice: {s.DeviceObject}\\nState: {s.State}\\n");
+            var message = snapshots.Count == 0
+                ? "Windows did not report any accessible shadow copies. Snapshots may be absent, expired, or inaccessible."
+                : string.Join("\\n", lines);
+            var content = new ScrollViewer
+            {
+                MaxHeight = 440,
+                Content = new TextBlock
+                {
+                    Text = message + "\\nRead-only discovery. Recovery and browsing are not available yet.",
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true
+                }
+            };
+            await new ContentDialog
+            {
+                Title = $"TimeVault · {snapshots.Count} snapshot(s)",
+                Content = content,
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+            GlobalStatus.Text = $"TimeVault · {snapshots.Count} snapshot(s) discovered";
+        }
+        catch (Exception ex) when (ex is System.Management.ManagementException or
+            System.Runtime.InteropServices.COMException or UnauthorizedAccessException or
+            IOException or PlatformNotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            GlobalStatus.Text = "TimeVault discovery unavailable · " + ex.Message;
+            await new ContentDialog
+            {
+                Title = "TimeVault discovery unavailable",
+                Content = "Windows could not enumerate shadow copies. This may be caused by permissions, WMI availability, or VSS configuration.\\n\\n" + ex.Message,
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+        }
+        finally { _timeVaultBusy = false; }
+    }
+
     private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
     {
         public string Name { get; } = name;
