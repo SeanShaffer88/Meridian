@@ -7,6 +7,28 @@ namespace Meridian.Core.Tests;
 
 public sealed class TarTreeExtractorTests
 {
+    [Fact]
+    public async Task RejectsTraversalWithoutPublishing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-traversal-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "traversal.tar");
+            using (var output = File.Create(archive))
+            using (var writer = new TarWriter(output))
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "../outside.txt")
+                {
+                    DataStream = new MemoryStream(new byte[] { 5 })
+                });
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                TarTreeExtractor.ExtractAsync(archive, root, "output"));
+            Assert.False(Directory.Exists(Path.Combine(root, "output")));
+            Assert.False(File.Exists(Path.Combine(root, "outside.txt")));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Theory]
     [InlineData(".tar")]
     [InlineData(".tar.gz")]
