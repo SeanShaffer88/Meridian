@@ -66,6 +66,7 @@ public static class ZipSafeExtractor
         // A partial file can remain if the process crashes; on managed failure,
         // remove only the file this call created.
         var created = false;
+        var completed = false;
         try
         {
             await using var output = new FileStream(destination, FileMode.CreateNew,
@@ -87,11 +88,12 @@ public static class ZipSafeExtractor
             if (total != selected.UncompressedBytes)
                 throw new InvalidDataException("ZIP entry size differs from its declared size.");
             await output.FlushAsync(cancellationToken);
+            completed = true;
             return total;
         }
         catch
         {
-            if (created)
+            if (created && !completed)
             {
                 try { File.Delete(destination); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
