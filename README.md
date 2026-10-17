@@ -48,6 +48,8 @@ These features are **implemented on the main development branch**. They are not 
 | **Independent sorting** | Sort each pane by name, type, size, or modified date, ascending or descending. |
 | **Keyboard-first navigation** | Switch panes, focus location or filter fields, refresh, and navigate history with shortcuts. |
 | **Folder DNA — first signature experience** | See a quick profile of the active folder: file/folder counts, known file sizes, date range, and largest type groups. |
+| **Drop Shelf** | Collect paths from unrelated folders without moving the originals; remove, clear, or show the location of a collected item. The shelf is in-memory and does not survive an app restart. |
+| **Operation Simulator — read-only batch preview** | Check shelf items against the active pane’s destination folder and see ready/blocked counts and collision explanations before copying anything. |
 | **Conservative file actions** | Copy, move, rename, create folders, view basic properties, and request Recycle Bin deletion. |
 | **Windows preview packages** | CI produces portable application folders and per-user installers for x64 and ARM64. |
 
@@ -63,6 +65,12 @@ Open **Folder DNA** to see an immediate summary of the *already-loaded* director
 - Which file types contribute the most bytes
 
 It does **not** recursively calculate folder sizes, hash files, or scan nested directories. That's intentional: insight shouldn't unexpectedly trigger an expensive drive-wide operation.
+
+### Drop Shelf + Operation Simulator: collect first, decide later
+
+Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview lists up to 100 individual results while counting the whole batch.
+
+**Currently preview-only:** Batch execution is not yet merged into the main branch. The shelf does not persist between launches. The preview is advisory, not a guarantee: filesystem contents can change after the check. A future copy command must recheck every item before writing.
 
 ### A workspace that follows your thinking
 
@@ -88,8 +96,8 @@ The ideas below define the direction of the project. **Unless explicitly listed 
 
 | Signature idea | The experience we're working toward |
 | --- | --- |
-| **Drop Shelf** | Gather files from unrelated folders into one temporary collection without moving the originals. |
-| **Operation Simulator** | Preview a batch of proposed changes and detect conflicts *before* executing them. |
+| **Drop Shelf improvements** | Build on the implemented temporary collection with persistence options, clearer batch management, and stronger workflow integration. |
+| **Operation Simulator improvements** | Extend the implemented read-only copy preflight into richer previews, additional operations, and safe execution with explicit confirmation. |
 | **Smart Collections** | Create dynamic, rule-based views without rearranging the files on disk. |
 | **File Time Machine** | Understand recorded changes and available recovery paths, without pretending an operation log is a backup. |
 | **Relationship View** | Discover explainable connections between files, projects, and metadata. |
@@ -121,8 +129,9 @@ See the full [innovation-first roadmap](docs/ROADMAP.md).
 2. Double-click a folder to enter it, or use **Back**, **Forward**, and **Up**.
 3. Try each pane's **Filter** and **Sort** controls.
 4. Open **Folder DNA** to understand the current folder.
-5. Select a disposable test file and try **Copy L → R** or **Copy R → L**.
-6. Save frequently used locations with **bookmarks** or a **new workspace tab**.
+5. Add a few disposable files from different locations with **Shelf selected**, then use **Preview shelf → active folder** to inspect potential conflicts without changing anything.
+6. Select a disposable test file and try **Copy L → R** or **Copy R → L**.
+7. Save frequently used locations with **bookmarks** or a **new workspace tab**.
 
 ### Keyboard shortcuts
 
