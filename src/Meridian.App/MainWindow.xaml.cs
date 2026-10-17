@@ -366,13 +366,16 @@ public sealed partial class MainWindow : Window
         {
             var entries = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath));
             var totalBytes = entries.Where(entry => !entry.IsDirectory).Sum(entry => entry.UncompressedBytes);
+            var fileCount = entries.Count(entry => !entry.IsDirectory);
+            var folderCount = entries.Count - fileCount;
             var listing = string.Join(Environment.NewLine,
                 entries.Select(entry => (entry.IsDirectory ? "[DIR] " : "[FILE] ") +
                     entry.Path + " (" + entry.UncompressedBytes.ToString("N0") + " bytes)"));
             await new ContentDialog
             {
                 Title = "ZIP contents · " + selected.Name + " · " + entries.Count.ToString("N0") +
-                    " entries · " + totalBytes.ToString("N0") + " bytes",
+                    " entries (" + fileCount.ToString("N0") + " files, " +
+                    folderCount.ToString("N0") + " folders) · " + totalBytes.ToString("N0") + " bytes",
                 Content = new TextBox { Text = listing, IsReadOnly = true,
                     AcceptsReturn = true, MinWidth = 540, Height = 380 },
                 CloseButtonText = "Close",
