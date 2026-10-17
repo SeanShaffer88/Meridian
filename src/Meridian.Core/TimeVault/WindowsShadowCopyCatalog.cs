@@ -1,4 +1,5 @@
 using System.Management;
+using System.Runtime.Versioning;
 
 namespace Meridian.Core.TimeVault;
 
@@ -6,6 +7,7 @@ namespace Meridian.Core.TimeVault;
 /// Enumerates existing VSS snapshots through Windows CIM/WMI without creating or deleting snapshots.
 /// Windows access permissions and WMI availability determine what is returned.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsShadowCopyCatalog : IShadowCopyCatalog
 {
     public Task<IReadOnlyList<ShadowCopy>> ListAsync(CancellationToken cancellationToken = default)
