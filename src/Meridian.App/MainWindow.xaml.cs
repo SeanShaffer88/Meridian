@@ -114,9 +114,9 @@ public sealed partial class MainWindow : Window
                 Content = (i == _activeWorkspaceTabIndex ? "▸ " : "") + tab.Name,
                 Tag = tab,
                 MinWidth = 110,
-                Padding = new Thickness(10, 4, 10, 4),
-                Click = WorkspaceTab_Click
+                Padding = new Thickness(10, 4, 10, 4)
             };
+            tabButton.Click += WorkspaceTab_Click;
             WorkspaceTabsPanel.Children.Add(tabButton);
             if (_workspaceTabs.Count > 1)
             {
@@ -125,10 +125,10 @@ public sealed partial class MainWindow : Window
                     Content = "×",
                     Tag = tab,
                     MinWidth = 28,
-                    Padding = new Thickness(4, 2, 4, 2),
-                    ToolTipService = { ToolTip = "Close " + tab.Name },
-                    Click = CloseWorkspaceTab_Click
+                    Padding = new Thickness(4, 2, 4, 2)
                 };
+                ToolTipService.SetToolTip(closeButton, "Close " + tab.Name);
+                closeButton.Click += CloseWorkspaceTab_Click;
                 WorkspaceTabsPanel.Children.Add(closeButton);
             }
         }
@@ -164,13 +164,14 @@ public sealed partial class MainWindow : Window
         var index = _workspaceTabs.IndexOf(tab);
         if (index < 0 || _workspaceTabs.Count <= 1) return;
 
-        if (index == _activeWorkspaceTabIndex) StoreCurrentWorkspaceTab();
+        var wasActive = index == _activeWorkspaceTabIndex;
+        if (wasActive) StoreCurrentWorkspaceTab();
         _workspaceTabs.RemoveAt(index);
         if (index < _activeWorkspaceTabIndex) _activeWorkspaceTabIndex--;
-        else if (index == _activeWorkspaceTabIndex) _activeWorkspaceTabIndex = Math.Min(index, _workspaceTabs.Count - 1);
+        else if (wasActive) _activeWorkspaceTabIndex = Math.Min(index, _workspaceTabs.Count - 1);
         RefreshWorkspaceTabs();
 
-        if (index == _activeWorkspaceTabIndex)
+        if (wasActive)
             await LoadWorkspaceTabAsync(_workspaceTabs[_activeWorkspaceTabIndex]);
         else
             await PersistWorkspaceAsync();
