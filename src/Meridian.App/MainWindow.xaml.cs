@@ -364,8 +364,13 @@ public sealed partial class MainWindow : Window
         _zipInspectionOpen = true;
         try
         {
-            var entries = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath));
-            var totalBytes = entries.Where(entry => !entry.IsDirectory).Sum(entry => entry.UncompressedBytes);
+            var isZip = string.Equals(Path.GetExtension(selected.FullPath), ".zip", StringComparison.OrdinalIgnoreCase);
+            var entries = await Task.Run(() => isZip
+                ? Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath)
+                    .Select(item => (item.Path, Bytes: item.UncompressedBytes, item.IsDirectory)).ToArray()
+                : Meridian.Core.Archives.TarArchiveCatalog.List(selected.FullPath)
+                    .Select(item => (item.Path, item.Bytes, item.IsDirectory)).ToArray());
+            var totalBytes = entries.Where(entry => !entry.IsDirectory).Sum(entry => entry.Bytes);
             var fileCount = entries.Count(entry => !entry.IsDirectory);
             var folderCount = entries.Count - fileCount;
             var listing = string.Join(Environment.NewLine,
@@ -373,7 +378,7 @@ public sealed partial class MainWindow : Window
                     entry.Path + " (" + entry.UncompressedBytes.ToString("N0") + " bytes)"));
             await new ContentDialog
             {
-                Title = "ZIP contents · " + selected.Name + " · " + entries.Count.ToString("N0") +
+                Title = "Archive contents · " + selected.Name + " · " + entries.Count.ToString("N0") +
                     " entries (" + fileCount.ToString("N0") + " files, " +
                     folderCount.ToString("N0") + " folders) · " + totalBytes.ToString("N0") + " bytes",
                 Content = new TextBox { Text = listing, IsReadOnly = true,
@@ -384,7 +389,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            GlobalStatus.Text = "ZIP inspection failed · " + ex.Message;
+            GlobalStatus.Text = "Archive inspection failed · " + ex.Message;
         }
         finally { _zipInspectionOpen = false; }
     }
