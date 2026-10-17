@@ -89,6 +89,20 @@ See two directories at once, enter a path directly, go back or forward, move to 
 
 </details>
 
+### 🔎 Live filtering in each pane
+
+Narrow the visible files in either pane by typing a name, path, or file type. Filtering works on the current folder listing, without scanning the drive again; the two panes have independent filters.
+
+<details>
+<summary>Technical Deep Dive & Advanced Flags</summary>
+
+- **System level touched:** None beyond the directory already enumerated for browsing.
+- **CLI flags:** None; use the filter field in either pane.
+- **Mechanics:** `DirectoryReader.Filter` applies a case-insensitive substring match against name, full path, and type label while keeping directories first.
+- **Limits:** This is not a recursive search, file-content search, or indexing engine.
+
+</details>
+
 ### 🗂️ Bookmarks and paired workspace tabs
 
 Save frequently visited folders, and create tabs that remember a left and right location together. Meridian restores the saved session where the paths are still available.
@@ -194,9 +208,10 @@ Builds and core tests running in CI **do not prove** that all UI interactions, d
 1. **Browse:** Use the left and right path fields to open two existing folders. Press **Enter** after entering a path.
 2. **Navigate:** Use the back, forward, and up buttons. Double-click a folder to open it.
 3. **Select:** Click an item in the pane you want to work with.
-4. **Copy:** Choose **Copy L → R** or **Copy R → L**, depending on the direction. Use **Cancel copy** if needed.
-5. **Move or manage:** Use the labeled **Move**, **New folder**, **Rename**, **Properties**, and **Delete** commands. Read confirmation dialogs before proceeding.
-6. **Save your workspace:** Add bookmarks or create a new workspace tab to remember both locations.
+4. **Filter (optional):** Type in the filter field above either pane to narrow its current listing. Clear the field to show all items again.
+5. **Copy:** Choose **Copy L → R** or **Copy R → L**, depending on the direction. Use **Cancel copy** if needed.
+6. **Move or manage:** Use the labeled **Move**, **New folder**, **Rename**, **Properties**, and **Delete** commands. Read confirmation dialogs before proceeding.
+7. **Save your workspace:** Add bookmarks or create a new workspace tab to remember both locations.
 
 > [!TIP]
 > Practice with two folders containing disposable sample files. Test a destination-name collision to see the no-overwrite behavior before trusting the workflow with important data.
@@ -210,6 +225,7 @@ Meridian is a **GUI application**, not a command-line utility. This matrix descr
 | Left / right path field | Navigate to a folder | Invalid or missing paths report an error |
 | Back / Forward / Up | Browse history or parent folder | Changes navigation only |
 | Refresh both | Reload both directory listings | Does not modify files |
+| Left / right filter | Narrow the visible listing in that pane | Case-insensitive; no recursive disk search |
 | Copy L → R / R → L | Copy the selected item | No overwrite; staged copy; cancellable |
 | Cancel copy | Request cancellation of an active copy | Partial-item cleanup is attempted |
 | Move L → R / R → L | Move the selected item | Confirmation and destination collision checks |
@@ -257,7 +273,8 @@ Meridian has a working foundation, but the long-term plan is broader than the cu
 | Dual-pane browsing, bookmarks, paired workspace tabs | **Implemented** |
 | Basic new folder, rename, properties, conservative copy/move, Recycle Bin delete | **Implemented; more real-device validation required** |
 | Windows x64 and ARM64 CI packaging | **Implemented; hardware/installer verification pending** |
-| Live filtering, advanced sorting, keyboard-first navigation | **In progress / planned** |
+| Live per-pane filtering | **Implemented** |
+| Advanced sorting and keyboard-first navigation | **Planned** |
 | Folder tree, flexible pane layouts, central transfer queue | **Planned** |
 | Batch rename, search, duplicate detection, preview, archives | **Planned** |
 | Network/cloud/device integrations and developer tools | **Planned** |
