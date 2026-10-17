@@ -350,8 +350,11 @@ public sealed partial class MainWindow : Window
         await NavigateAsync(pane, target, addHistory: false);
     }
 
+    private bool _previewDialogOpen;
+
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
     {
+        if (_previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
         {
             GlobalStatus.Text = "Select a file to preview.";
@@ -368,6 +371,7 @@ public sealed partial class MainWindow : Window
         });
         Microsoft.UI.Xaml.Controls.MediaPlayerElement? player = null;
         Windows.Media.Playback.MediaPlayer? mediaSession = null;
+        _previewDialogOpen = true;
         try
         {
             if ((File.GetAttributes(path) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
@@ -473,6 +477,7 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _previewDialogOpen = false;
             if (player is not null)
             {
                 mediaSession?.Pause();
