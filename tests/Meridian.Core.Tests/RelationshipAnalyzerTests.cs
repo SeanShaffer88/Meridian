@@ -195,4 +195,27 @@ public class RelationshipAnalyzerTests
             .Select(i => Path.Combine(root, $"dir-{i}", $"file-{i}.txt"));
         Assert.Empty(RelationshipAnalyzer.Analyze(paths, maxPaths: 10000, timeBudget: TimeSpan.FromMinutes(1)));
     }
+
+    [Fact]
+    public void ExpiredBudgetOnSingleInputThrowsEvenWithoutRelationships()
+    {
+        var path = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-slow-single.txt"));
+        IEnumerable<string> SlowPaths()
+        {
+            Thread.Sleep(50);
+            yield return path;
+        }
+        Assert.Throws<TimeoutException>(() =>
+            RelationshipAnalyzer.Analyze(SlowPaths(), timeBudget: TimeSpan.FromMilliseconds(1)));
+    }
+
+    [Fact]
+    public void CancellationWinsOverExpiredTimeBudget()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() =>
+            RelationshipAnalyzer.Analyze(Array.Empty<string>(),
+                cancellationToken: cancellation.Token, timeBudget: TimeSpan.FromTicks(1)));
+    }
 }
