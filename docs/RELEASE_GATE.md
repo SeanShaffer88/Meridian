@@ -30,3 +30,7 @@ The [Safety Contract](SAFETY_CONTRACT.md) applies to every mutating capability. 
 - [ ] Accessible safety prompts and no preselected destructive options.
 - [ ] Windows VM restore drills for every advertised recovery workflow.
 
+
+## Engineering quality requirements
+
+Release readiness also requires satisfying [Engineering Quality Gates](ENGINEERING_QUALITY_GATES.md), including clean x64/ARM64 builds, verified playback, measured performance, accessibility checks and clean-install testing. Unverified items remain blockers.
