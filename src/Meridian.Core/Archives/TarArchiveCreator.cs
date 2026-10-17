@@ -26,6 +26,7 @@ public static class TarArchiveCreator
             throw new IOException("Archive destination already exists.");
         var plan = new List<(string Name, string Source)>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        long totalBytes = 0;
         foreach (var item in sourceFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -34,6 +35,10 @@ public static class TarArchiveCreator
             var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Value, cancellationToken);
             if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Archive cannot contain itself.");
+            var length = new FileInfo(source).Length;
+            if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
+                throw new InvalidDataException("TAR source exceeds 4 GiB aggregate budget.");
+            totalBytes += length;
             plan.Add((name, source));
         }
         var ancestor = parent;
