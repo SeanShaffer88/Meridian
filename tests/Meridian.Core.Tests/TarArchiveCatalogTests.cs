@@ -33,6 +33,31 @@ public sealed class TarArchiveCatalogTests
     }
 
     [Fact]
+    public void RejectsDuplicateEntryNamesIgnoringCase()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-case-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "duplicate.tar");
+            using (var output = File.Create(archive))
+            using (var writer = new TarWriter(output))
+            {
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "README.txt")
+                {
+                    DataStream = new MemoryStream(new byte[] { 1 })
+                });
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "readme.txt")
+                {
+                    DataStream = new MemoryStream(new byte[] { 2 })
+                });
+            }
+            Assert.Throws<InvalidDataException>(() => TarArchiveCatalog.List(archive));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void ListsRegularFilesInTar()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-tar-" + Guid.NewGuid().ToString("N"));
