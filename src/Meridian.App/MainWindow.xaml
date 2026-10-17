@@ -19,6 +19,7 @@
       <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
       <AppBarButton Icon="Copy" Label="Copy R → L" Click="CopyRightToLeft_Click" />
       <AppBarSeparator />
+      <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" />
       <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" />
       <AppBarButton Icon="OpenFolder" Label="Open in Explorer" Click="OpenInExplorer_Click" />
     </CommandBar>
