@@ -42,14 +42,14 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [ ] Bookmarks/favorites and named workspaces; persist and restore tabs, pane layout, locations, and focus
 - [ ] Folder tree sidebar, with shared focus-synchronized or independent per-pane trees
 - [ ] Core view modes: icon sizes, list, compact list, tiles, content, and details/grid
-- [ ] Live type-ahead filtering, sorting, selection, and useful keyboard shortcuts
+- [x] Live case-insensitive filtering by name, path, or type in each pane; sorting controls, type-ahead selection, and expanded keyboard shortcuts remain planned
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
 - [x] Rename files and folders in place with validation and no-overwrite behavior
 - [x] Basic cross-pane move flow with confirmation, destination collision checks, no-overwrite behavior, and cross-volume fallback (automated core tests added; Windows verification pending)
 - [x] Confirmed deletion to the Windows Recycle Bin (subject to Windows/filesystem support)
 - [x] Read-only properties dialog for basic file/folder metadata (folder size intentionally not recursively calculated)
-- [ ] Portable configuration and settings persistence; installer/package path
+- [x] Per-user Inno Setup installer and portable x64/ARM64 CI artifacts; portable settings beside executable remains planned
 
 ## Phase 2 — Navigation and organization depth
 
