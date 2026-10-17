@@ -22,6 +22,7 @@ public static class ZipArchiveCreator
             throw new ArgumentOutOfRangeException(nameof(sourceFiles));
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ancestorPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var plan = new List<(string Name, string Source, long Length)>();
         long total = 0;
@@ -35,6 +36,21 @@ public static class ZipArchiveCreator
             if (length < 0 || length > maxTotalBytes - total)
                 throw new InvalidDataException("Archive source size budget exceeded.");
             if (sourcePaths.Contains(source)) throw new InvalidDataException("Duplicate archive source.");
+            if (ancestorPaths.Contains(name))
+                throw new InvalidDataException("ZIP file entry conflicts with an existing descendant.");
+            var ancestor = name;
+            while (ancestor.Contains('/'))
+            {
+                ancestor = ancestor[..ancestor.LastIndexOf('/')];
+                if (names.Contains(ancestor))
+                    throw new InvalidDataException("ZIP file entry conflicts with an existing parent file.");
+            }
+            ancestor = name;
+            while (ancestor.Contains('/'))
+            {
+                ancestor = ancestor[..ancestor.LastIndexOf('/')];
+                ancestorPaths.Add(ancestor);
+            }
             names.Add(name);
             sourcePaths.Add(source);
             total += length;
