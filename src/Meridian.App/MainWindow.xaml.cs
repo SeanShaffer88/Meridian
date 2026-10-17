@@ -475,6 +475,11 @@ public sealed partial class MainWindow : Window
             return;
         }
         var sources = _activePane.List.SelectedItems.OfType<FileEntry>().ToArray();
+        if (sources.Length == 0)
+        {
+            GlobalStatus.Text = "Select at least one file or folder to archive.";
+            return;
+        }
         var destination = Path.Combine(_activePane.CurrentPath,
             (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
         var formatPicker = new ComboBox { SelectedIndex = 0, MinWidth = 260 };
