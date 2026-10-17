@@ -13,14 +13,18 @@ public static class BatchCopy
         public bool Succeeded => FailedSource is null && !Cancelled;
     }
 
+    public sealed record Progress(int Completed, int Total, string CurrentSource);
+
     public static Result Execute(IEnumerable<string> sourcePaths, string destinationDirectory,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IProgress<Progress>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(sourcePaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
 
         // Materialize once so the same exact set is previewed and executed.
         var sources = sourcePaths.ToArray();
+        if (sources.Length == 0)
+            throw new InvalidOperationException("Batch copy refused: the source collection is empty.");
         var plan = OperationPreview.PreviewCopy(sources, destinationDirectory, cancellationToken);
         if (plan.HasBlockers)
             throw new InvalidOperationException(
@@ -29,6 +33,7 @@ public static class BatchCopy
         var completed = new List<string>();
         foreach (var item in plan.Items)
         {
+            progress?.Report(new Progress(completed.Count, plan.Items.Count, item.Source));
             if (cancellationToken.IsCancellationRequested)
                 return new Result(completed.AsReadOnly(), item.Source, null, Cancelled: true);
 
@@ -37,6 +42,7 @@ public static class BatchCopy
                 // FileOperations rechecks paths and refuses collisions at execution time.
                 var target = FileOperations.CopyItem(item.Source, plan.DestinationDirectory, cancellationToken);
                 completed.Add(target);
+                progress?.Report(new Progress(completed.Count, plan.Items.Count, item.Source));
             }
             catch (OperationCanceledException)
             {
