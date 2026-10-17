@@ -90,6 +90,7 @@ public sealed partial class MainWindow : Window
             if (token.IsCancellationRequested) return;
             pane.Items.Clear(); foreach (var entry in entries) pane.Items.Add(entry);
             SetPaneStatus(pane, $"{entries.Count:N0} items"); GlobalStatus.Text = "Ready · Local-only · No telemetry";
+            if (!_restoringWorkspace) await PersistWorkspaceAsync();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
