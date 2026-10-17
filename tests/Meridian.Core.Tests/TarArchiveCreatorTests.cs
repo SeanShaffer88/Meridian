@@ -29,6 +29,26 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tar.gz")]
+    [InlineData(".tgz")]
+    public async Task RejectsDestinationAsSource(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-self-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var target = Path.Combine(root, "bundle" + extension);
+            await File.WriteAllTextAsync(target, "original");
+            await Assert.ThrowsAsync<IOException>(() => TarArchiveCreator.CreateAsync(target,
+                new Dictionary<string, string> { ["self.txt"] = target }));
+            Assert.Equal("original", await File.ReadAllTextAsync(target));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task RejectsDuplicatePhysicalSourceUnderDifferentEntryNames()
     {
