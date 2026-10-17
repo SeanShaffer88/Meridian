@@ -47,8 +47,7 @@ public static class TarArchiveCatalog
                 if (fileNames.Contains(parent))
                     throw new InvalidDataException("TAR entry conflicts with a parent file.");
             }
-            if (!directory && names.Any(existing => existing.StartsWith(name + "/",
-                StringComparison.OrdinalIgnoreCase)))
+            if (!directory && ancestors.Contains(name))
                 throw new InvalidDataException("TAR file conflicts with existing descendants.");
             if (entries.Count >= maxEntries || entry.Length < 0 || entry.Length > maxTotalBytes - total)
                 throw new InvalidDataException("TAR catalog size or entry limit exceeded.");
