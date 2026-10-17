@@ -356,7 +356,17 @@ public sealed partial class MainWindow : Window
         try
         {
             var entries = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath));
-            GlobalStatus.Text = $"ZIP contains {entries.Count:N0} entries.";
+            var listing = string.Join(Environment.NewLine,
+                entries.Select(entry => (entry.IsDirectory ? "[DIR] " : "[FILE] ") +
+                    entry.Path + " (" + entry.UncompressedBytes.ToString("N0") + " bytes)"));
+            await new ContentDialog
+            {
+                Title = "ZIP contents · " + selected.Name,
+                Content = new TextBox { Text = listing, IsReadOnly = true,
+                    AcceptsReturn = true, MinWidth = 540, Height = 380 },
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
