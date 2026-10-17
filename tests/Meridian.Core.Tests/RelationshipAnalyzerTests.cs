@@ -315,4 +315,37 @@ public class RelationshipAnalyzerTests
         else
             Assert.Single(RelationshipAnalyzer.Analyze(paths));
     }
+
+    [Fact]
+    public void IndexedResultsMatchReferenceWithOverlappingStemAndDirectoryGroups()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-overlap"));
+        var paths = Enumerable.Range(0, 90)
+            .Select(i => Path.Combine(root, $"folder-{i % 6}",
+                $"asset-{i % 10}.{i}"))
+            .ToArray();
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var expected = new List<(string Source, string Related, RelationshipEvidence Evidence)>();
+        for (var i = 0; i < paths.Length; i++)
+        {
+            for (var j = i + 1; j < paths.Length; j++)
+            {
+                var sameStem = comparer.Equals(
+                    Path.GetFileNameWithoutExtension(paths[i]),
+                    Path.GetFileNameWithoutExtension(paths[j]));
+                var sameDirectory = comparer.Equals(
+                    Path.GetDirectoryName(paths[i]), Path.GetDirectoryName(paths[j]));
+                if (sameStem || sameDirectory)
+                    expected.Add((paths[i], paths[j], sameStem
+                        ? RelationshipEvidence.FilenameStem
+                        : RelationshipEvidence.SameDirectory));
+            }
+        }
+
+        var actual = RelationshipAnalyzer.Analyze(paths);
+        Assert.Equal(expected, actual.Select(r => (r.SourcePath, r.RelatedPath, r.Evidence)));
+        Assert.Contains(actual, r => r.Evidence == RelationshipEvidence.FilenameStem);
+        Assert.Contains(actual, r => r.Evidence == RelationshipEvidence.SameDirectory);
+    }
 }
