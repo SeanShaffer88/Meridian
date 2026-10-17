@@ -54,6 +54,28 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task EmptyFileProgressCompletesOnlyAfterPublication()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-empty-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "empty.txt");
+            await File.WriteAllBytesAsync(source, Array.Empty<byte>());
+            var target = Path.Combine(root, "result.zip");
+            var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(updates.Add);
+            await ZipArchiveCreator.CreateAsync(target,
+                new Dictionary<string, string> { ["empty.txt"] = source }, progress: progress);
+            Assert.Equal(2, updates.Count);
+            Assert.Equal((0L, 0L), updates[0]);
+            Assert.Equal((0L, 0L), updates[1]);
+            Assert.Single(ZipArchiveCatalog.List(target));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task LargeSourceProgressIsThrottled()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-zip-throttle-" + Guid.NewGuid().ToString("N"));
