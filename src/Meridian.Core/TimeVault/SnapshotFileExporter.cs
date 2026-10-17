@@ -21,6 +21,8 @@ public sealed class SnapshotFileExporter
             throw new ArgumentException("Destination must use a local drive letter.", nameof(destinationFile));
         if (destinationFile[3..].Split('\\').Any(part => part is "." or ".."))
             throw new ArgumentException("Destination cannot contain traversal components.", nameof(destinationFile));
+        if (destinationFile[3..].Contains("\\\\", StringComparison.Ordinal))
+            throw new ArgumentException("Destination cannot contain empty path components.", nameof(destinationFile));
         var destination = Path.GetFullPath(destinationFile);
         // Restrict initial exports to ordinary local drive-letter destinations.
         if (destination.Length < 3 || !char.IsLetter(destination[0]) ||
