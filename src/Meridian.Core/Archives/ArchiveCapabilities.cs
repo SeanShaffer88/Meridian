@@ -23,7 +23,8 @@ public static class ArchiveCapabilities
     public static Format? ForPath(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var extension = Path.GetExtension(path);
+        var extension = path.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)
+            ? ".tgz" : Path.GetExtension(path);
         return Supported.FirstOrDefault(item =>
             string.Equals(item.Extension, extension, StringComparison.OrdinalIgnoreCase));
     }
