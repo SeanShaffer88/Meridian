@@ -50,6 +50,8 @@ public static class TarArchiveCatalog
                 throw new InvalidDataException("TAR file conflicts with existing descendants.");
             if (entries.Count >= maxEntries || entry.Length < 0 || entry.Length > maxTotalBytes - total)
                 throw new InvalidDataException("TAR catalog size or entry limit exceeded.");
+            if (directory && entry.Length != 0)
+                throw new InvalidDataException("Directory TAR entry has a payload.");
             total += entry.Length;
             entries.Add(new Entry(name, entry.Length, directory));
         }
