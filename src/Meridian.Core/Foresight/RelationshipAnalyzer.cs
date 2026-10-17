@@ -46,31 +46,58 @@ public static class RelationshipAnalyzer
             items.Add(full);
         }
 
+        // Index candidates by stem and directory instead of comparing every input pair.
+        // Lists retain input order, preserving the previous deterministic output order.
+        var byStem = new Dictionary<string, List<int>>(comparer);
+        var byDirectory = new Dictionary<string, List<int>>(comparer);
+        for (var i = 0; i < items.Count; i++)
+        {
+            var stem = Path.GetFileNameWithoutExtension(items[i]);
+            if (stem.Length > 0)
+            {
+                if (!byStem.TryGetValue(stem, out var stemIndices))
+                    byStem[stem] = stemIndices = new List<int>();
+                stemIndices.Add(i);
+            }
+
+            var directory = Path.GetDirectoryName(items[i]) ?? string.Empty;
+            if (!byDirectory.TryGetValue(directory, out var directoryIndices))
+                byDirectory[directory] = directoryIndices = new List<int>();
+            directoryIndices.Add(i);
+        }
+
         var result = new List<FileRelationship>();
         for (var i = 0; i < items.Count; i++)
         {
-            for (var j = i + 1; j < items.Count; j++)
+            var stem = Path.GetFileNameWithoutExtension(items[i]);
+            var stemIndices = stem.Length > 0 ? byStem[stem] : null;
+            var directoryIndices = byDirectory[Path.GetDirectoryName(items[i]) ?? string.Empty];
+            var stemPosition = stemIndices is null ? 0 : stemIndices.BinarySearch(i) + 1;
+            var directoryPosition = directoryIndices.BinarySearch(i) + 1;
+
+            // Merge two ascending candidate lists. A matching stem wins over
+            // same-directory evidence when a pair qualifies for both.
+            while ((stemIndices is not null && stemPosition < stemIndices.Count) ||
+                   directoryPosition < directoryIndices.Count)
             {
-                var a = items[i];
-                var b = items[j];
-                var aStem = Path.GetFileNameWithoutExtension(a);
-                var bStem = Path.GetFileNameWithoutExtension(b);
-                if (aStem.Length > 0 && comparer.Equals(aStem, bStem))
-                {
-                    if (result.Count == maxRelationships)
-                        throw new InvalidOperationException("Foresight relationship limit exceeded; narrow the input set.");
-                    result.Add(new FileRelationship(a, b,
+                var nextStem = stemIndices is not null && stemPosition < stemIndices.Count
+                    ? stemIndices[stemPosition] : int.MaxValue;
+                var nextDirectory = directoryPosition < directoryIndices.Count
+                    ? directoryIndices[directoryPosition] : int.MaxValue;
+                var matchingStem = nextStem <= nextDirectory;
+                var j = Math.Min(nextStem, nextDirectory);
+                if (nextStem == j) stemPosition++;
+                if (nextDirectory == j) directoryPosition++;
+
+                if (result.Count == maxRelationships)
+                    throw new InvalidOperationException("Foresight relationship limit exceeded; narrow the input set.");
+                result.Add(matchingStem
+                    ? new FileRelationship(items[i], items[j],
                         "Matching filename stems; this does not establish a dependency.",
-                        RelationshipEvidence.FilenameStem));
-                }
-                else if (comparer.Equals(Path.GetDirectoryName(a), Path.GetDirectoryName(b)))
-                {
-                    if (result.Count == maxRelationships)
-                        throw new InvalidOperationException("Foresight relationship limit exceeded; narrow the input set.");
-                    result.Add(new FileRelationship(a, b,
+                        RelationshipEvidence.FilenameStem)
+                    : new FileRelationship(items[i], items[j],
                         "Files share a directory; this does not establish a dependency.",
                         RelationshipEvidence.SameDirectory));
-                }
             }
         }
         return Array.AsReadOnly(result.ToArray());
