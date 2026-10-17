@@ -23,8 +23,7 @@ public static class ArchiveSourcePlanner
             }
             if (!Directory.Exists(path)) throw new FileNotFoundException("Missing archive source.", path);
             var root = Path.GetFullPath(path);
-            if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Linked archive root rejected.");
+            RejectLinkedAncestors(root, cancellationToken);
             if (string.Equals(Path.TrimEndingDirectorySeparator(root),
                 Path.TrimEndingDirectorySeparator(Path.GetPathRoot(root)!), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Select folders within a drive, not the drive root itself.");
@@ -54,6 +53,20 @@ public static class ArchiveSourcePlanner
         }
         if (files.Count == 0) throw new InvalidDataException("No files selected.");
         return files;
+
+        static void RejectLinkedAncestors(string path, CancellationToken cancellationToken)
+        {
+            var ancestor = path;
+            while (!string.IsNullOrEmpty(ancestor))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((File.GetAttributes(ancestor) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Linked archive source ancestor rejected.");
+                var next = Path.GetDirectoryName(ancestor);
+                if (string.IsNullOrEmpty(next) || next == ancestor) break;
+                ancestor = next;
+            }
+        }
 
         void Add(string name, string path)
         {
