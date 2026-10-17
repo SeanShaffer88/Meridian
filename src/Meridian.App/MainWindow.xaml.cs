@@ -283,7 +283,7 @@ public sealed partial class MainWindow : Window
             var renamedTo = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
             var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.OrdinalIgnoreCase)
+            GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal)
                 ? "Name unchanged."
                 : $"Renamed · {Path.GetFileName(renamedTo)}";
         }
