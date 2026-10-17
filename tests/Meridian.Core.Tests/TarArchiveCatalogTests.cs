@@ -58,6 +58,31 @@ public sealed class TarArchiveCatalogTests
     }
 
     [Fact]
+    public void RejectsFileAfterDescendant()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "conflict.tar");
+            using (var output = File.Create(archive))
+            using (var writer = new TarWriter(output))
+            {
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "parent/child")
+                {
+                    DataStream = new MemoryStream(new byte[] { 1 })
+                });
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "parent")
+                {
+                    DataStream = new MemoryStream(new byte[] { 2 })
+                });
+            }
+            Assert.Throws<InvalidDataException>(() => TarArchiveCatalog.List(archive));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void ListsRegularFilesInTar()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-tar-" + Guid.NewGuid().ToString("N"));
