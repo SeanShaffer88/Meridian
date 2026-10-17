@@ -37,6 +37,17 @@ public static class TarArchiveCatalog
                 throw new InvalidDataException("TAR contains unsupported link or special entry.");
             var name = ArchiveEntryPathPolicy.Normalize(entry.Name.TrimEnd('/'));
             if (!names.Add(name)) throw new InvalidDataException("Duplicate TAR entry.");
+            var parent = name;
+            while (parent.Contains('/'))
+            {
+                parent = parent[..parent.LastIndexOf('/')];
+                if (entries.Any(existing => !existing.IsDirectory &&
+                    string.Equals(existing.Path, parent, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("TAR entry conflicts with a parent file.");
+            }
+            if (!directory && entries.Any(existing => existing.Path.StartsWith(name + "/",
+                StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("TAR file conflicts with existing descendants.");
             if (entries.Count >= maxEntries || entry.Length < 0 || entry.Length > maxTotalBytes - total)
                 throw new InvalidDataException("TAR catalog size or entry limit exceeded.");
             total += entry.Length;
