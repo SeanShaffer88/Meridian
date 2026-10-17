@@ -155,4 +155,44 @@ public class RelationshipAnalyzerTests
         Assert.Throws<OperationCanceledException>(() =>
             RelationshipAnalyzer.Analyze(Paths(), cancellationToken: cancellation.Token));
     }
+
+    [Fact]
+    public void RejectsInvalidTimeBudgets()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RelationshipAnalyzer.Analyze(Array.Empty<string>(), timeBudget: TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RelationshipAnalyzer.Analyze(Array.Empty<string>(), timeBudget: TimeSpan.FromMinutes(6)));
+    }
+
+    [Fact]
+    public void GenerousTimeBudgetPreservesResults()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-budget"));
+        var paths = new[] { Path.Combine(root, "a.txt"), Path.Combine(root, "b.txt") };
+        Assert.Single(RelationshipAnalyzer.Analyze(paths, timeBudget: TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public void ExpiredTimeBudgetStopsAnalysis()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-budget"));
+        IEnumerable<string> SlowPaths()
+        {
+            yield return Path.Combine(root, "a.txt");
+            Thread.Sleep(50);
+            yield return Path.Combine(root, "b.txt");
+        }
+        Assert.Throws<TimeoutException>(() =>
+            RelationshipAnalyzer.Analyze(SlowPaths(), timeBudget: TimeSpan.FromMilliseconds(1)));
+    }
+
+    [Fact]
+    public void MaximumSparseInputRemainsBounded()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-sparse"));
+        var paths = Enumerable.Range(0, 10000)
+            .Select(i => Path.Combine(root, $"dir-{i}", $"file-{i}.txt"));
+        Assert.Empty(RelationshipAnalyzer.Analyze(paths, maxPaths: 10000, timeBudget: TimeSpan.FromMinutes(1)));
+    }
 }
