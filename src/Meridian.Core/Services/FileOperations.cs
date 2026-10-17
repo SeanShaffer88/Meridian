@@ -17,9 +17,12 @@ public static class FileOperations
         if (Directory.Exists(source))
         {
             var relativeDestination = Path.GetRelativePath(source, destinationRoot);
-            var isDescendant = !Path.IsPathRooted(relativeDestination) && relativeDestination != "." && relativeDestination != ".." &&
-                !relativeDestination.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-            if (isDescendant) throw new IOException("A folder cannot be copied into itself or one of its descendants.");
+            var isSelfOrDescendant = !Path.IsPathRooted(relativeDestination) &&
+                (relativeDestination == "." ||
+                 (relativeDestination != ".." &&
+                  !relativeDestination.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)));
+            if (isSelfOrDescendant)
+                throw new IOException("A folder cannot be copied into itself or one of its descendants.");
         }
         var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(source));
         var finalPath = Path.Combine(destinationRoot, name);
