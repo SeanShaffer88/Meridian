@@ -25,3 +25,15 @@ The README should become a visual tour of real, implemented features as Windows 
 ## Verification record
 
 For each image, record in its pull request or commit message: commit SHA, Windows build/architecture, capture date, and a brief description of the action tested. If a screenshot cannot be captured in a verified Windows environment, leave its gallery entry pending rather than substituting a conceptual image.
+
+## Importing a verified capture
+
+On the Windows machine where Meridian was built and tested, capture a PNG of the **real running application** and review it for private data. From the repository root:
+
+```powershell
+./scripts/Import-FeatureScreenshot.ps1 -Feature dual-pane-workspace -Source ./capture.png -VerifiedCommit <full-40-character-commit-sha> -ConfirmedRealCapture
+```
+
+The importer checks the PNG signature and dimensions, confirms the commit exists in the local Git repository, and refuses to overwrite a prior capture. **It cannot independently prove** that the image depicts Meridian or that the feature worked; the reviewer must verify those facts. The screenshot is copied to `docs/images/screenshots/`; it is not automatically published in the README. Add an accessible Markdown image and caption only after review.
+
+Do not copy the literal angle-bracket placeholder in the example; replace it with the verified build commit.
