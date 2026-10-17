@@ -34,6 +34,7 @@ public static class ZipArchiveCreator
             var length = new FileInfo(source).Length;
             if (length < 0 || length > maxTotalBytes - total)
                 throw new InvalidDataException("Archive source size budget exceeded.");
+            if (!sourcePaths.Add(source)) throw new InvalidDataException("Duplicate archive source.");
             total += length;
             plan.Add((name, source, length));
         }
