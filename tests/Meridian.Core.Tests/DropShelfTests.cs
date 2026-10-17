@@ -5,6 +5,28 @@ namespace Meridian.Core.Tests;
 public sealed class DropShelfTests
 {
     [Fact]
+    public void RemoveMissing_PrunesOnlyStaleReferences()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-shelf-prune-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var existing = Path.Combine(root, "existing.txt");
+            var missing = Path.Combine(root, "missing.txt");
+            File.WriteAllText(existing, "preserve");
+            var shelf = new DropShelf();
+            shelf.Add(missing);
+            shelf.Add(existing);
+
+            Assert.Equal(1, shelf.RemoveMissing());
+            Assert.Equal(Path.GetFullPath(existing), Assert.Single(shelf.Paths));
+            Assert.Equal("preserve", File.ReadAllText(existing));
+            Assert.Equal(0, shelf.RemoveMissing());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void Add_DeduplicatesNormalizedPathsIgnoringCase()
     {
         var shelf = new DropShelf();
