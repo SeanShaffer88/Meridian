@@ -428,7 +428,7 @@ public sealed partial class MainWindow : Window
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         _zipExtractionCancellation = new CancellationTokenSource();
-        GlobalStatus.Text = "Extracting ZIP · " + selected.Name;
+        GlobalStatus.Text = "Extracting archive · " + selected.Name;
         var token = _zipExtractionCancellation.Token;
         var progress = new Progress<int>(percent =>
             GlobalStatus.Text = "Extracting ZIP · " + percent + "%");
@@ -442,11 +442,11 @@ public sealed partial class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            GlobalStatus.Text = "ZIP extraction cancelled.";
+            GlobalStatus.Text = "Archive extraction cancelled.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            GlobalStatus.Text = "ZIP extraction failed · " + ex.Message;
+            GlobalStatus.Text = "Archive extraction failed · " + ex.Message;
         }
         finally
         {
