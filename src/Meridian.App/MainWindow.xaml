@@ -32,6 +32,7 @@
       <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
       <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
+      <AppBarButton Icon="View" Label="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
       <AppBarButton Icon="Delete" Label="Delete" Click="DeleteSelected_Click" />
       <AppBarSeparator />
       <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" />
