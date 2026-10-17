@@ -213,6 +213,8 @@ public sealed partial class MainWindow : Window
     }
 
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
+    private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
+    private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
     private void LeftItems_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
     private void RightItems_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
     private async void LeftUp_Click(object sender, RoutedEventArgs e) => await NavigateUpAsync(_left);
