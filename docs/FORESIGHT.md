@@ -10,6 +10,8 @@ Foresight is the proposed intelligence and consequence-analysis layer for Meridi
 
 **Important:** matching names and locations are weak correlations, not verified project dependencies. A zero-result analysis is not proof that an operation is safe.
 
+The `ForesightImpactAnalyzer.Preview(targetPath, contextPaths)` prototype also returns only hints associated with a proposed target and explicitly disclaims verified dependency coverage. It neither opens files nor authorizes an operation.
+
 ## Proposed architecture
 
 1. **Evidence adapters:** opt-in, bounded filesystem metadata, known shortcut references, project manifests and format-specific parsers. Each adapter has an explicit capability and privacy budget.
@@ -24,7 +26,8 @@ Foresight is the proposed intelligence and consequence-analysis layer for Meridi
 - [x] Read-only relationship hint model and unit tests committed (not yet run on Windows).
 - [ ] Make the analysis cancellation-aware and efficient on large input sets.
 - [ ] Read-only Windows shortcut and supported project-manifest evidence adapters, with adversarial fixtures.
-- [ ] Explainable impact report and explicit uncertainty labels.
+- [x] Initial metadata-only target impact preview and explicit uncertainty labels committed (not yet Windows-tested).
+- [ ] Verified dependency evidence and broader impact reporting.
 - [ ] UI preview that never implicitly initiates an operation.
 - [ ] Optional local AI interpretation behind an opt-in switch, privacy review and offline tests.
 - [ ] Verified operation journal, recovery drills and Windows x64/ARM64 security gates before any Foresight-guided mutation.
