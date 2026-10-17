@@ -68,4 +68,28 @@ public sealed class BatchCopyTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+    [Fact]
+    public void Execute_ReportsCompletedItemCounts()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-progress-{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "one.txt");
+        var destination = Path.Combine(root, "target");
+        Directory.CreateDirectory(destination);
+        try
+        {
+            File.WriteAllText(source, "one");
+            var updates = new List<BatchCopy.Progress>();
+            var progress = new SynchronousProgress<BatchCopy.Progress>(updates.Add);
+            var result = BatchCopy.Execute([source], destination, progress: progress);
+            Assert.True(result.Succeeded);
+            Assert.Contains(updates, x => x.Completed == 0 && x.Total == 1);
+            Assert.Contains(updates, x => x.Completed == 1 && x.Total == 1);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private sealed class SynchronousProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
 }
