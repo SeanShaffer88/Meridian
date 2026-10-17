@@ -785,7 +785,10 @@ public sealed partial class MainWindow : Window
             {
                 GlobalStatus.Text = "Copying Drop Shelf items…";
                 var progress = new Progress<BatchCopy.Progress>(state =>
-                    GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}");
+                {
+                    if (_batchCancellation == cancellation)
+                        GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}";
+                });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
                 await NavigateAsync(_activePane, destination, addHistory: false);
                 GlobalStatus.Text = result.Succeeded
@@ -795,8 +798,8 @@ public sealed partial class MainWindow : Window
             }
             finally
             {
-                CancelShelfButton.IsEnabled = false;
                 _batchCancellation = null;
+                CancelShelfButton.IsEnabled = false;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
