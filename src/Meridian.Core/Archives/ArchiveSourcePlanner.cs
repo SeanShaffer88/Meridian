@@ -17,10 +17,23 @@ public static class ArchiveSourcePlanner
             if (!Directory.Exists(path)) throw new FileNotFoundException("Missing archive source.", path);
             var root = Path.GetFullPath(path);
             var prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(root));
-            foreach (var child in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            var pending = new Stack<string>();
+            pending.Push(root);
+            while (pending.Count > 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Add(prefix + "/" + Path.GetRelativePath(root, child).Replace('\\', '/'), child);
+                var directory = pending.Pop();
+                foreach (var child in Directory.EnumerateFileSystemEntries(directory))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var attrs = File.GetAttributes(child);
+                    if ((attrs & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("Linked archive source rejected.");
+                    if ((attrs & FileAttributes.Directory) != 0)
+                        pending.Push(child);
+                    else
+                        Add(prefix + "/" + Path.GetRelativePath(root, child).Replace('\\', '/'), child);
+                }
             }
         }
         if (files.Count == 0) throw new InvalidDataException("No files selected.");
