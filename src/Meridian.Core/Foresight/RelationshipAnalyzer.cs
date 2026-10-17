@@ -48,7 +48,7 @@ public static class RelationshipAnalyzer
         var unique = new HashSet<string>(comparer);
         foreach (var path in paths)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            CheckBudget();
             if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
                 throw new ArgumentException("Foresight requires absolute paths.", nameof(paths));
             if (items.Count >= maxPaths)
@@ -115,6 +115,7 @@ public static class RelationshipAnalyzer
                         RelationshipEvidence.SameDirectory));
             }
         }
+        CheckBudget();
         return Array.AsReadOnly(result.ToArray());
     }
 }
