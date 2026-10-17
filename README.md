@@ -2,7 +2,7 @@
 
 # ◈ Meridian
 
-### Your files are more than a list.
+### Beyond File Management.
 
 **A new kind of workspace for exploring, understanding, and organizing what lives on your computer.**
 
