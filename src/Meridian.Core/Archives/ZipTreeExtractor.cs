@@ -73,7 +73,7 @@ public static class ZipTreeExtractor
                 if (item.IsDirectory)
                 {
                     Directory.CreateDirectory(outputPath);
-                    progress?.Report(Math.Min(99, (i + 1) * 100 / catalog.Count));
+                    progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
                     continue;
                 }
                 var containing = Path.GetDirectoryName(outputPath)!;
