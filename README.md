@@ -23,9 +23,11 @@ Meridian's long-term goals—including advanced panes and tabs, a transfer queue
 
 Flexible 1–4 pane layouts, tabs, workspace presets, folder tree and Miller Columns, advanced search, batch rename, previews, archive support, checksums, duplicate discovery, file comparison, extension points, settings, and packaged releases.
 
-## Requirements
+## Platform support
 
-- Windows 11 x64 is the initial evaluation target.
+- **Target OS:** Windows 11 only (minimum supported build: 22000).
+- **Supported architectures:** x64 and ARM64, with each architecture built and tested separately in CI.
+- Windows 10 is not a supported target. ARM64 compatibility must be validated on Windows 11 ARM64 hardware or an appropriate test environment before release.
 - .NET 10 SDK and Visual Studio with the WinUI application development workload.
 - Network access for the first NuGet restore unless dependencies are cached.
 
