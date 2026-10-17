@@ -38,3 +38,7 @@ The `DependencyImpactAnalyzer` additionally accepts explicit, provenance-bearing
 ## Product rule
 
 **Foresight can recommend; it cannot authorize.** A human-approved plan is still revalidated by the non-AI execution layer. Never call a heuristic prediction a verified guarantee.
+
+## Experimental JSON reference extraction
+
+The branch includes `JsonManifestReferenceReader`, an explicitly invoked, read-only parser that inspects only named JSON string properties. It limits file size, JSON depth and extracted reference count, and rejects reparse points in the manifest path's existing ancestors. It does **not** verify that a property is a real dependency, and its path checks are not race-free. No automatic directory scan or AI model is involved.
