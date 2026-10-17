@@ -21,13 +21,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - name: Restore core tests
-        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj
+        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --locked-mode
       - name: Build core tests
         run: dotnet build tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --no-restore --configuration Release
       - name: Run core tests
-        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --no-build --configuration Release --logger trx
+        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --no-build --no-restore --configuration Release --logger trx
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -37,14 +37,23 @@ jobs:
           if-no-files-found: ignore
 
   windows-app:
+    name: Validate Windows app (${{ matrix.architecture }})
     runs-on: windows-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            runtime: win-x64
+          - architecture: ARM64
+            runtime: win-arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
       - name: Restore Windows app
-        run: dotnet restore src/Meridian.App/Meridian.App.csproj -p:RuntimeIdentifier=win-x64
-      - name: Build Windows app x64
-        run: dotnet build src/Meridian.App/Meridian.App.csproj --no-restore --configuration Release -p:RuntimeIdentifier=win-x64 -p:Platform=x64
+        run: dotnet restore src/Meridian.App/Meridian.App.csproj --locked-mode -p:RuntimeIdentifier=${{ matrix.runtime }} -p:Platform=${{ matrix.architecture }} -p:SelfContained=true
+      - name: Build Windows app
+        run: dotnet build src/Meridian.App/Meridian.App.csproj --no-restore --configuration Release -p:RuntimeIdentifier=${{ matrix.runtime }} -p:Platform=${{ matrix.architecture }} -p:SelfContained=true

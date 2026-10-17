@@ -39,6 +39,8 @@ The [workflow](.github/workflows/windows-ci.yml) publishes first, then invokes I
 
 CI uploads TRX results and architecture-specific installer/portable artifacts for 14 days. It runs on PRs targeting main, pushes to main and manual dispatch; a push to another branch alone is not a separate push-triggered run. Inspect completed jobs for the exact application commit.
 
+The separate [Windows validation workflow](.github/workflows/windows-validation.yml) runs on pushes to `feature/timevault-foundation` and manual dispatch. It uses the same pinned SDK and locked dependency restores, runs core tests and builds both x64 and ARM64; it does not package installers or verify runtime startup. Both workflows request only read access to repository contents.
+
 The `meridian-distribution-win-x64` and `meridian-distribution-win-arm64` artifacts each contain the installer, a portable ZIP and `SHA256SUMS-win-<architecture>.txt`. CI creates the ZIP from the complete publish folder, including hidden files, and verifies both file hashes before upload. Keep the extracted distribution files together and run `./scripts/verify-checksums.ps1 -ManifestPath <distribution-folder>/SHA256SUMS-win-x64.txt` (or `win-arm64`) before use. The verifier rejects malformed/duplicate entries, missing files and mismatched bytes. Checksums establish agreement with the supplied manifest, not publisher authenticity; signing and trusted distribution remain separate requirements. `./scripts/test-packaging.ps1` exercises packaging and rejection paths with disposable fixtures retained under ignored `TestResults/`.
 
 ## Documentation and review
