@@ -12,7 +12,7 @@ Extract the artifact before use. Keep the entire portable folder together, inclu
 
 Enter a directory path and press Enter in either pane. Double-click a folder to enter it; double-click a file invokes its Windows shell association and can execute applications or scripts. Use **Preview** for the separate read-only preview path. Back, Forward, Up and Refresh operate on folder listings. Filters inspect only the already-loaded listing; they are not a whole-drive search. Each pane can sort by name, type, size or modified date in either direction.
 
-Paired workspace tabs keep two folder locations together. Bookmarks store named locations. The lists allow extended selection, but most everyday actions operate on the selected item; do not assume every toolbar command processes all highlighted items. Archive creation explicitly reads the active pane's selection.
+Paired workspace tabs keep two folder locations together. Bookmarks store named locations. The preview allows up to 128 tabs and 512 bookmarks. Saved state is limited to 1 MiB; malformed, excessive or invalid entries are ignored as a whole on restoration, while a failed save leaves the previous file in place and reports a warning. The lists allow extended selection, but most everyday actions operate on the selected item; do not assume every toolbar command processes all highlighted items. Archive creation explicitly reads the active pane's selection.
 
 | Shortcut | Action |
 | --- | --- |

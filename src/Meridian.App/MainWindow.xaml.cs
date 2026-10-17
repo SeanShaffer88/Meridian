@@ -88,19 +88,21 @@ public sealed partial class MainWindow : Window
         await PersistWorkspaceAsync();
     }
 
-    private async Task PersistWorkspaceAsync()
+    private async Task<bool> PersistWorkspaceAsync()
     {
-        if (_restoringWorkspace) return;
+        if (_restoringWorkspace) return false;
         try
         {
             StoreCurrentWorkspaceTab();
             var tabs = _workspaceTabs.Select(tab => new WorkspaceTabSnapshot(tab.Name, tab.LeftPath, tab.RightPath)).ToArray();
             await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(), tabs, _activeWorkspaceTabIndex));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             // Workspace persistence is a convenience; file browsing must continue if it fails.
             GlobalStatus.Text = "Workspace could not be saved · " + ex.Message;
+            return false;
         }
     }
 
@@ -153,6 +155,11 @@ public sealed partial class MainWindow : Window
 
     private async void AddWorkspaceTab_Click(object sender, RoutedEventArgs e)
     {
+        if (_workspaceTabs.Count >= WorkspaceStore.MaximumTabs)
+        {
+            GlobalStatus.Text = $"Workspace tab limit reached · {WorkspaceStore.MaximumTabs}";
+            return;
+        }
         if (_switchingWorkspaceTab) return;
         StoreCurrentWorkspaceTab();
         var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
@@ -161,8 +168,7 @@ public sealed partial class MainWindow : Window
         _workspaceTabs.Add(tab);
         _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
         RefreshWorkspaceTabs();
-        await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Opened {tab.Name}";
+        if (await PersistWorkspaceAsync()) GlobalStatus.Text = $"Opened {tab.Name}";
     }
 
     private async void WorkspaceTab_Click(object sender, RoutedEventArgs e)
@@ -221,12 +227,16 @@ public sealed partial class MainWindow : Window
         }
         tab.LeftPath = _left.CurrentPath;
         tab.RightPath = _right.CurrentPath;
-        await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Switched to {tab.Name}";
+        if (await PersistWorkspaceAsync()) GlobalStatus.Text = $"Switched to {tab.Name}";
     }
 
     private async Task AddBookmarkAsync()
     {
+        if (_bookmarks.Count >= WorkspaceStore.MaximumBookmarks)
+        {
+            GlobalStatus.Text = $"Bookmark limit reached · {WorkspaceStore.MaximumBookmarks}";
+            return;
+        }
         var path = _activePane.CurrentPath;
         if (string.IsNullOrWhiteSpace(path)) return;
         if (_bookmarks.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)))
@@ -239,8 +249,7 @@ public sealed partial class MainWindow : Window
         var name = Path.GetFileName(trimmed);
         if (string.IsNullOrWhiteSpace(name)) name = path;
         _bookmarks.Add(new BookmarkSnapshot(name, path));
-        await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Bookmarked · {name}";
+        if (await PersistWorkspaceAsync()) GlobalStatus.Text = $"Bookmarked · {name}";
     }
 
     private async void AddBookmark_Click(object sender, RoutedEventArgs e) => await AddBookmarkAsync();
@@ -255,8 +264,7 @@ public sealed partial class MainWindow : Window
 
         _bookmarks.Remove(selected);
         BookmarksBox.SelectedItem = null;
-        await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Removed bookmark · {selected.Name}";
+        if (await PersistWorkspaceAsync()) GlobalStatus.Text = $"Removed bookmark · {selected.Name}";
     }
 
     private async void BookmarksBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

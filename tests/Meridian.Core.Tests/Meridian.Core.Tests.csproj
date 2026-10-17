@@ -15,4 +15,5 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup><ProjectReference Include="..\..\src\Meridian.Core\Meridian.Core.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="..\..\src\Meridian.App\Services\WorkspaceStore.cs" Link="AppServices\WorkspaceStore.cs" /></ItemGroup>
 </Project>
