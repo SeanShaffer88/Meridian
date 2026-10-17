@@ -99,6 +99,7 @@ public static class TarArchiveCreator
                         {
                             DataStream = cancellableInput
                         });
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (input.Length != item.Length || input.Position != item.Length)
                             throw new InvalidDataException("TAR source file changed or was not fully consumed during creation.");
                     }
