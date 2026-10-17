@@ -449,6 +449,7 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _zipCreationBusy;
+    private CancellationTokenSource? _zipCreationCancellation;
 
     private async void CreateZip_Click(object sender, RoutedEventArgs e)
     {
@@ -473,11 +474,13 @@ public sealed partial class MainWindow : Window
         };
         if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
         _zipCreationBusy = true;
+        _zipCreationCancellation = new CancellationTokenSource();
         try
         {
             GlobalStatus.Text = "Creating ZIP · " + selected.Name;
             await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
-                destination, new Dictionary<string, string> { [selected.Name] = selected.FullPath }));
+                destination, new Dictionary<string, string> { [selected.Name] = selected.FullPath },
+                cancellationToken: _zipCreationCancellation.Token));
             GlobalStatus.Text = "ZIP created · " + destination;
             await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
         }
@@ -485,7 +488,12 @@ public sealed partial class MainWindow : Window
         {
             GlobalStatus.Text = "ZIP creation failed · " + ex.Message;
         }
-        finally { _zipCreationBusy = false; }
+        finally
+        {
+            _zipCreationCancellation?.Dispose();
+            _zipCreationCancellation = null;
+            _zipCreationBusy = false;
+        }
     }
 
     private bool _previewDialogOpen;
