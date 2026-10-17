@@ -14,6 +14,9 @@ public static class ArchiveSourcePlanner
         {
             if (files.Count >= 10000) throw new InvalidDataException("Archive entry count limit exceeded.");
             cancellationToken.ThrowIfCancellationRequested();
+            ArgumentException.ThrowIfNullOrWhiteSpace(path);
+            if (!Path.IsPathFullyQualified(path))
+                throw new ArgumentException("Archive sources must be absolute paths.");
             if (File.Exists(path))
             {
                 if (!Path.IsPathFullyQualified(path))
