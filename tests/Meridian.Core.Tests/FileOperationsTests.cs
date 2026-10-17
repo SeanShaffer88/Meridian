@@ -5,6 +5,53 @@ namespace Meridian.Core.Tests;
 public sealed class FileOperationsTests
 {
     [Fact]
+    public void RenameItem_RenamesFileWithoutChangingContents()
+    {
+        using var temp = new TemporaryDirectory();
+        var parent = Directory.CreateDirectory(Path.Combine(temp.Path, "parent")).FullName;
+        var source = Path.Combine(parent, "before.txt");
+        File.WriteAllText(source, "keep this");
+
+        var result = FileOperations.RenameItem(source, "after.txt");
+
+        Assert.Equal(Path.Combine(parent, "after.txt"), result);
+        Assert.False(File.Exists(source));
+        Assert.Equal("keep this", File.ReadAllText(result));
+    }
+
+    [Fact]
+    public void RenameItem_RefusesToOverwriteExistingItem()
+    {
+        using var temp = new TemporaryDirectory();
+        var parent = Directory.CreateDirectory(Path.Combine(temp.Path, "parent")).FullName;
+        var source = Path.Combine(parent, "before.txt");
+        var existing = Path.Combine(parent, "after.txt");
+        File.WriteAllText(source, "source");
+        File.WriteAllText(existing, "destination");
+
+        Assert.Throws<IOException>(() => FileOperations.RenameItem(source, "after.txt"));
+        Assert.Equal("source", File.ReadAllText(source));
+        Assert.Equal("destination", File.ReadAllText(existing));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("folder\\name")]
+    [InlineData(" folder ")]
+    public void RenameItem_RejectsInvalidName(string newName)
+    {
+        using var temp = new TemporaryDirectory();
+        var parent = Directory.CreateDirectory(Path.Combine(temp.Path, "parent")).FullName;
+        var source = Path.Combine(parent, "before.txt");
+        File.WriteAllText(source, "keep");
+
+        Assert.Throws<ArgumentException>(() => FileOperations.RenameItem(source, newName));
+        Assert.True(File.Exists(source));
+    }
+
+    [Fact]
     public void CopyItem_CopiesFileAndPreservesContents()
     {
         using var temp = new TemporaryDirectory();
