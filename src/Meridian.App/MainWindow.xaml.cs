@@ -454,12 +454,12 @@ public sealed partial class MainWindow : Window
     private async void CreateZip_Click(object sender, RoutedEventArgs e)
     {
         if (_zipCreationBusy || _zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
-        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
+        if (_activePane.List.SelectedItem is not FileEntry selected)
         {
-            GlobalStatus.Text = "Select a regular file to archive.";
+            GlobalStatus.Text = "Select files or folders to archive.";
             return;
         }
-        var sources = _activePane.List.SelectedItems.OfType<FileEntry>().Where(x => !x.IsDirectory).ToArray();
+        var sources = _activePane.List.SelectedItems.OfType<FileEntry>().ToArray();
         var destination = Path.Combine(_activePane.CurrentPath,
             (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
         var confirmation = new ContentDialog
@@ -480,8 +480,8 @@ public sealed partial class MainWindow : Window
         {
             GlobalStatus.Text = "Creating ZIP · " + selected.Name;
             await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
-                destination, sources.ToDictionary(entry => entry.Name, entry => entry.FullPath,
-                    StringComparer.OrdinalIgnoreCase),
+                destination, Meridian.Core.Archives.ArchiveSourcePlanner.Plan(
+                    sources.Select(entry => entry.FullPath), _zipCreationCancellation.Token),
                 cancellationToken: _zipCreationCancellation.Token));
             GlobalStatus.Text = "ZIP created · " + destination;
             await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
