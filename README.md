@@ -230,11 +230,22 @@ For implementation details and limitations, see the [roadmap](docs/ROADMAP.md), 
 
 ## Feature screenshots
 
-As Meridian's features become usable and **verified in a running Windows build**, this README will include genuine screenshots of the interface—not mockups presented as completed functionality.
+Meridian's feature gallery will show **real captures from verified Windows builds**, never conceptual mockups presented as working functionality. Screenshots are added individually as features become demonstrable and pass the relevant verification gates.
 
-The screenshot gallery will cover the dual-pane workspace, Folder DNA, Drop Shelf, Operation Simulator, Universal Viewer (including video playback), TimeVault and subsequent tools as each reaches a demonstrable milestone.
+| Feature | What the screenshot should demonstrate | Capture status |
+| --- | --- | --- |
+| Dual-pane workspace | Both file panes, tabs, navigation and selection | Awaiting verified Windows capture |
+| Folder DNA | Folder summary based on the visible directory listing | Awaiting verified Windows capture |
+| Drop Shelf | Collected paths from multiple locations | Awaiting verified Windows capture |
+| Operation Simulator | Explicit copy preflight and collision review | Awaiting verified Windows capture |
+| Universal Viewer — text / hex | Actual bounded preview in a running build | Awaiting verified Windows capture |
+| Universal Viewer — image | Native image preview, with source file identified | Awaiting verified Windows capture |
+| Universal Viewer — video | Playback controls and a real media file in the running app | Awaiting verified Windows playback validation |
+| TimeVault | Snapshot picker and actual read-only snapshot directory listing | Awaiting verified Windows/VSS capture |
+| Archive Portal | Real in-app archive browsing | Not yet implemented |
+| Search, vaults and recovery tools | Each completed feature in its actual application view | Not yet implemented |
 
-**Screenshots are pending:** the current branch's Windows runtime and media playback have not yet been verified, so there are no authenticated captures to publish. See [Screenshot guidelines](docs/SCREENSHOTS.md) for the capture, review and maintenance process.
+Once a screenshot is verified, replace that feature's status with a linked image and short caption; record the corresponding commit and platform in [Screenshot guidelines](docs/SCREENSHOTS.md). Screenshots must not expose personal filenames, credentials or private data.
 
 ## What you can use today
 
