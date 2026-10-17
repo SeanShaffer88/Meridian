@@ -24,6 +24,8 @@ public static class ArchiveSourcePlanner
             }
             if (!Directory.Exists(path)) throw new FileNotFoundException("Missing archive source.", path);
             var root = Path.GetFullPath(path);
+            if (visitedDirectories.Contains(root) || pendingDirectories.Contains(root))
+                throw new InvalidDataException("Archive source folder was selected more than once.");
             var prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(root));
             if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked archive root rejected.");
