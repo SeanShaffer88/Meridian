@@ -28,20 +28,9 @@ public static class FileOperations
         if (!caseOnlyRename && (File.Exists(destination) || Directory.Exists(destination)))
             throw new IOException($"'{newName}' already exists in this folder. Nothing was overwritten.");
 
-        if (caseOnlyRename)
-        {
-            // Windows paths are case-insensitive; use a unique temporary sibling for case-only changes.
-            var temporary = Path.Combine(parent, $".meridian-rename-{Guid.NewGuid():N}.tmp");
-            MoveWithoutCopy(source, temporary);
-            try { MoveWithoutCopy(temporary, destination); }
-            catch
-            {
-                try { MoveWithoutCopy(temporary, source); }
-                catch { /* Preserve the original failure if rollback is blocked. */ }
-                throw;
-            }
-        }
-        else MoveWithoutCopy(source, destination);
+        // Use one Windows rename for casing changes as well, without a
+        // temporary sibling and its second-step/rollback failure paths.
+        MoveWithoutCopy(source, destination);
 
         return destination;
     }

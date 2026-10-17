@@ -10,7 +10,7 @@ Windows resolves whether a rename is possible. Drive-letter equality is not a vo
 
 Move still performs preflight existence/collision/self-descendant checks. The native operation enforces no replacement at execution time; preflight alone is not a lock. Windows failures become I/O or access-denied errors. Long paths receive extended Windows path syntax where needed. Public move/rename require Windows; cross-platform core compilation does not imply these operations work on another OS.
 
-Case-only rename uses a unique temporary sibling and attempts rollback if its second rename fails. If rollback is blocked, a temporary `.meridian-rename-*.tmp` item can remain; there is no general transaction or durable receipt. Path checks still do not provide handle-based identity guarantees against concurrent replacement. This increment does not resolve every move/rename safety gate.
+Case-only rename uses one native rename, without a temporary sibling or second-step rollback. A rename rejected by Windows does not initiate a separate recovery move. The UI captures its original pane/parent before confirmation and refreshes only that pane if its location is unchanged. There is still no general transaction or durable receipt. Path checks still do not provide handle-based identity guarantees against concurrent replacement. This increment does not resolve every move/rename safety gate.
 
 ## Copy and batch behavior
 

@@ -8,6 +8,45 @@ public sealed class MoveSafetyTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void CaseOnlyRenameChangesActualEntryCasingWithoutTemporaryItems(bool folder)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-case-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "before-文件");
+            var content = folder ? Path.Combine(source, "inside.txt") : source;
+            if (folder) Directory.CreateDirectory(source);
+            File.WriteAllText(content, "preserve");
+            var result = FileOperations.RenameItem(source, "BEFORE-文件");
+            var actual = Assert.Single(Directory.GetFileSystemEntries(root));
+            Assert.Equal("BEFORE-文件", Path.GetFileName(actual));
+            Assert.Equal(result, actual);
+            Assert.Equal("preserve", File.ReadAllText(folder ? Path.Combine(result, "inside.txt") : result));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void LockedCaseOnlyRenamePreservesOriginalNameAndContent()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-case-lock-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "before.txt");
+            File.WriteAllText(source, "preserve");
+            using (var held = File.Open(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.Throws<IOException>(() => FileOperations.RenameItem(source, "BEFORE.txt"));
+            Assert.Equal(new[] { source }, Directory.GetFileSystemEntries(root));
+            Assert.Equal("preserve", File.ReadAllText(source));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void SameVolumeDriveAliasMovesWithoutCopying(bool folder)
     {
         using var fixture = new DriveAlias();

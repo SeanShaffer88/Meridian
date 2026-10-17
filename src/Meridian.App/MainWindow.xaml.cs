@@ -843,6 +843,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var pane = _activePane;
+        var parentPath = pane.CurrentPath;
         var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
         var dialog = new ContentDialog
         {
@@ -858,9 +860,10 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var renamedTo = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
-            var pane = _activePane;
-            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            var newName = nameBox.Text;
+            var renamedTo = await Task.Run(() => FileOperations.RenameItem(selected.FullPath, newName));
+            if (string.Equals(pane.CurrentPath, parentPath, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(pane, parentPath, addHistory: false);
             GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal)
                 ? "Name unchanged."
                 : $"Renamed · {Path.GetFileName(renamedTo)}";
