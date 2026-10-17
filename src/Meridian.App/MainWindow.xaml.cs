@@ -990,26 +990,58 @@ public sealed partial class MainWindow : Window
         {
             Meridian.Core.TimeVault.IShadowCopyCatalog catalog = new Meridian.Core.TimeVault.WindowsShadowCopyCatalog();
             var snapshots = await catalog.ListAsync();
-            var lines = snapshots
-                .OrderByDescending(s => s.CreatedAt)
-                .Select(s => $"Created: {(s.CreatedAt == DateTimeOffset.MinValue ? "Unknown" : s.CreatedAt.ToLocalTime().ToString("g"))}\nVolume: {s.OriginalVolume}\nDevice: {s.DeviceObject}\nState: {s.State}\n");
-            var message = snapshots.Count == 0
-                ? "Windows did not report any accessible shadow copies. Snapshots may be absent, expired, or inaccessible."
-                : string.Join("\n", lines);
-            var content = new ScrollViewer
+            var selectedPath = _activePane.CurrentPath;
+            var panel = new StackPanel { Spacing = 8 };
+            panel.Children.Add(new TextBlock
             {
-                MaxHeight = 440,
-                Content = new TextBlock
+                Text = "Existing snapshots only · read-only · no recovery operations",
+                TextWrapping = TextWrapping.Wrap
+            });
+            var selector = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Choose a snapshot" };
+            foreach (var snapshot in snapshots.OrderByDescending(item => item.CreatedAt))
+            {
+                selector.Items.Add(new ComboBoxItem
                 {
-                    Text = message + "\nRead-only discovery. Recovery and browsing are not available yet.",
-                    TextWrapping = TextWrapping.Wrap,
-                    IsTextSelectionEnabled = true
-                }
+                    Content = $"{(snapshot.CreatedAt == DateTimeOffset.MinValue ? "Unknown date" : snapshot.CreatedAt.ToLocalTime().ToString("g"))} · {snapshot.OriginalVolume}",
+                    Tag = snapshot
+                });
+            }
+            panel.Children.Add(selector);
+            var listing = new TextBlock
+            {
+                Text = snapshots.Count == 0
+                    ? "No accessible shadow copies reported by Windows."
+                    : "Select a snapshot, then inspect the active pane's folder.",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
             };
+            var inspect = new Button { Content = "Inspect current folder (read-only)", IsEnabled = snapshots.Count > 0 };
+            inspect.Click += async (_, _) =>
+            {
+                if (selector.SelectedItem is not ComboBoxItem { Tag: Meridian.Core.TimeVault.ShadowCopy selected }) return;
+                inspect.IsEnabled = false;
+                listing.Text = "Reading snapshot folder…";
+                try
+                {
+                    var entries = await new Meridian.Core.TimeVault.SnapshotDirectoryReader().ListAsync(selected, selectedPath);
+                    listing.Text = entries.Count == 0
+                        ? "Snapshot folder is empty."
+                        : string.Join("\n", entries.Take(250).Select(item => (item.IsDirectory ? "[Folder] " : "[File] ") + item.Name))
+                            + (entries.Count > 250 ? $"\n… and {entries.Count - 250} more entries (display limited)." : "");
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+                    PlatformNotSupportedException or System.ComponentModel.Win32Exception)
+                {
+                    listing.Text = "Cannot inspect this snapshot folder: " + ex.Message;
+                }
+                finally { inspect.IsEnabled = true; }
+            };
+            panel.Children.Add(inspect);
+            panel.Children.Add(new ScrollViewer { MaxHeight = 340, Content = listing });
             await new ContentDialog
             {
                 Title = $"TimeVault · {snapshots.Count} snapshot(s)",
-                Content = content,
+                Content = panel,
                 CloseButtonText = "Close",
                 XamlRoot = LeftPath.XamlRoot
             }.ShowAsync();
