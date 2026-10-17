@@ -49,16 +49,14 @@ public sealed partial class MainWindow : Window
         {
             foreach (var tab in saved.Tabs)
             {
+                if (tab is null) continue;
                 var tabName = string.IsNullOrWhiteSpace(tab.Name) ? $"Workspace {_workspaceTabs.Count + 1}" : tab.Name;
                 _workspaceTabs.Add(new WorkspaceTab(tabName, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight));
             }
-            _activeWorkspaceTabIndex = Math.Clamp(saved.ActiveTabIndex, 0, _workspaceTabs.Count - 1);
         }
-        else
-        {
+        if (_workspaceTabs.Count == 0)
             _workspaceTabs.Add(new WorkspaceTab("Workspace 1", defaultLeft, defaultRight));
-            _activeWorkspaceTabIndex = 0;
-        }
+        _activeWorkspaceTabIndex = Math.Clamp(saved?.ActiveTabIndex ?? 0, 0, _workspaceTabs.Count - 1);
         _nextWorkspaceTabNumber = _workspaceTabs.Count + 1;
         RefreshWorkspaceTabs();
 
