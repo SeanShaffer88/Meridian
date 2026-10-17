@@ -3,6 +3,8 @@ using Meridian.Models;
 namespace Meridian.Services;
 
 /// <summary>Reads one directory without recursively calculating folder sizes.</summary>
+public enum DirectorySortField { Name, Type, Size, Modified }
+
 public static class DirectoryReader
 {
     public static IReadOnlyList<FileEntry> Read(string path, CancellationToken cancellationToken = default)
@@ -30,6 +32,8 @@ public static class DirectoryReader
                     IsDirectory = isDirectory,
                     TypeLabel = isDirectory ? "Folder" : GetTypeLabel(info.Name),
                     SizeLabel = size,
+                    SizeBytes = info is FileInfo sizedFile ? sizedFile.Length : 0,
+                    ModifiedUtc = info.LastWriteTimeUtc,
                     ModifiedLabel = info.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
                 });
             }
@@ -44,7 +48,7 @@ public static class DirectoryReader
     }
 
     /// <summary>Filters a previously-read directory listing without touching the filesystem again.</summary>
-    public static IReadOnlyList<FileEntry> Filter(IReadOnlyList<FileEntry> entries, string? query)
+    public static IReadOnlyList<FileEntry> Filter(IReadOnlyList<FileEntry> entries, string? query, DirectorySortField sortField = DirectorySortField.Name, bool descending = false)
     {
         ArgumentNullException.ThrowIfNull(entries);
         var normalizedQuery = query?.Trim();
@@ -57,9 +61,23 @@ public static class DirectoryReader
                 item.TypeLabel.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase));
         }
 
-        return filtered.OrderByDescending(item => item.IsDirectory)
-            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var directoriesFirst = filtered.OrderByDescending(item => item.IsDirectory);
+        IOrderedEnumerable<FileEntry> sorted = sortField switch
+        {
+            DirectorySortField.Type => descending
+                ? directoriesFirst.ThenByDescending(item => item.TypeLabel, StringComparer.OrdinalIgnoreCase)
+                : directoriesFirst.ThenBy(item => item.TypeLabel, StringComparer.OrdinalIgnoreCase),
+            DirectorySortField.Size => descending
+                ? directoriesFirst.ThenByDescending(item => item.SizeBytes)
+                : directoriesFirst.ThenBy(item => item.SizeBytes),
+            DirectorySortField.Modified => descending
+                ? directoriesFirst.ThenByDescending(item => item.ModifiedUtc)
+                : directoriesFirst.ThenBy(item => item.ModifiedUtc),
+            _ => descending
+                ? directoriesFirst.ThenByDescending(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                : directoriesFirst.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+        };
+        return sorted.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     public static string FormatSize(long bytes)

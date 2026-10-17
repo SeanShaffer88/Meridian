@@ -46,7 +46,13 @@
           <Button Content="←" Click="LeftBack_Click" MinWidth="32" /><Button Grid.Column="1" Content="→" Click="LeftForward_Click" MinWidth="32" /><Button Grid.Column="2" Content="↑" Click="LeftUp_Click" MinWidth="32" />
           <TextBox x:Name="LeftPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="LeftPath_KeyDown" />
         </Grid>
-        <TextBox x:Name="LeftFilter" Grid.Row="2" Margin="10,0,10,8" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" />
+        <Grid Grid.Row="2" Margin="10,0,10,8" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+          <TextBox x:Name="LeftFilter" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" />
+          <ComboBox x:Name="LeftSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="LeftSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane">
+            <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
+          </ComboBox>
+          <ToggleButton x:Name="LeftSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" Checked="LeftSortDirection_Changed" Unchecked="LeftSortDirection_Changed" />
+        </Grid>
         <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Single" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
             <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
@@ -70,7 +76,13 @@
           <Button Content="←" Click="RightBack_Click" MinWidth="32" /><Button Grid.Column="1" Content="→" Click="RightForward_Click" MinWidth="32" /><Button Grid.Column="2" Content="↑" Click="RightUp_Click" MinWidth="32" />
           <TextBox x:Name="RightPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="RightPath_KeyDown" />
         </Grid>
-        <TextBox x:Name="RightFilter" Grid.Row="2" Margin="10,0,10,8" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" />
+        <Grid Grid.Row="2" Margin="10,0,10,8" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+          <TextBox x:Name="RightFilter" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" />
+          <ComboBox x:Name="RightSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="RightSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane">
+            <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
+          </ComboBox>
+          <ToggleButton x:Name="RightSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" Checked="RightSortDirection_Changed" Unchecked="RightSortDirection_Changed" />
+        </Grid>
         <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Single" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
             <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
