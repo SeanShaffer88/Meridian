@@ -109,7 +109,7 @@ public static class ZipArchiveCreator
                             await compressed.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
                             copied += count;
                             completedBytes += count;
-                            progress?.Report((completedBytes, total));
+                            progress?.Report((Math.Min(completedBytes, Math.Max(0, total - 1)), total));
                         }
                         if (copied != item.Length)
                             throw new InvalidDataException("Source file changed size during archive creation.");
