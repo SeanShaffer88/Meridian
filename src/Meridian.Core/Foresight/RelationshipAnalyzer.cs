@@ -21,11 +21,14 @@ public enum RelationshipEvidence
 public static class RelationshipAnalyzer
 {
     public static IReadOnlyList<FileRelationship> Analyze(
-        IEnumerable<string> paths, int maxPaths = 1000)
+        IEnumerable<string> paths, int maxPaths = 1000, int maxRelationships = 10000)
     {
         ArgumentNullException.ThrowIfNull(paths);
         if (maxPaths is < 1 or > 10000)
             throw new ArgumentOutOfRangeException(nameof(maxPaths));
+
+        if (maxRelationships is < 1 or > 100000)
+            throw new ArgumentOutOfRangeException(nameof(maxRelationships));
 
         var comparer = OperatingSystem.IsWindows()
             ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -53,13 +56,21 @@ public static class RelationshipAnalyzer
                 var aStem = Path.GetFileNameWithoutExtension(a);
                 var bStem = Path.GetFileNameWithoutExtension(b);
                 if (aStem.Length > 0 && comparer.Equals(aStem, bStem))
+                {
+                    if (result.Count == maxRelationships)
+                        throw new InvalidOperationException("Foresight relationship limit exceeded; narrow the input set.");
                     result.Add(new FileRelationship(a, b,
                         "Matching filename stems; this does not establish a dependency.",
                         RelationshipEvidence.FilenameStem));
+                }
                 else if (comparer.Equals(Path.GetDirectoryName(a), Path.GetDirectoryName(b)))
+                {
+                    if (result.Count == maxRelationships)
+                        throw new InvalidOperationException("Foresight relationship limit exceeded; narrow the input set.");
                     result.Add(new FileRelationship(a, b,
                         "Files share a directory; this does not establish a dependency.",
                         RelationshipEvidence.SameDirectory));
+                }
             }
         }
         return Array.AsReadOnly(result.ToArray());
