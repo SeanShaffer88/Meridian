@@ -14,7 +14,7 @@ public static class ZipTreeExtractor
     public static async Task<Receipt> ExtractAsync(
         string archivePath, string destinationDirectory, string newFolderName,
         int maxEntries = 10000, long maxTotalBytes = 4L * 1024 * 1024 * 1024,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IProgress<int>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
         if (!Path.IsPathFullyQualified(destinationDirectory))
