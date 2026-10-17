@@ -210,8 +210,16 @@ public static class FileOperations
 
     private static void RejectReparsePoint(string path)
     {
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            throw new IOException($"Copying symbolic links and other reparse points is not supported: {path}");
+        // A regular leaf can still resolve through a linked ancestor. Check the
+        // complete existing path before reading, renaming, or staging writes.
+        // These checks are conservative; they do not prevent concurrent path swaps.
+        string? current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        while (current is not null)
+        {
+            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException($"File operations through symbolic links and other reparse points are not supported: {current}");
+            current = Path.GetDirectoryName(current);
+        }
     }
 
     private static void TryDeleteStaging(string path)

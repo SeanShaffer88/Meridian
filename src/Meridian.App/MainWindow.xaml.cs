@@ -407,10 +407,11 @@ public sealed partial class MainWindow : Window
             return;
         }
         _zipExtractionBusy = true;
+        var extractionPane = _activePane;
         try
         {
         var archivePath = selected.FullPath;
-        var parent = _activePane.CurrentPath;
+        var parent = extractionPane.CurrentPath;
         var folder = Path.GetFileNameWithoutExtension(archivePath);
         if (folder.EndsWith(".tar", StringComparison.OrdinalIgnoreCase))
             folder = folder[..^4];
@@ -424,6 +425,7 @@ public sealed partial class MainWindow : Window
             Content = new TextBlock { Text = entryCount + " entries to " + Path.Combine(parent, folder) },
             PrimaryButtonText = "Extract",
             CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
             XamlRoot = LeftPath.XamlRoot
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
@@ -431,14 +433,15 @@ public sealed partial class MainWindow : Window
         GlobalStatus.Text = "Extracting archive · " + selected.Name;
         var token = _zipExtractionCancellation.Token;
         var progress = new Progress<int>(percent =>
-            GlobalStatus.Text = "Extracting ZIP · " + percent + "%");
+            GlobalStatus.Text = "Extracting archive · " + percent + "%");
         var extractedFiles = await Task.Run(async () => isZip
             ? (await Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
                 archivePath, parent, folder, cancellationToken: token, progress: progress)).FileCount
             : (await Meridian.Core.Archives.TarTreeExtractor.ExtractAsync(
                 archivePath, parent, folder, cancellationToken: token, progress: progress)).FileCount, token);
         GlobalStatus.Text = "Extracted " + extractedFiles + " files.";
-        await NavigateAsync(_activePane, parent, addHistory: false);
+        if (string.Equals(extractionPane.CurrentPath, parent, StringComparison.OrdinalIgnoreCase))
+            await NavigateAsync(extractionPane, parent, addHistory: false);
         }
         catch (OperationCanceledException)
         {
