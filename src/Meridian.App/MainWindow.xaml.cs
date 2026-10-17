@@ -509,10 +509,11 @@ public sealed partial class MainWindow : Window
         {
             confirmationResult = await confirmation.ShowAsync();
         }
-        catch
+        catch (Exception ex)
         {
             _zipCreationBusy = false;
-            throw;
+            GlobalStatus.Text = "Archive dialog failed · " + ex.Message;
+            return;
         }
         if (confirmationResult != ContentDialogResult.Primary)
         {
