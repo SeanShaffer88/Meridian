@@ -382,7 +382,8 @@ public sealed partial class MainWindow : Window
                 };
                 mediaSession = new Windows.Media.Playback.MediaPlayer();
                 player.SetMediaPlayer(mediaSession);
-                mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(path));
+                var mediaFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromStorageFile(mediaFile);
                 panel.Children.Add(player);
             }
             else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
