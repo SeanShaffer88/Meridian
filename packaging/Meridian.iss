@@ -1,5 +1,6 @@
 #define MyAppName "Meridian"
 #define MyAppVersion "0.1.0"
+#define MyFileVersion "0.1.0.0"
 
 #ifndef PublishDir
   #error "Pass /DPublishDir=<published app folder>."
@@ -31,8 +32,8 @@ UninstallDisplayIcon={app}\Meridian.exe
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
-VersionInfoVersion={#MyAppVersion}
-VersionInfoProductVersion={#MyAppVersion}
+VersionInfoVersion={#MyFileVersion}
+VersionInfoProductVersion={#MyFileVersion}
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
