@@ -6,7 +6,7 @@
 
 The UI performs directory enumeration on a background task and marshals the results back to the UI thread. A cancellation token is used for superseded directory reads. Copy operations stage a file or directory in the destination folder and rename it into place only after the copy completes; this reduces exposure to incomplete final names but is not a full transactional guarantee. File data is copied in bounded chunks so cancellation can be checked between reads and writes, and staged data is removed on failure where possible. Source timestamps are preserved for copied files.
 
-The UI exposes cancellation for the active copy. It does not yet report byte-level progress, support multiple queued transfers, or provide pause/resume. Do not treat this initial design as a completed safety review.
+The UI exposes cancellation for the active copy and a dialog-based new-folder command that rejects invalid path names and checks for existing items before creation. It does not yet report byte-level progress, support multiple queued transfers, or provide pause/resume. Do not treat this initial design as a completed safety review.
 
 ## Workspace persistence
 
