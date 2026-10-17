@@ -8,6 +8,17 @@ public sealed record ShadowCopy(
     DateTimeOffset CreatedAt,
     string State)
 {
-    public bool IsUsable => !string.IsNullOrWhiteSpace(DeviceObject)
-        && DeviceObject.StartsWith(@"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy", StringComparison.OrdinalIgnoreCase);
+    private const string DevicePrefix = @"\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy";
+
+    public bool IsUsable
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(DeviceObject) ||
+                !DeviceObject.StartsWith(DevicePrefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+            var suffix = DeviceObject[DevicePrefix.Length..];
+            return suffix.Length > 0 && suffix.All(char.IsAsciiDigit);
+        }
+    }
 }
