@@ -118,6 +118,21 @@ Inspired by the clear, category-by-category feature reference used by classic du
 - **[REQUIREMENT]** **No separate WinRAR, 7-Zip or other archive-manager installation required.** Ship supported decoding components with Meridian; audit licenses and Windows x64/ARM64 packaging.
 - **[REQUIREMENT]** No universal-format promise: advertise exact browse, extract, create and encryption capabilities by format.
 
+#### Archive format support at a glance
+
+This table describes **current implementation versus intended coverage**, not formats that Meridian can already open in the interface. **Catalog** means listing entries without extracting them.
+
+| Format family | Catalog today | Extraction today | Creation today | Intended direction |
+| --- | --- | --- | --- | --- |
+| ZIP / ZIP64 | **[DEV]** ZIP backend prototype | No | No | Browse, extract and create |
+| 7z | No | No | No | Embedded backend; codec-dependent |
+| RAR / RAR5 | No | No | No | Browse and extract if license and decoder permit; no RAR writing promise |
+| TAR / PAX / GNU TAR | No | No | No | Browse, extract and create |
+| GZIP / BZIP2 / XZ / Zstandard | No | No | No | Decode and encode supported streams; handle TAR combinations |
+| Other archive families | No | No | No | Evaluate individually and publish a tested capability matrix |
+
+The ZIP catalog currently inspects declared metadata only. **It does not decompress, validate payload integrity, extract files or protect against every malformed archive.** Encryption and format-specific codec support are not yet verified.
+
 See [Archive Engine design and compatibility](docs/ARCHIVE_ENGINE.md).
 
 ### Search, discovery and file intelligence
