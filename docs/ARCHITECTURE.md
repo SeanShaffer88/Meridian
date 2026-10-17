@@ -15,3 +15,7 @@ The app stores the last successfully browsed left- and right-pane paths in `%LOC
 ## Workspace restoration and bookmarks
 
 Meridian stores the last successfully browsed left- and right-pane paths and named folder bookmarks in `%LOCALAPPDATA%/Meridian/workspace.json`. The file contains paths and bookmark labels only. Workspace writes use a temporary file followed by a replacement move; malformed, missing, or unreadable saved state falls back to the default Documents/Downloads locations. Bookmarks are user-managed and remain local to the current Windows user. Persistence is best-effort and must not prevent file browsing if the preference file cannot be read or written.
+
+## Workspace tabs
+
+The UI maintains workspace tabs as paired left/right folder locations. Switching tabs refreshes both panes; tab names and locations, plus the active tab index, are stored in the existing local workspace JSON. Older workspace files without tab data fall back to a single default tab. This is a first step toward fuller tab/session management; tab reordering, locking, pinning, and layout restoration are not implemented yet.

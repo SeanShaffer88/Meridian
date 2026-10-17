@@ -37,7 +37,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 ## Phase 1 — Everyday workflow
 
-- [ ] Multi-tab browsing, tab reordering, locking, pinning, duplication, close-left/right, and optional color accents
+- [ ] Workspace tabs with independent left/right locations and session restoration (initial implementation under review); later: reordering, locking, pinning, close-left/right, and color accents
 - [ ] Flexible one-, two-, and four-pane layouts, including horizontal/vertical splits and adjustable split ratios
 - [ ] Bookmarks/favorites and named workspaces; persist and restore tabs, pane layout, locations, and focus
 - [ ] Folder tree sidebar, with shared focus-synchronized or independent per-pane trees
