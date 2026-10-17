@@ -15,6 +15,12 @@ public sealed class SnapshotFileExporter
 
         if (!Path.IsPathFullyQualified(destinationFile) || destinationFile.StartsWith(@"\\", StringComparison.Ordinal))
             throw new ArgumentException("Destination must be an absolute local drive path.", nameof(destinationFile));
+        // Validate the raw path before normalization, including traversal components.
+        if (destinationFile.Length < 3 || !char.IsLetter(destinationFile[0]) ||
+            destinationFile[1] != ':' || destinationFile[2] != '\\')
+            throw new ArgumentException("Destination must use a local drive letter.", nameof(destinationFile));
+        if (destinationFile[3..].Split('\\').Any(part => part is "." or ".."))
+            throw new ArgumentException("Destination cannot contain traversal components.", nameof(destinationFile));
         var destination = Path.GetFullPath(destinationFile);
         // Restrict initial exports to ordinary local drive-letter destinations.
         if (destination.Length < 3 || !char.IsLetter(destination[0]) ||
