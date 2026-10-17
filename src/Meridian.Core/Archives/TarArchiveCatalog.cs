@@ -3,7 +3,7 @@ using System.IO.Compression;
 
 namespace Meridian.Core.Archives;
 
-/// <summary>Read-only bounded catalog for TAR and gzip-compressed TAR; no extraction.</summary>
+/// <summary>Read-only bounded catalog for TAR and gzip-compressed TAR, used by staged extraction.</summary>
 public static class TarArchiveCatalog
 {
     public sealed record Entry(string Path, long Bytes, bool IsDirectory);
