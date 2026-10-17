@@ -400,6 +400,9 @@ public sealed partial class MainWindow : Window
             }
             else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
             {
+                const long maximumImageFileBytes = 64L * 1024 * 1024;
+                if (new FileInfo(path).Length > maximumImageFileBytes)
+                    throw new IOException("Image exceeds the 64 MiB preview file limit. Open it in a dedicated image editor.");
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
                 using var stream = await file.OpenReadAsync();
                 var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
