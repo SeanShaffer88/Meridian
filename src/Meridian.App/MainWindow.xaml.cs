@@ -420,8 +420,10 @@ public sealed partial class MainWindow : Window
         _zipExtractionCancellation = new CancellationTokenSource();
         GlobalStatus.Text = "Extracting ZIP · " + selected.Name;
         var token = _zipExtractionCancellation.Token;
+        var progress = new Progress<int>(percent =>
+            GlobalStatus.Text = "Extracting ZIP · " + percent + "%");
         var receipt = await Task.Run(() => Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
-            archivePath, parent, folder, cancellationToken: token), token);
+            archivePath, parent, folder, cancellationToken: token, progress: progress), token);
         GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
         await NavigateAsync(_activePane, parent, addHistory: false);
         }
