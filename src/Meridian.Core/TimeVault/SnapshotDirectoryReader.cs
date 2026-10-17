@@ -24,7 +24,8 @@ public sealed class SnapshotDirectoryReader
             if (liveFolder.Length < 3 || !char.IsLetter(liveFolder[0]) ||
                 liveFolder[1] != ':' || liveFolder[2] != '\\')
                 throw new ArgumentException("Folder must be an absolute local drive path.", nameof(liveFolder));
-            if (liveFolder[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries).Any(part =>
+            if (liveFolder[3..].Contains("\\\\", StringComparison.Ordinal) ||
+                liveFolder[3..].Split('\\', StringSplitOptions.RemoveEmptyEntries).Any(part =>
                 part is "." or ".." || part.Contains(':') || part.EndsWith(' ') || part.EndsWith('.')))
                 throw new ArgumentException("Folder contains an unsafe path component.", nameof(liveFolder));
             var root = Path.GetPathRoot(Path.GetFullPath(liveFolder))
