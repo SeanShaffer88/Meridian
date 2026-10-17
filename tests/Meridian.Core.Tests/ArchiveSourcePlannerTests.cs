@@ -12,6 +12,12 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsBlankSourcePath()
+    {
+        Assert.Throws<ArgumentException>(() => ArchiveSourcePlanner.Plan(new[] { " " }));
+    }
+
+    [Fact]
     public void RejectsRelativeSourceBeforeFilesystemAccess()
     {
         Assert.Throws<ArgumentException>(() => ArchiveSourcePlanner.Plan(new[] { "relative.txt" }));
