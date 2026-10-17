@@ -29,6 +29,40 @@ public sealed class TarTreeExtractorTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public async Task ReportsCompletionAfterPublishedDirectoryExists()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var archive = Path.Combine(root, "sample.tar");
+            using (var output = File.Create(archive))
+            using (var writer = new TarWriter(output))
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "one.txt")
+                {
+                    DataStream = new MemoryStream(new byte[] { 1 })
+                });
+            var percentages = new List<int>();
+            var completionObserved = false;
+            var progress = new InlineProgress(value =>
+            {
+                percentages.Add(value);
+                if (value == 100)
+                    completionObserved = File.Exists(Path.Combine(root, "output", "one.txt"));
+            });
+            await TarTreeExtractor.ExtractAsync(archive, root, "output", progress: progress);
+            Assert.Equal(new[] { 99, 100 }, percentages);
+            Assert.True(completionObserved);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private sealed class InlineProgress(Action<int> callback) : IProgress<int>
+    {
+        public void Report(int value) => callback(value);
+    }
+
     [Theory]
     [InlineData(".tar")]
     [InlineData(".tar.gz")]
