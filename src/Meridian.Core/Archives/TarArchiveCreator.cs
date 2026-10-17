@@ -8,7 +8,8 @@ public static class TarArchiveCreator
 {
     public static async Task CreateAsync(string destinationArchive,
         IReadOnlyDictionary<string, string> sourceFiles,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<(long CompletedBytes, long TotalBytes)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationArchive);
         ArgumentNullException.ThrowIfNull(sourceFiles);
@@ -72,6 +73,10 @@ public static class TarArchiveCreator
             if (string.IsNullOrEmpty(next) || next == ancestor) break;
             ancestor = next;
         }
+        long completedBytes = 0;
+        long lastReportedBytes = 0;
+        cancellationToken.ThrowIfCancellationRequested();
+        ReportProgressSafely(progress, 0, totalBytes);
         var stage = Path.Combine(parent, ".meridian-tar-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
@@ -94,7 +99,16 @@ public static class TarArchiveCreator
                             throw new InvalidDataException("TAR source length changed.");
                         // TarWriter copies the DataStream synchronously. A cancellation-aware
                         // wrapper ensures long file writes can stop between reads.
-                        using var cancellableInput = new CancellationAwareReadStream(input, cancellationToken);
+                        using var cancellableInput = new CancellationAwareReadStream(input, cancellationToken, count =>
+                        {
+                            completedBytes += count;
+                            var visible = Math.Min(completedBytes, Math.Max(0, totalBytes - 1));
+                            if (visible - lastReportedBytes >= 1024 * 1024)
+                            {
+                                lastReportedBytes = visible;
+                                ReportProgressSafely(progress, visible, totalBytes);
+                            }
+                        });
                         writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, item.Name)
                         {
                             DataStream = cancellableInput
@@ -121,13 +135,20 @@ public static class TarArchiveCreator
             }
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(stage, target, overwrite: false);
+            ReportProgressSafely(progress, totalBytes, totalBytes);
         }
         finally
         {
             try { File.Delete(stage); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
-    private sealed class CancellationAwareReadStream(Stream inner, CancellationToken token) : Stream
+    private static void ReportProgressSafely(IProgress<(long CompletedBytes, long TotalBytes)>? progress, long completed, long total)
+    {
+        try { progress?.Report((completed, total)); }
+        catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException) { }
+    }
+
+    private sealed class CancellationAwareReadStream(Stream inner, CancellationToken token, Action<int> onRead) : Stream
     {
         public override bool CanRead => inner.CanRead;
         public override bool CanSeek => inner.CanSeek;
@@ -137,12 +158,18 @@ public static class TarArchiveCreator
         public override int Read(byte[] buffer, int offset, int count)
         {
             token.ThrowIfCancellationRequested();
-            return inner.Read(buffer, offset, count);
+            var read = inner.Read(buffer, offset, count);
+            if (read > 0) onRead(read);
+            token.ThrowIfCancellationRequested();
+            return read;
         }
         public override int Read(Span<byte> buffer)
         {
             token.ThrowIfCancellationRequested();
-            return inner.Read(buffer);
+            var read = inner.Read(buffer);
+            if (read > 0) onRead(read);
+            token.ThrowIfCancellationRequested();
+            return read;
         }
         public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
         public override void Flush() => throw new NotSupportedException();
