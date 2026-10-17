@@ -21,7 +21,8 @@ public enum RelationshipEvidence
 public static class RelationshipAnalyzer
 {
     public static IReadOnlyList<FileRelationship> Analyze(
-        IEnumerable<string> paths, int maxPaths = 1000, int maxRelationships = 10000)
+        IEnumerable<string> paths, int maxPaths = 1000, int maxRelationships = 10000,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(paths);
         if (maxPaths is < 1 or > 10000)
@@ -36,6 +37,7 @@ public static class RelationshipAnalyzer
         var unique = new HashSet<string>(comparer);
         foreach (var path in paths)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
                 throw new ArgumentException("Foresight requires absolute paths.", nameof(paths));
             if (items.Count >= maxPaths)
@@ -52,6 +54,7 @@ public static class RelationshipAnalyzer
         var byDirectory = new Dictionary<string, List<int>>(comparer);
         for (var i = 0; i < items.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var stem = Path.GetFileNameWithoutExtension(items[i]);
             if (stem.Length > 0)
             {
@@ -80,6 +83,7 @@ public static class RelationshipAnalyzer
             while ((stemIndices is not null && stemPosition < stemIndices.Count) ||
                    directoryPosition < directoryIndices.Count)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var nextStem = stemIndices is not null && stemPosition < stemIndices.Count
                     ? stemIndices[stemPosition] : int.MaxValue;
                 var nextDirectory = directoryPosition < directoryIndices.Count
