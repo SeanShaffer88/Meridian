@@ -26,6 +26,17 @@ public sealed class JsonManifestReferenceReader
 
         cancellationToken.ThrowIfCancellationRequested();
         var full = Path.GetFullPath(manifestPath);
+        var root = Path.GetPathRoot(full)
+            ?? throw new ArgumentException("Manifest must be rooted.", nameof(manifestPath));
+        var cursor = root;
+        foreach (var part in full[root.Length..].Split(
+            Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            cursor = Path.Combine(cursor, part);
+            if ((File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Manifest path traverses a reparse point.");
+        }
         if ((File.GetAttributes(full) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
             throw new IOException("Manifest must be a regular file.");
         await using var stream = new FileStream(full, FileMode.Open, FileAccess.Read,
