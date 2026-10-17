@@ -1,6 +1,6 @@
 # Meridian Archive Engine — no external archive manager required
 
-**Status: design / planned. No integrated archive decoder or writer has been shipped or verified.**
+**Status: early backend prototype on the feature branch.** A bounded, read-only ZIP catalog using built-in .NET compression and conservative entry-name validation has been committed with initial tests. It has not been compiled or Windows-verified; extraction, creation, UI navigation and non-ZIP formats are not implemented.
 
 ## Product contract
 
@@ -34,8 +34,8 @@ Choose and audit a maintained, redistributable backend with compatible licensing
 
 ## Delivery sequence
 
-1. Define archive entry/provider and capability contracts with deterministic path-policy tests.
-2. Build read-only ZIP listing and bounded streaming extraction against a bundled or built-in backend, with hostile archive fixtures.
+1. Define archive entry/provider and capability contracts with deterministic path-policy tests (initial entry-name policy committed).
+2. Build read-only ZIP listing (initial backend committed) and bounded streaming extraction against a bundled or built-in backend, with hostile archive fixtures.
 3. Integrate archive navigation and preview into the dual-pane workspace.
 4. Add multi-format backends with explicit codec coverage, x64/ARM64 packaging, security tests and license audit.
 5. Add archive creation, optional encryption and advanced operations after independent safety review.
