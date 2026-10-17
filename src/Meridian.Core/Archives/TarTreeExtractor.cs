@@ -79,8 +79,10 @@ public static class TarTreeExtractor
                 throw new InvalidDataException("TAR gained entries after cataloging.");
             cancellationToken.ThrowIfCancellationRequested();
             CheckParents(parent, cancellationToken);
-            if ((File.GetAttributes(stage) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Extraction stage became a reparse point.");
+            var stageAttributes = File.GetAttributes(stage);
+            if ((stageAttributes & FileAttributes.ReparsePoint) != 0 ||
+                (stageAttributes & FileAttributes.Directory) == 0)
+                throw new IOException("Extraction stage is not a regular directory.");
             if (File.Exists(target) || Directory.Exists(target))
                 throw new IOException("Extraction destination appeared.");
             Directory.Move(stage, target);
