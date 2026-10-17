@@ -26,6 +26,7 @@
     </Grid>
     <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="#1B1D22">
       <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
+      <AppBarButton Icon="View" Label="Preview copy" Click="PreviewCopy_Click" ToolTipService.ToolTip="Inspect selected copy without changing files" />
       <AppBarButton Icon="Copy" Label="Copy R → L" Click="CopyRightToLeft_Click" />
       <AppBarButton Icon="Move" Label="Move L → R" Click="MoveLeftToRight_Click" />
       <AppBarButton Icon="Move" Label="Move R → L" Click="MoveRightToLeft_Click" />
