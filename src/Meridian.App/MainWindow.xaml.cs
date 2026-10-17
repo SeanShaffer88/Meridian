@@ -359,11 +359,6 @@ public sealed partial class MainWindow : Window
         }
 
         var path = selected.FullPath;
-        if ((File.GetAttributes(path) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
-        {
-            GlobalStatus.Text = "Preview does not follow file links or directories.";
-            return;
-        }
         var decision = Meridian.Core.Viewer.ViewerRouter.Classify(path);
         var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
         panel.Children.Add(new TextBlock
@@ -375,6 +370,8 @@ public sealed partial class MainWindow : Window
         Windows.Media.Playback.MediaPlayer? mediaSession = null;
         try
         {
+            if ((File.GetAttributes(path) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
+                throw new IOException("Preview does not follow file links or directories.");
             if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
             {
                 player = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
