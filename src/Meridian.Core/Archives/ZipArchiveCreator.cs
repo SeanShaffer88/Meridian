@@ -51,6 +51,8 @@ public static class ZipArchiveCreator
         }
 
         var target = Path.GetFullPath(destinationArchive);
+        if (!target.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("ZIP creation requires a .zip destination.");
         if (plan.Any(item => string.Equals(item.Source, target, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Archive destination cannot also be a source file.", nameof(destinationArchive));
         var parent = Path.GetDirectoryName(target)!;
