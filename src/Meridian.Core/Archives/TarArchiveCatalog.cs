@@ -38,7 +38,7 @@ public static class TarArchiveCatalog
                 entry.EntryType != TarEntryType.V7RegularFile)
                 throw new InvalidDataException("TAR contains unsupported link or special entry.");
             var name = ArchiveEntryPathPolicy.Normalize(entry.Name.TrimEnd('/'));
-            if (!names.Add(name)) throw new InvalidDataException("Duplicate TAR entry.");
+            if (names.Contains(name)) throw new InvalidDataException("Duplicate TAR entry.");
             var parent = name;
             while (parent.Contains('/'))
             {
@@ -54,6 +54,7 @@ public static class TarArchiveCatalog
             if (directory && entry.Length != 0)
                 throw new InvalidDataException("Directory TAR entry has a payload.");
             total += entry.Length;
+            names.Add(name);
             entries.Add(new Entry(name, entry.Length, directory));
             if (!directory) fileNames.Add(name);
         }
