@@ -401,9 +401,9 @@ public sealed partial class MainWindow : Window
     {
         if (_zipExtractionBusy || _zipCreationBusy || _zipInspectionOpen || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
-            !string.Equals(Path.GetExtension(selected.FullPath), ".zip", StringComparison.OrdinalIgnoreCase))
+            Meridian.Core.Archives.ArchiveCapabilities.ForPath(selected.FullPath)?.CanExtract != true)
         {
-            GlobalStatus.Text = "Select a ZIP archive to extract.";
+            GlobalStatus.Text = "Select a supported archive to extract.";
             return;
         }
         _zipExtractionBusy = true;
@@ -412,11 +412,14 @@ public sealed partial class MainWindow : Window
         var archivePath = selected.FullPath;
         var parent = _activePane.CurrentPath;
         var folder = Path.GetFileNameWithoutExtension(archivePath);
-        var plan = await Task.Run(() => Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath));
+        var isZip = string.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase);
+        var entryCount = await Task.Run(() => isZip
+            ? Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath).Count
+            : Meridian.Core.Archives.TarArchiveCatalog.List(archivePath).Count);
         var dialog = new ContentDialog
         {
-            Title = "Extract ZIP?",
-            Content = new TextBlock { Text = plan.Count + " entries to " + Path.Combine(parent, folder) },
+            Title = "Extract archive?",
+            Content = new TextBlock { Text = entryCount + " entries to " + Path.Combine(parent, folder) },
             PrimaryButtonText = "Extract",
             CloseButtonText = "Cancel",
             XamlRoot = LeftPath.XamlRoot
