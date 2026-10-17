@@ -13,12 +13,14 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _left;
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
+    private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private PaneState _activePane;
     private bool _restoringWorkspace;
 
     public MainWindow()
     {
         InitializeComponent();
+        BookmarksBox.ItemsSource = _bookmarks;
         _left = new PaneState("Left", LeftPath, LeftItems, LeftStatus);
         _right = new PaneState("Right", RightPath, RightItems, RightStatus);
         _activePane = _left;
@@ -34,6 +36,8 @@ public sealed partial class MainWindow : Window
     private async Task InitializeAsync(string documents, string downloads)
     {
         var saved = await _workspaceStore.LoadAsync();
+        _bookmarks.Clear();
+        foreach (var bookmark in saved?.Bookmarks ?? []) _bookmarks.Add(bookmark);
         var leftPath = saved?.LeftPath is { Length: > 0 } savedLeft && Directory.Exists(savedLeft) ? savedLeft : documents;
         var rightPath = saved?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
 
@@ -56,13 +60,54 @@ public sealed partial class MainWindow : Window
         if (_restoringWorkspace) return;
         try
         {
-            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath));
+            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray()));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             // Workspace persistence is a convenience; file browsing must continue if it fails.
             GlobalStatus.Text = "Workspace could not be saved · " + ex.Message;
         }
+    }
+
+    private async Task AddBookmarkAsync()
+    {
+        var path = _activePane.CurrentPath;
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (_bookmarks.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)))
+        {
+            GlobalStatus.Text = "That location is already bookmarked.";
+            return;
+        }
+
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var name = Path.GetFileName(trimmed);
+        if (string.IsNullOrWhiteSpace(name)) name = path;
+        _bookmarks.Add(new BookmarkSnapshot(name, path));
+        await PersistWorkspaceAsync();
+        GlobalStatus.Text = $"Bookmarked · {name}";
+    }
+
+    private async void AddBookmark_Click(object sender, RoutedEventArgs e) => await AddBookmarkAsync();
+
+    private async void RemoveBookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (BookmarksBox.SelectedItem is not BookmarkSnapshot selected)
+        {
+            GlobalStatus.Text = "Select a saved location to remove.";
+            return;
+        }
+
+        _bookmarks.Remove(selected);
+        BookmarksBox.SelectedItem = null;
+        await PersistWorkspaceAsync();
+        GlobalStatus.Text = $"Removed bookmark · {selected.Name}";
+    }
+
+    private async void BookmarksBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (BookmarksBox.SelectedItem is not BookmarkSnapshot selected) return;
+        await NavigateAsync(_activePane, selected.Path);
+        BookmarksBox.SelectedItem = null;
     }
 
     private async Task NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
