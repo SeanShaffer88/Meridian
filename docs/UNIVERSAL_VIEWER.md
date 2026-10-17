@@ -23,3 +23,7 @@
 - [ ] Add bounded text decoding, image decode resource limits, and sandboxed or reviewed PDF handling.
 - [ ] Test malformed media, decompression bombs, symlinks/junctions, huge files, missing codecs, cancellation, and rapid selection changes.
 - [ ] Document supported formats from verified playback tests, not extension guesses.
+
+## Current preview resource limits
+
+The WinUI prototype renders at most 4 KiB of hexadecimal data, reads at most 64 KiB for text previews, uses strict UTF-8 with a hexadecimal fallback for invalid sequences, and refuses image files larger than 64 MiB. These are initial defensive limits, **not** a guarantee against decompression bombs, codec vulnerabilities, or filesystem races. Decoded pixel count, parser isolation, media resource budgets and Windows hands-on testing remain open release blockers.
