@@ -21,6 +21,22 @@ public sealed class DirectoryReaderTests
     }
 
     [Fact]
+    public void Read_CancelledTokenThrowsOperationCanceledException()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "note.txt"), "hello");
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+
+            Assert.Throws<OperationCanceledException>(() => DirectoryReader.Read(root, cancellation.Token));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void FormatSize_FormatsBytesAndKilobytes()
     {
         Assert.Equal("12 B", DirectoryReader.FormatSize(12));
