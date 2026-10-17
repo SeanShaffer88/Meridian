@@ -34,6 +34,22 @@ public sealed class SnapshotFileExporter
         if ((File.GetAttributes(source) & FileAttributes.Directory) != 0)
             throw new ArgumentException("Only regular files can be exported.", nameof(originalFile));
 
+        // Restrict initial exports to ordinary local drive-letter destinations.
+        if (destination.Length < 3 || !char.IsLetter(destination[0]) ||
+            destination[1] != ':' || destination[2] != '\\')
+            throw new ArgumentException("Destination must be a local drive-letter path.", nameof(destinationFile));
+        var parent = Path.GetDirectoryName(destination)
+            ?? throw new ArgumentException("Destination must have a parent directory.", nameof(destinationFile));
+        var driveRoot = Path.GetPathRoot(destination)!;
+        var relativeParent = parent[driveRoot.Length..];
+        var cursor = driveRoot;
+        foreach (var part in relativeParent.Split('\\', StringSplitOptions.RemoveEmptyEntries))
+        {
+            cursor = Path.Combine(cursor, part);
+            if ((File.GetAttributes(cursor) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Destination path contains a reparse point.");
+        }
+
         // CreateNew is atomic: an existing destination is never overwritten.
         // The caller must choose an explicit destination and confirm the operation.
         await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write,
