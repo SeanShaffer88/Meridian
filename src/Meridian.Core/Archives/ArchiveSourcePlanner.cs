@@ -56,13 +56,14 @@ public static class ArchiveSourcePlanner
             cancellationToken.ThrowIfCancellationRequested();
             var safeName = ArchiveEntryPathPolicy.Normalize(name);
             var safePath = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(path, cancellationToken);
-            if (!sourceFiles.Add(safePath))
+            if (sourceFiles.Contains(safePath))
                 throw new InvalidDataException("Archive source file selected more than once.");
             var length = new FileInfo(safePath).Length;
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
                 throw new InvalidDataException("Archive source size budget exceeded.");
             if (files.Count >= 10000 || !files.TryAdd(safeName, safePath))
                 throw new InvalidDataException("Archive entry count or name collision.");
+            sourceFiles.Add(safePath);
             totalBytes += length;
         }
     }
