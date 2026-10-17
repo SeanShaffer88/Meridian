@@ -12,8 +12,9 @@ public static class ArchiveCapabilities
             "Built-in .NET ZIP; bounded previews, staged tree extraction and explicit-file creation. Not yet Windows-verified."),
         new Format(".7z", false, false, false, false, "Planned embedded codec; not implemented."),
         new Format(".rar", false, false, false, false, "Planned extraction codec; not implemented."),
-        new Format(".tar", false, false, false, false, "Planned; not implemented."),
-        new Format(".gz", false, false, false, false, "Planned; not implemented."),
+        new Format(".tar", true, false, false, false, "Read-only TAR catalog prototype; no extraction or creation."),
+        new Format(".tgz", true, false, false, false, "Read-only gzip-compressed TAR catalog prototype."),
+        new Format(".gz", false, false, false, false, "Standalone gzip not supported; .tar.gz listing prototype only."),
         new Format(".bz2", false, false, false, false, "Planned; not implemented."),
         new Format(".xz", false, false, false, false, "Planned; not implemented."),
         new Format(".zst", false, false, false, false, "Planned; not implemented.")
