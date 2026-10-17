@@ -18,6 +18,7 @@
     <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="#1B1D22">
       <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
       <AppBarButton Icon="Copy" Label="Copy R → L" Click="CopyRightToLeft_Click" />
+      <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
       <AppBarSeparator />
       <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" />
       <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" />
