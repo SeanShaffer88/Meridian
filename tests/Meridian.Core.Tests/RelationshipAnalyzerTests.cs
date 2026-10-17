@@ -54,4 +54,32 @@ public class RelationshipAnalyzerTests
     {
         Assert.Empty(RelationshipAnalyzer.Analyze(Array.Empty<string>()));
     }
+
+    [Fact]
+    public void RejectsRelationshipLimitBeforeGeneratingUnboundedOutput()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "meridian-foresight"));
+        var paths = Enumerable.Range(0, 500)
+            .Select(i => Path.Combine(root, $"item-{i}.txt"));
+        Assert.Throws<InvalidOperationException>(() =>
+            RelationshipAnalyzer.Analyze(paths, maxRelationships: 50));
+    }
+
+    [Fact]
+    public void AllowsExactRelationshipLimit()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "meridian-foresight"));
+        var paths = Enumerable.Range(0, 5)
+            .Select(i => Path.Combine(root, $"item-{i}.txt"));
+        Assert.Equal(10, RelationshipAnalyzer.Analyze(paths, maxRelationships: 10).Count);
+    }
+
+    [Fact]
+    public void RejectsInvalidRelationshipLimits()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RelationshipAnalyzer.Analyze(Array.Empty<string>(), maxRelationships: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RelationshipAnalyzer.Analyze(Array.Empty<string>(), maxRelationships: 100001));
+    }
 }
