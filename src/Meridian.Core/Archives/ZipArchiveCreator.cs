@@ -77,6 +77,7 @@ public static class ZipArchiveCreator
             throw new IOException("Archive destination already exists.");
 
         long completedBytes = 0;
+        cancellationToken.ThrowIfCancellationRequested();
         ReportProgress(0, total);
         var stage = Path.Combine(parent, ".meridian-zip-" + Guid.NewGuid().ToString("N") + ".tmp");
         var created = false;
