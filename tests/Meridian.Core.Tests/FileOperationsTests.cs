@@ -5,6 +5,44 @@ namespace Meridian.Core.Tests;
 public sealed class FileOperationsTests
 {
     [Fact]
+    public void CopyItem_RefusesLinkedDestinationWithoutWriting()
+    {
+        using var temp = new TemporaryDirectory();
+        var real = Directory.CreateDirectory(Path.Combine(temp.Path, "real")).FullName;
+        var link = Path.Combine(temp.Path, "linked");
+        var source = Path.Combine(temp.Path, "source.txt");
+        File.WriteAllText(source, "untouched");
+        try { Directory.CreateSymbolicLink(link, real); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return; // Symbolic link creation can be restricted on Windows runners.
+        }
+
+        Assert.Throws<IOException>(() => FileOperations.CopyItem(source, link));
+        Assert.False(File.Exists(Path.Combine(real, "source.txt")));
+        Assert.Equal("untouched", File.ReadAllText(source));
+    }
+
+    [Fact]
+    public void MoveItem_RefusesLinkedDestinationWithoutMoving()
+    {
+        using var temp = new TemporaryDirectory();
+        var real = Directory.CreateDirectory(Path.Combine(temp.Path, "real")).FullName;
+        var link = Path.Combine(temp.Path, "linked");
+        var source = Path.Combine(temp.Path, "source.txt");
+        File.WriteAllText(source, "untouched");
+        try { Directory.CreateSymbolicLink(link, real); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return;
+        }
+
+        Assert.Throws<IOException>(() => FileOperations.MoveItem(source, link));
+        Assert.True(File.Exists(source));
+        Assert.False(File.Exists(Path.Combine(real, "source.txt")));
+    }
+
+    [Fact]
     public void RenameItem_RenamesFileWithoutChangingContents()
     {
         using var temp = new TemporaryDirectory();
