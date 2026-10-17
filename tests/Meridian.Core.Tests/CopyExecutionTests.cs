@@ -4,6 +4,50 @@ namespace Meridian.Core.Tests;
 
 public sealed class CopyExecutionTests
 {
+    [Fact]
+    public void TreeCopyPreservesDifferentPayloadsAcrossBufferBoundaries()
+    {
+        using var fixture = new Fixture(tree: true);
+        int[] lengths = [0, 1, 4095, 4096, 4097, 1024 * 1024 - 1, 1024 * 1024, 1024 * 1024 + 1];
+        var expected = lengths.Select((length, index) =>
+        {
+            var bytes = new byte[length];
+            new Random(index + 100).NextBytes(bytes);
+            var name = $"boundary-{index}.bin";
+            File.WriteAllBytes(Path.Combine(fixture.Source, "nested", name), bytes);
+            return (name, bytes);
+        }).ToArray();
+
+        var output = FileOperations.CopyItem(fixture.Source, fixture.Destination);
+
+        foreach (var (name, bytes) in expected)
+            Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(output, "nested", name)));
+        fixture.AssertSourceIntact();
+    }
+
+    [Fact]
+    public async Task ConcurrentCopiesKeepIndependentPayloads()
+    {
+        var fixtures = Enumerable.Range(0, 4).Select(_ => new Fixture(tree: false)).ToArray();
+        try
+        {
+            for (var index = 0; index < fixtures.Length; index++)
+            {
+                new Random(index + 100).NextBytes(fixtures[index].Payload);
+                File.WriteAllBytes(fixtures[index].Source, fixtures[index].Payload);
+            }
+            var outputs = await Task.WhenAll(fixtures.Select(fixture => Task.Run(() =>
+                FileOperations.CopyItem(fixture.Source, fixture.Destination))));
+
+            for (var index = 0; index < fixtures.Length; index++)
+            {
+                Assert.Equal(fixtures[index].Payload, File.ReadAllBytes(outputs[index]));
+                fixtures[index].AssertSourceIntact();
+            }
+        }
+        finally { foreach (var fixture in fixtures) fixture.Dispose(); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -4,6 +4,7 @@ namespace Meridian.Services;
 /// <remarks>Path checks are not race-free. Moves require a Windows rename without copy fallback.</remarks>
 public static class FileOperations
 {
+    private const int CopyBufferSize = 1024 * 1024;
     /// <summary>Renames a file or directory in place without replacing an existing item.</summary>
     public static string RenameItem(string sourcePath, string newName)
     {
@@ -185,28 +186,34 @@ public static class FileOperations
             throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
         var stagingPath = Path.Combine(destinationRoot, $".meridian-{Guid.NewGuid():N}.partial");
         var reporting = progress is null ? null : new CopyProgressState(progress);
+        byte[]? buffer = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(CopyBufferSize);
             if (Directory.Exists(source))
             {
                 Directory.CreateDirectory(stagingPath);
-                CopyDirectoryContents(source, stagingPath, cancellationToken, reporting);
+                CopyDirectoryContents(source, stagingPath, buffer, cancellationToken, reporting);
                 cancellationToken.ThrowIfCancellationRequested();
                 Directory.Move(stagingPath, finalPath);
             }
             else
             {
-                CopyFileWithCancellation(source, stagingPath, cancellationToken, reporting);
+                CopyFileWithCancellation(source, stagingPath, buffer, cancellationToken, reporting);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(stagingPath, finalPath);
             }
             return finalPath;
         }
         catch { TryDeleteStaging(stagingPath); throw; }
+        finally
+        {
+            if (buffer is not null) System.Buffers.ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
     }
 
-    private static void CopyDirectoryContents(string source, string destination,
+    private static void CopyDirectoryContents(string source, string destination, byte[] buffer,
         CancellationToken cancellationToken, CopyProgressState? reporting)
     {
         foreach (var sourcePath in Directory.EnumerateFileSystemEntries(source))
@@ -218,25 +225,26 @@ public static class FileOperations
             if ((attributes & FileAttributes.Directory) != 0)
             {
                 Directory.CreateDirectory(targetPath);
-                CopyDirectoryContents(sourcePath, targetPath, cancellationToken, reporting);
+                CopyDirectoryContents(sourcePath, targetPath, buffer, cancellationToken, reporting);
             }
-            else CopyFileWithCancellation(sourcePath, targetPath, cancellationToken, reporting);
+            else CopyFileWithCancellation(sourcePath, targetPath, buffer, cancellationToken, reporting);
         }
     }
 
-    private static void CopyFileWithCancellation(string source, string destination,
+    private static void CopyFileWithCancellation(string source, string destination, byte[] buffer,
         CancellationToken cancellationToken, CopyProgressState? reporting)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var creationTime = File.GetCreationTimeUtc(source);
         var lastWriteTime = File.GetLastWriteTimeUtc(source);
         var lastAccessTime = File.GetLastAccessTimeUtc(source);
-        var buffer = new byte[1024 * 1024];
-        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
-        using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.SequentialScan))
+        // One operation-owned transfer buffer is reused throughout the tree.
+        // Small stream buffers avoid another large allocation for every file.
+        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
+        using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
         {
             int read;
-            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            while ((read = input.Read(buffer, 0, CopyBufferSize)) > 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 output.Write(buffer, 0, read);
