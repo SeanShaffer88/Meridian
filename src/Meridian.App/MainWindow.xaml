@@ -81,7 +81,7 @@
           </ComboBox>
           <ToggleButton x:Name="LeftSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" Checked="LeftSortDirection_Changed" Unchecked="LeftSortDirection_Changed" />
         </Grid>
-        <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Single" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
+        <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
             <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
               <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="#F04444" />
@@ -111,7 +111,7 @@
           </ComboBox>
           <ToggleButton x:Name="RightSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" Checked="RightSortDirection_Changed" Unchecked="RightSortDirection_Changed" />
         </Grid>
-        <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Single" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
+        <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
             <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
               <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="#F04444" />
