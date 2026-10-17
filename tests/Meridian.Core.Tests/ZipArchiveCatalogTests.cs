@@ -59,4 +59,36 @@ public class ZipArchiveCatalogTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void RejectsFileThatIsAlsoParentOfAnotherEntry()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".zip");
+        try
+        {
+            using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("docs");
+                zip.CreateEntry("docs/readme.txt");
+            }
+            Assert.Throws<InvalidDataException>(() => ZipArchiveCatalog.List(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void RejectsUnixSymbolicLinkEntry()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".zip");
+        try
+        {
+            using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+            {
+                var entry = zip.CreateEntry("shortcut");
+                entry.ExternalAttributes = unchecked((int)(0xA1FF0000u));
+            }
+            Assert.Throws<InvalidDataException>(() => ZipArchiveCatalog.List(path));
+        }
+        finally { File.Delete(path); }
+    }
 }
