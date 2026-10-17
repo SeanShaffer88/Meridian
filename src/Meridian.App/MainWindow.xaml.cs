@@ -354,7 +354,7 @@ public sealed partial class MainWindow : Window
 
     private async void InspectZip_Click(object sender, RoutedEventArgs e)
     {
-        if (_zipInspectionOpen || _previewDialogOpen) return;
+        if (_zipInspectionOpen || _zipCreationBusy || _zipExtractionBusy || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
             !string.Equals(Path.GetExtension(selected.FullPath), ".zip", StringComparison.OrdinalIgnoreCase))
         {
@@ -394,7 +394,7 @@ public sealed partial class MainWindow : Window
 
     private async void ExtractZip_Click(object sender, RoutedEventArgs e)
     {
-        if (_zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
+        if (_zipExtractionBusy || _zipCreationBusy || _zipInspectionOpen || _previewDialogOpen) return;
         if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory) return;
         _zipExtractionBusy = true;
         try
