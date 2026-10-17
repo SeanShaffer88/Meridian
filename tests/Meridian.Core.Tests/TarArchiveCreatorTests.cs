@@ -89,6 +89,28 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task RejectsCaseInsensitiveDuplicateEntryNames(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-case-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var first = Path.Combine(root, "first.txt");
+            var second = Path.Combine(root, "second.txt");
+            await File.WriteAllTextAsync(first, "first");
+            await File.WriteAllTextAsync(second, "second");
+            var archive = Path.Combine(root, "bundle" + extension);
+            await Assert.ThrowsAsync<InvalidDataException>(() => TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["Readme.txt"] = first, ["README.TXT"] = second }));
+            Assert.False(File.Exists(archive));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task RejectsParentFileBeforeDescendant()
     {
