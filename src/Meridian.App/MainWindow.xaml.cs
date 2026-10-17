@@ -484,10 +484,7 @@ public sealed partial class MainWindow : Window
         var confirmation = new ContentDialog
         {
             Title = "Create archive?",
-            Content = new TextBlock { Text = "Selected files: " + sources.Length +
-                Environment.NewLine + "Destination: " + destination +
-                Environment.NewLine + "Existing archives will not be overwritten.",
-                TextWrapping = TextWrapping.Wrap },
+            Content = formatPicker,
             PrimaryButtonText = "Create",
             CloseButtonText = "Cancel",
             XamlRoot = LeftPath.XamlRoot
