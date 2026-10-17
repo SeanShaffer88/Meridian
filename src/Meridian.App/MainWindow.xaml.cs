@@ -473,6 +473,7 @@ public sealed partial class MainWindow : Window
             await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
                 destination, new Dictionary<string, string> { [selected.Name] = selected.FullPath }));
             GlobalStatus.Text = "ZIP created · " + destination;
+            await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
