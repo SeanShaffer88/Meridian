@@ -348,4 +348,37 @@ public class RelationshipAnalyzerTests
         Assert.Contains(actual, r => r.Evidence == RelationshipEvidence.FilenameStem);
         Assert.Contains(actual, r => r.Evidence == RelationshipEvidence.SameDirectory);
     }
+
+    [Fact]
+    public void RejectsLexicallyDifferentPathsResolvingToSameLocation()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-normalize"));
+        var canonical = Path.Combine(root, "report.txt");
+        var equivalent = Path.Combine(root, "sub", "..", "report.txt");
+        Assert.Throws<ArgumentException>(() =>
+            RelationshipAnalyzer.Analyze(new[] { canonical, equivalent }));
+    }
+
+    [Fact]
+    public void InputEnumerationIsDisposedWhenPathLimitFails()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "foresight-dispose"));
+        var disposed = false;
+        IEnumerable<string> Paths()
+        {
+            try
+            {
+                yield return Path.Combine(root, "a.txt");
+                yield return Path.Combine(root, "b.txt");
+            }
+            finally
+            {
+                disposed = true;
+            }
+        }
+
+        Assert.Throws<ArgumentException>(() =>
+            RelationshipAnalyzer.Analyze(Paths(), maxPaths: 1));
+        Assert.True(disposed);
+    }
 }
