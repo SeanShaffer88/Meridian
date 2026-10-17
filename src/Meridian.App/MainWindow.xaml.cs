@@ -12,7 +12,9 @@ public sealed partial class MainWindow : Window
 {
     private readonly PaneState _left;
     private readonly PaneState _right;
+    private readonly WorkspaceStore _workspaceStore = new();
     private PaneState _activePane;
+    private bool _restoringWorkspace;
 
     public MainWindow()
     {
@@ -31,8 +33,36 @@ public sealed partial class MainWindow : Window
 
     private async Task InitializeAsync(string documents, string downloads)
     {
-        await NavigateAsync(_left, documents, addHistory: false);
-        await NavigateAsync(_right, downloads, addHistory: false);
+        var saved = await _workspaceStore.LoadAsync();
+        var leftPath = saved?.LeftPath is { Length: > 0 } savedLeft && Directory.Exists(savedLeft) ? savedLeft : documents;
+        var rightPath = saved?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
+
+        _restoringWorkspace = true;
+        try
+        {
+            await NavigateAsync(_left, leftPath, addHistory: false);
+            await NavigateAsync(_right, rightPath, addHistory: false);
+        }
+        finally
+        {
+            _restoringWorkspace = false;
+        }
+
+        await PersistWorkspaceAsync();
+    }
+
+    private async Task PersistWorkspaceAsync()
+    {
+        if (_restoringWorkspace) return;
+        try
+        {
+            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            // Workspace persistence is a convenience; file browsing must continue if it fails.
+            GlobalStatus.Text = "Workspace could not be saved · " + ex.Message;
+        }
     }
 
     private async Task NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
