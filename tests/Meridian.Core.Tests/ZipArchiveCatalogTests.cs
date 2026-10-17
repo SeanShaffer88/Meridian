@@ -91,4 +91,20 @@ public class ZipArchiveCatalogTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void RejectsExplicitDirectoryAndFileAtSamePath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".zip");
+        try
+        {
+            using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("docs/");
+                zip.CreateEntry("docs");
+            }
+            Assert.Throws<InvalidDataException>(() => ZipArchiveCatalog.List(path));
+        }
+        finally { File.Delete(path); }
+    }
 }
