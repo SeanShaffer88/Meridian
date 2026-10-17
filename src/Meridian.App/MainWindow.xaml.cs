@@ -372,13 +372,13 @@ public sealed partial class MainWindow : Window
                     .Select(item => (item.Path, item.Bytes, item.IsDirectory)).ToArray());
             var totalBytes = entries.Where(entry => !entry.IsDirectory).Sum(entry => entry.Bytes);
             var fileCount = entries.Count(entry => !entry.IsDirectory);
-            var folderCount = entries.Count - fileCount;
+            var folderCount = entries.Length - fileCount;
             var listing = string.Join(Environment.NewLine,
                 entries.Select(entry => (entry.IsDirectory ? "[DIR] " : "[FILE] ") +
                     entry.Path + " (" + entry.Bytes.ToString("N0") + " bytes)"));
             await new ContentDialog
             {
-                Title = "Archive contents · " + selected.Name + " · " + entries.Count.ToString("N0") +
+                Title = "Archive contents · " + selected.Name + " · " + entries.Length.ToString("N0") +
                     " entries (" + fileCount.ToString("N0") + " files, " +
                     folderCount.ToString("N0") + " folders) · " + totalBytes.ToString("N0") + " bytes",
                 Content = new TextBox { Text = listing, IsReadOnly = true,
