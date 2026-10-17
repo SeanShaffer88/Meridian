@@ -25,6 +25,7 @@ public static class TarArchiveCreator
         if (File.Exists(target) || Directory.Exists(target))
             throw new IOException("Archive destination already exists.");
         var plan = new List<(string Name, string Source, long Length)>();
+        var fileAncestors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0;
         foreach (var item in sourceFiles)
@@ -39,6 +40,13 @@ public static class TarArchiveCreator
             if (length > 4L * 1024 * 1024 * 1024 - totalBytes)
                 throw new InvalidDataException("TAR source exceeds 4 GiB aggregate budget.");
             totalBytes += length;
+            foreach (var existing in names)
+            {
+                if (existing == name) continue;
+                if (existing.StartsWith(name + "/", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith(existing + "/", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("TAR file entry conflicts with a parent path.");
+            }
             plan.Add((name, source, length));
         }
         var ancestor = parent;
