@@ -499,7 +499,17 @@ public sealed partial class MainWindow : Window
             XamlRoot = LeftPath.XamlRoot
         };
         _zipCreationBusy = true;
-        if (await confirmation.ShowAsync() != ContentDialogResult.Primary)
+        ContentDialogResult confirmationResult;
+        try
+        {
+            confirmationResult = await confirmation.ShowAsync();
+        }
+        catch
+        {
+            _zipCreationBusy = false;
+            throw;
+        }
+        if (confirmationResult != ContentDialogResult.Primary)
         {
             _zipCreationBusy = false;
             return;
