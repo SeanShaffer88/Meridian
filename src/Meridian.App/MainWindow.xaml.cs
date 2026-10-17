@@ -257,6 +257,42 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void RenameSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select a file or folder to rename.";
+            return;
+        }
+
+        var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
+        var dialog = new ContentDialog
+        {
+            Title = "Rename item",
+            Content = nameBox,
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            var renamedTo = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
+            var pane = _activePane;
+            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.OrdinalIgnoreCase)
+                ? "Name unchanged."
+                : $"Renamed · {Path.GetFileName(renamedTo)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not rename item · " + ex.Message;
+        }
+    }
+
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
