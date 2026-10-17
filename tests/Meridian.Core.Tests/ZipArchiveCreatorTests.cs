@@ -54,6 +54,32 @@ public class ZipArchiveCreatorTests
     }
 
     [Fact]
+    public async Task ReportsStreamingByteProgress()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-zip-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.bin");
+            await File.WriteAllBytesAsync(source, new byte[20000]);
+            var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var progress = new SynchronousProgress<(long CompletedBytes, long TotalBytes)>(updates.Add);
+            await ZipArchiveCreator.CreateAsync(Path.Combine(root, "result.zip"),
+                new Dictionary<string, string> { ["source.bin"] = source }, progress: progress);
+            Assert.NotEmpty(updates);
+            Assert.Equal((0L, 20000L), updates[0]);
+            Assert.Equal((20000L, 20000L), updates[^1]);
+            Assert.All(updates, update => Assert.InRange(update.CompletedBytes, 0, update.TotalBytes));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
+
+    [Fact]
     public async Task CreatesArchiveFromExplicitFileMap()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-create-" + Guid.NewGuid().ToString("N"));
