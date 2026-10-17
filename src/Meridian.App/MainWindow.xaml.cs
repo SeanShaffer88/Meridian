@@ -16,6 +16,7 @@ public sealed partial class MainWindow : Window
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private PaneState _activePane;
     private bool _restoringWorkspace;
+    private CancellationTokenSource? _copyCancellation;
 
     public MainWindow()
     {
@@ -172,20 +173,43 @@ public sealed partial class MainWindow : Window
     }
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
+        if (_copyCancellation is not null) { GlobalStatus.Text = "A copy is already in progress."; return; }
         if (source.List.SelectedItem is not FileEntry selected) { GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first."; return; }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
         if (string.Equals(Path.GetFullPath(selected.FullPath), Path.GetFullPath(destination.CurrentPath), StringComparison.OrdinalIgnoreCase))
         { GlobalStatus.Text = "The destination is the selected folder. Choose another destination."; return; }
+
         var destinationPath = destination.CurrentPath;
+        var cancellation = new CancellationTokenSource();
+        _copyCancellation = cancellation;
+        CancelCopyButton.IsEnabled = true;
         GlobalStatus.Text = $"Copying {selected.Name}…"; SetPaneStatus(source, "Copy in progress…");
         try
         {
-            var copiedTo = await Task.Run(() => FileOperations.CopyItem(selected.FullPath, destinationPath));
+            var copiedTo = await Task.Run(() => FileOperations.CopyItem(selected.FullPath, destinationPath, cancellation.Token), cancellation.Token);
             if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
             SetPaneStatus(source, "Ready"); GlobalStatus.Text = $"Copied successfully · {Path.GetFileName(copiedTo)}";
         }
+        catch (OperationCanceledException)
+        {
+            SetPaneStatus(source, "Copy cancelled");
+            GlobalStatus.Text = "Copy cancelled · Partial staging data was cleaned up where possible.";
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         { SetPaneStatus(source, "Copy failed"); GlobalStatus.Text = "Copy failed · " + ex.Message; }
+        finally
+        {
+            if (ReferenceEquals(_copyCancellation, cancellation)) _copyCancellation = null;
+            CancelCopyButton.IsEnabled = false;
+            cancellation.Dispose();
+        }
+    }
+
+    private void CancelCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if (_copyCancellation is null) return;
+        _copyCancellation.Cancel();
+        GlobalStatus.Text = "Cancelling copy…";
     }
 
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
