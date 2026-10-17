@@ -5,6 +5,7 @@ using Microsoft.VisualBasic.FileIO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.System;
 
 namespace Meridian;
@@ -296,7 +297,7 @@ public sealed partial class MainWindow : Window
     private void ApplyFilter(PaneState pane)
     {
         var query = pane.FilterBox.Text.Trim();
-        var matches = DirectoryReader.Filter(pane.AllItems, query);
+        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending);
 
         pane.Items.Clear();
         foreach (var item in matches)
@@ -305,6 +306,19 @@ public sealed partial class MainWindow : Window
         SetPaneStatus(pane, string.IsNullOrEmpty(query)
             ? $"{pane.AllItems.Count:N0} items"
             : $"{matches.Count:N0} of {pane.AllItems.Count:N0} items · filtered");
+    }
+
+    private void LeftSort_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSort(_left, LeftSort, LeftSortDescending);
+    private void RightSort_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSort(_right, RightSort, RightSortDescending);
+    private void LeftSortDirection_Changed(object sender, RoutedEventArgs e) => UpdateSort(_left, LeftSort, LeftSortDescending);
+    private void RightSortDirection_Changed(object sender, RoutedEventArgs e) => UpdateSort(_right, RightSort, RightSortDescending);
+
+    private void UpdateSort(PaneState? pane, ComboBox sort, ToggleButton direction)
+    {
+        if (pane is null || sort is null || direction is null) return;
+        pane.SortField = (DirectorySortField)Math.Clamp(sort.SelectedIndex, 0, 3);
+        pane.Descending = direction.IsChecked == true;
+        ApplyFilter(pane);
     }
 
     private void LeftFilter_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter(_left);
@@ -659,6 +673,8 @@ public sealed partial class MainWindow : Window
         public TextBlock Status { get; } = status;
         public ObservableCollection<FileEntry> Items { get; } = [];
         public IReadOnlyList<FileEntry> AllItems { get; set; } = Array.Empty<FileEntry>();
+        public DirectorySortField SortField { get; set; } = DirectorySortField.Name;
+        public bool Descending { get; set; }
         public Stack<string> BackHistory { get; } = new();
         public Stack<string> ForwardHistory { get; } = new();
         public string CurrentPath { get; set; } = string.Empty;
