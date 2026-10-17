@@ -97,7 +97,7 @@ public static class ZipTreeExtractor
                 if (written != item.UncompressedBytes)
                     throw new InvalidDataException("ZIP decompressed size did not match catalog.");
                 fileCount++;
-                progress?.Report((i + 1) * 100 / catalog.Count);
+                progress?.Report((int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
             }
             cancellationToken.ThrowIfCancellationRequested();
             CheckDirectoryChain(parent, cancellationToken);
