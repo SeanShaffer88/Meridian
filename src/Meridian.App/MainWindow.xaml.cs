@@ -359,6 +359,11 @@ public sealed partial class MainWindow : Window
         }
 
         var path = selected.FullPath;
+        if ((File.GetAttributes(path) & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
+        {
+            GlobalStatus.Text = "Preview does not follow file links or directories.";
+            return;
+        }
         var decision = Meridian.Core.Viewer.ViewerRouter.Classify(path);
         var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
         panel.Children.Add(new TextBlock
