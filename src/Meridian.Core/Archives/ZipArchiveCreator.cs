@@ -38,18 +38,18 @@ public static class ZipArchiveCreator
             if (sourcePaths.Contains(source)) throw new InvalidDataException("Duplicate archive source.");
             if (ancestorPaths.Contains(name))
                 throw new InvalidDataException("ZIP file entry conflicts with an existing descendant.");
-            var ancestor = name;
-            while (ancestor.Contains('/'))
+            var entryAncestor = name;
+            while (entryAncestor.Contains('/'))
             {
-                ancestor = ancestor[..ancestor.LastIndexOf('/')];
-                if (names.Contains(ancestor))
+                entryAncestor = entryAncestor[..entryAncestor.LastIndexOf('/')];
+                if (names.Contains(entryAncestor))
                     throw new InvalidDataException("ZIP file entry conflicts with an existing parent file.");
             }
-            ancestor = name;
-            while (ancestor.Contains('/'))
+            entryAncestor = name;
+            while (entryAncestor.Contains('/'))
             {
-                ancestor = ancestor[..ancestor.LastIndexOf('/')];
-                ancestorPaths.Add(ancestor);
+                entryAncestor = entryAncestor[..entryAncestor.LastIndexOf('/')];
+                ancestorPaths.Add(entryAncestor);
             }
             names.Add(name);
             sourcePaths.Add(source);
