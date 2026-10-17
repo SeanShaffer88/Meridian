@@ -18,6 +18,8 @@
     <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="#1B1D22">
       <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
       <AppBarButton Icon="Copy" Label="Copy R → L" Click="CopyRightToLeft_Click" />
+      <AppBarButton Icon="Move" Label="Move L → R" Click="MoveLeftToRight_Click" />
+      <AppBarButton Icon="Move" Label="Move R → L" Click="MoveRightToLeft_Click" />
       <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
       <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
