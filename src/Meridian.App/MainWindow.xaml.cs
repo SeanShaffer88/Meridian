@@ -292,6 +292,9 @@ public sealed partial class MainWindow : Window
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
         var token = pane.ReadCancellation.Token;
+        pane.AllItems = Array.Empty<FileEntry>();
+        pane.Items.Clear();
+        pane.List.SelectedItem = null;
         pane.CurrentPath = fullPath; pane.PathBox.Text = fullPath; SetPaneStatus(pane, "Loading folder…");
         try
         {
@@ -304,7 +307,10 @@ public sealed partial class MainWindow : Window
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        { SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Could not read folder · " + ex.Message; }
+        {
+            if (token.IsCancellationRequested) return;
+            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Could not read folder · " + ex.Message;
+        }
     }
 
     private void ApplyFilter(PaneState pane)
@@ -491,7 +497,9 @@ public sealed partial class MainWindow : Window
             GlobalStatus.Text = "Select at least one file or folder to archive.";
             return;
         }
-        var destination = Path.Combine(_activePane.CurrentPath,
+        var creationPane = _activePane;
+        var creationParent = creationPane.CurrentPath;
+        var destination = Path.Combine(creationParent,
             (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
         var formatPicker = new ComboBox { SelectedIndex = 0, MinWidth = 260 };
         formatPicker.Items.Add("ZIP (.zip)");
@@ -557,8 +565,9 @@ public sealed partial class MainWindow : Window
             else
                 await Task.Run(() => Meridian.Core.Archives.TarArchiveCreator.CreateAsync(
                     destination, planned, cancellationToken: token), token);
+            if (string.Equals(creationPane.CurrentPath, creationParent, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(creationPane, creationParent, addHistory: false);
             GlobalStatus.Text = "Archive created · " + destination;
-            await NavigateAsync(_activePane, _activePane.CurrentPath, addHistory: false);
         }
         catch (OperationCanceledException)
         {
@@ -1115,7 +1124,8 @@ public sealed partial class MainWindow : Window
             return;
         }
         var sources = _dropShelf.Paths.ToArray();
-        var destination = _activePane.CurrentPath;
+        var destinationPane = _activePane;
+        var destination = destinationPane.CurrentPath;
         _batchPreparing = true;
         try
         {
@@ -1145,16 +1155,19 @@ public sealed partial class MainWindow : Window
             using var cancellation = new CancellationTokenSource();
             _batchCancellation = cancellation;
             CancelShelfButton.IsEnabled = true;
+            var acceptingProgress = true;
             try
             {
                 GlobalStatus.Text = "Copying Drop Shelf items…";
                 var progress = new Progress<BatchCopy.Progress>(state =>
                 {
-                    if (_batchCancellation == cancellation)
+                    if (acceptingProgress && _batchCancellation == cancellation)
                         GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}";
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
-                await NavigateAsync(_activePane, destination, addHistory: false);
+                acceptingProgress = false;
+                if (string.Equals(destinationPane.CurrentPath, destination, StringComparison.OrdinalIgnoreCase))
+                    await NavigateAsync(destinationPane, destination, addHistory: false);
                 GlobalStatus.Text = result.Succeeded
                     ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
                     : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
@@ -1189,6 +1202,7 @@ public sealed partial class MainWindow : Window
             }
             finally
             {
+                acceptingProgress = false;
                 _batchCancellation = null;
                 CancelShelfButton.IsEnabled = false;
             }
