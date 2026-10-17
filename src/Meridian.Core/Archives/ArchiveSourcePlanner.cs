@@ -14,6 +14,8 @@ public static class ArchiveSourcePlanner
             cancellationToken.ThrowIfCancellationRequested();
             if (File.Exists(path))
             {
+                if (!Path.IsPathFullyQualified(path))
+                    throw new ArgumentException("Archive sources must be absolute paths.");
                 Add(Path.GetFileName(path), path);
                 continue;
             }
