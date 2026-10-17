@@ -52,12 +52,13 @@ public sealed class SnapshotFileExporter
 
         // CreateNew is atomic: an existing destination is never overwritten.
         // The caller must choose an explicit destination and confirm the operation.
+        await using var input = new FileStream(source, FileMode.Open, FileAccess.Read,
+            FileShare.Read, 128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        cancellationToken.ThrowIfCancellationRequested();
         await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write,
             FileShare.None, 128 * 1024, FileOptions.Asynchronous);
         try
         {
-            await using var input = new FileStream(source, FileMode.Open, FileAccess.Read,
-                FileShare.Read, 128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
             await input.CopyToAsync(output, 128 * 1024, cancellationToken);
             await output.FlushAsync(cancellationToken);
             return output.Length;
