@@ -49,6 +49,8 @@ public static class ZipArchiveCreator
         }
 
         var target = Path.GetFullPath(destinationArchive);
+        if (plan.Any(item => string.Equals(item.Source, target, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Archive destination cannot also be a source file.", nameof(destinationArchive));
         var parent = Path.GetDirectoryName(target)!;
         var ancestor = parent;
         while (!string.IsNullOrEmpty(ancestor))
