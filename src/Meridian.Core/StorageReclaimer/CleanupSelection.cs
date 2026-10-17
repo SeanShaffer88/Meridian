@@ -13,7 +13,12 @@ public static class CleanupSelection
         ArgumentNullException.ThrowIfNull(requestedPaths);
         var comparer = OperatingSystem.IsWindows()
             ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var candidates = plan.Candidates.ToDictionary(x => x.FullPath, comparer);
+        var candidates = new Dictionary<string, CleanupCandidate>(comparer);
+        foreach (var candidate in plan.Candidates)
+        {
+            if (!candidates.TryAdd(candidate.FullPath, candidate))
+                throw new ArgumentException("Inventory contains duplicate target paths.", nameof(plan));
+        }
         var selected = new List<CleanupCandidate>();
         var seen = new HashSet<string>(comparer);
         foreach (var path in requestedPaths)
