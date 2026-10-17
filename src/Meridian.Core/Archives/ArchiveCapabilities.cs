@@ -9,12 +9,12 @@ public static class ArchiveCapabilities
     public static IReadOnlyList<Format> Supported { get; } = Array.AsReadOnly(new[]
     {
         new Format(".zip", true, true, true, true,
-            "Built-in .NET ZIP; bounded previews, staged tree extraction and explicit-file creation. Not yet Windows-verified."),
+            "Built-in .NET ZIP; bounded backend previews, staged tree extraction and file-map creation. Interactive workflows and broad codec compatibility remain unverified."),
         new Format(".7z", false, false, false, false, "Planned embedded codec; not implemented."),
         new Format(".rar", false, false, false, false, "Planned extraction codec; not implemented."),
-        new Format(".tar", true, false, true, true, "TAR catalog, staged extraction and creation prototypes; not Windows-verified."),
-        new Format(".tgz", true, false, true, true, "Compressed TAR catalog, staged extraction and creation prototypes; not Windows-verified."),
-        new Format(".gz", false, false, false, false, "Standalone gzip not supported; .tar.gz listing prototype only."),
+        new Format(".tar", true, false, true, true, "TAR catalog, staged extraction and file-map creation; interactive workflows and full dialect coverage remain unverified."),
+        new Format(".tgz", true, false, true, true, "Compressed TAR catalog, staged extraction and file-map creation; interactive workflows remain unverified."),
+        new Format(".gz", false, false, false, false, "Standalone gzip is unsupported; .tar.gz routes to compressed TAR capabilities."),
         new Format(".bz2", false, false, false, false, "Planned; not implemented."),
         new Format(".xz", false, false, false, false, "Planned; not implemented."),
         new Format(".zst", false, false, false, false, "Planned; not implemented.")

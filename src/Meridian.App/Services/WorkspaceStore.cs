@@ -3,8 +3,8 @@ using System.Text.Json;
 namespace Meridian.Services;
 
 /// <summary>
-/// Persists the two visible folder locations locally so a new session can restore the workspace.
-/// The file contains paths only and is stored in the user's local application data directory.
+/// Persists pane paths, bookmark labels/paths, paired tab names/paths and the active tab index.
+/// State is stored in the user's local application data directory; the in-memory shelf is excluded.
 /// </summary>
 internal sealed class WorkspaceStore
 {

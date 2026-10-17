@@ -1,6 +1,7 @@
 namespace Meridian.Services;
 
-/// <summary>Conservative copy operations. Existing destinations are never overwritten.</summary>
+/// <summary>Copy, move and rename without intentional replacement of existing destinations.</summary>
+/// <remarks>Path checks are not race-free; cross-volume moves copy then delete without checksum verification.</remarks>
 public static class FileOperations
 {
     /// <summary>Renames a file or directory in place without replacing an existing item.</summary>

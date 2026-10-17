@@ -4,7 +4,7 @@
 
 ## Status
 
-**Read-only snapshot discovery UI implemented in the development branch; Windows runtime verification pending.** This branch contains immutable snapshot metadata, a drive-letter-scoped path resolver, and a Windows WMI-based snapshot catalog. The catalog has not yet passed Windows CI or real-device validation. A toolbar button opens a snapshot selection dialog with an opt-in read-only listing of the active pane's corresponding historical folder. The listing is nonrecursive, limited to 250 displayed entries, and does not open or export files. Windows runtime verification remains pending. The UI does **not** open historical files, export recovery data, or create snapshots; a separate backend-only export prototype exists. WMI VolumeName often uses volume GUID paths; drive-letter GUID matching has now been added but has not been verified on Windows; mount-point folders and volumes without drive letters remain unsupported.
+**Read-only snapshot discovery UI implemented in the development branch; Windows runtime verification pending.** This branch contains immutable snapshot metadata, a drive-letter-scoped path resolver, and a Windows WMI-based snapshot catalog. The application and core suite passed Windows CI at the [documented baseline](STATUS.md); actual WMI/VSS discovery, volume mapping and historical reads have not been verified against controlled snapshots. A toolbar button opens a snapshot selection dialog with an opt-in read-only listing of the active pane's corresponding historical folder. The listing is nonrecursive, capped at 10,000 backend entries and 250 displayed entries, and does not open or export files. Windows runtime verification remains pending. The UI does **not** open historical files, export recovery data, or create snapshots; a separate backend-only export prototype exists. The catalog can return volume GUID paths; drive-letter GUID matching is implemented but has not been integration-verified against controlled VSS volumes; mount-point folders and volumes without drive letters remain unsupported.
 
 ## Product direction
 
@@ -31,7 +31,7 @@
 ## Implementation milestones
 
 - [x] Define snapshot metadata and scoped path resolution foundation.
-- [x] Implement a WMI-based read-only Windows VSS catalog behind an interface (Windows validation pending).
+- [x] Implement a WMI-based read-only Windows VSS catalog behind an interface (real VSS integration validation pending).
 - [ ] Complete tests for path normalization, volume GUID mapping, volume boundaries, and malformed device objects (additional tests added; Windows validation pending).
 - [ ] WinUI read-only snapshot explorer and timeline (snapshot selection and limited read-only folder listing added; full explorer and timeline pending).
 - [ ] Read-only metadata preview, search and compare.
@@ -53,6 +53,6 @@ This document is a roadmap, not a claim that these features already work.
 | Snapshot browsing | Toolbar picker and limited read-only listing | Actual VSS volumes, inaccessible/expired snapshots, accessibility |
 | Export engine | Backend-only staged, no-overwrite single-file copy | Handle-based reparse safety, cancellation/cleanup integration tests |
 | Export receipt | Backend data contract | UI presentation, optional verified checksum |
-| CI | Windows build/test workflow configured; test-result artifacts configured | Confirm successful current-branch jobs and inspect reports |
+| CI | x64/ARM64 build/publish and core suite passed for baseline in [verification report](VERIFICATION_REPORT.md) | Real VSS integration and ARM64 runtime checks; fresh CI for later application commits |
 
 **Security boundary:** Path-component checks and reparse-attribute inspection are best-effort; filesystem objects can change between inspection and opening. No guarantee of race-free export or recovery is made. VSS is not a substitute for a separate backup.

@@ -19,7 +19,7 @@ Free · Open source · Offline-first · Windows 11
 </div>
 
 > [!WARNING]
-> **Meridian is an early development preview, not a finished release.** Windows x64/ARM64 build, publish, installer and core-test CI passed for the archive-integrity baseline `d0d9d597`; subsequent changes require their own CI evidence. Hands-on runtime, clean-install and accessibility testing remain unverified. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
+> **Meridian is an early development preview, not a finished release.** Windows x64/ARM64 build, publish, installer and core-test CI passed for application baseline `2eef02a`, including an x64 published-app startup check; later application changes require new evidence. Hands-on runtime, clean-install and accessibility testing remain unverified. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
 
 ---
 
@@ -37,17 +37,19 @@ Meridian is being built to answer more:
 
 The goal is not to clone File Explorer with more buttons. It's to make everyday file work **clearer, more capable, and safer**.
 
+See the [documentation index](docs/README.md), [dated implementation status](docs/STATUS.md), [user guide](docs/USER_GUIDE.md) and [verification report](docs/VERIFICATION_REPORT.md). Design goals and implemented features are tracked separately.
+
 ## Complete feature list
 
 Inspired by the clear, category-by-category feature reference used by classic dual-pane file managers, this directory covers **what Meridian has today, what exists in the development branch, and what is on the roadmap**. It is intentionally comprehensive, but it is **not** a claim that every listed feature is available.
 
-**Availability key:** **[MAIN]** implemented in the main branch · **[DEV]** prototype or backend code in [draft PR #37](https://github.com/SeanShaffer88/Meridian/pull/37), not released · **[PLANNED]** not implemented · **[REQUIREMENT]** design or release criterion. Even [MAIN] and [DEV] items do **not** imply successful Windows 11 x64/ARM64 runtime verification.
+**Availability key:** **[MAIN]** implemented in the main branch · **[DEV]** implemented UI or backend prototype code in [draft PR #37](https://github.com/SeanShaffer88/Meridian/pull/37), not released · **[PLANNED]** not implemented · **[REQUIREMENT]** design or release criterion. Even [MAIN] and [DEV] items do **not** imply successful Windows 11 x64/ARM64 runtime verification.
 
 ### Jump to a feature category
 
 [General interface](#general-features-and-interface) · [File operations](#file-operations-and-organization) · [Viewer and media](#built-in-viewer-images-audio-and-video) · [Archives](#archives-and-compressed-files) · [Search and intelligence](#search-discovery-and-file-intelligence) · [Recovery](#recovery-history-and-system-maintenance) · [Network and devices](#network-devices-and-extensions) · [Remote transfers](#network-transfer-and-remote-server-roadmap) · [Selection](#advanced-file-selection-and-navigation) · [Metadata](#file-metadata-permissions-and-diagnostics) · [Security and quality](#reliability-security-and-release-readiness)
 
-**Quick distinction:** The feature branch includes ZIP/TAR/TGZ inspection, creation and staged extraction commands. Archive-as-folder navigation remains planned. The media player is an **unverified WinUI prototype**. No external archive application will be required for formats Meridian eventually supports.
+**Quick distinction:** The feature branch includes ZIP/TAR/TGZ inspection, creation and staged extraction commands. Archive-as-folder navigation remains planned. The media player compiles in both architecture builds; actual playback remains unverified. No external archive application will be required for formats Meridian eventually supports.
 
 ### General features and interface
 
@@ -105,13 +107,13 @@ Inspired by the clear, category-by-category feature reference used by classic du
 
 - **[DEV]** Conservative archive-entry path validator that rejects traversal, rooted paths, reserved device names and unsafe components.
 - **[DEV]** Integrated ZIP/TAR/TGZ inspection, archive creation from selected files/folders, and staged extraction into a new folder using built-in .NET support.
-- **[DEV]** ZIP catalog limits on entry count and declared uncompressed sizes; duplicate path rejection.
+- **[DEV]** ZIP/TAR catalog limits on entry count and declared sizes; duplicate paths, file/parent collisions and unsupported special entries rejected.
 - **[PLANNED]** Browse supported archives like virtual folders inside either pane.
-- **[PLANNED]** Extract individual entries or selected groups, with preview and no-overwrite defaults.
+- **[DEV]** Whole-tree staged extraction into a new sibling folder; individual-entry/group extraction UI remains planned.
 - **[DEV]** ZIP creation and extraction with streamed CRC/length checks; archive update remains planned.
 - **[PLANNED]** 7z browsing/extraction and creation where the chosen embedded backend supports it.
 - **[PLANNED]** RAR/RAR5 browsing and extraction where supported by an appropriately licensed bundled decoder; **RAR creation is not promised**.
-- **[PLANNED]** TAR/PAX/GNU TAR, GZIP, BZIP2, XZ and Zstandard streams and combinations.
+- **[DEV]** TAR and TAR.GZ/TGZ catalog, creation and extraction for supported regular-file/directory entries; broad TAR dialect coverage, standalone compressed streams and BZIP2/XZ/Zstandard remain planned.
 - **[PLANNED]** Password-protected archive reading and encryption options, explicitly scoped by format.
 - **[DEV]** ZIP CRC/length and TAR/TGZ trailer checks, progress, cancellation, collision rejection and staged publication; broader integrity tooling remains planned.
 - **[PLANNED]** Compression-ratio, nesting, total-output, memory and time budgets to resist archive bombs.
@@ -154,7 +156,7 @@ See [Archive Engine design and compatibility](docs/ARCHIVE_ENGINE.md).
 ### Recovery, history and system maintenance
 
 - **[DEV]** TimeVault: read-only Windows Volume Shadow Copy metadata discovery through WMI.
-- **[DEV]** TimeVault: volume matching, scoped snapshot paths and limited snapshot folder listing.
+- **[DEV]** TimeVault: volume matching, scoped snapshot paths, toolbar snapshot picker and limited read-only historical folder listing.
 - **[DEV]** TimeVault: backend-only single-file export with no-overwrite staging and cancellation.
 - **[DEV]** TimeVault: export receipt model; not yet a complete recovery UI.
 - **[DEV]** Storage Reclaimer: bounded, read-only temporary-file inventory and advisory cleanup planning.
@@ -197,9 +199,9 @@ These are **planned**, not present in Meridian today. Remote file handling will 
 - **[PLANNED]** Select files by wildcard, extension, size, age, attributes or saved rules.
 - **[PLANNED]** Invert selection, select all with matching extension and restore previous selection.
 - **[PLANNED]** Breadcrumb address bar with editable path, path history and folder suggestions.
-- **[PLANNED]** Favorite directories, frequently used destinations and pinned workspaces.
+- **[MAIN]** Named directory bookmarks; frequent-destination ranking and pinned workspaces remain planned.
 - **[PLANNED]** Navigate into archives and supported virtual providers without extracting them.
-- **[PLANNED]** Quick filter as you type, with highlighted matches and reversible filter state.
+- **[MAIN]** Live per-pane filtering of loaded items; match highlighting and persistent filter state remain planned.
 - **[PLANNED]** Keyboard-accessible file preview, focused-pane indicators and accessible selection counts.
 - **[PLANNED]** Multi-tab drag-and-drop with explicit copy/move intent and collision previews.
 
@@ -249,7 +251,7 @@ Once a screenshot is verified, replace that feature's status with a linked image
 
 ## What you can use today
 
-These features are **implemented on the main development branch**. They are not a claim of complete real-device validation.
+The everyday features below exist on `main`; the dated status document separately identifies additions in PR #37. They are not a claim of complete real-device validation.
 
 | Experience | What it does |
 | --- | --- |
@@ -266,7 +268,7 @@ These features are **implemented on the main development branch**. They are not 
 
 ### Universal Viewer and media player (development branch)
 
-The [Universal Viewer prototype](docs/UNIVERSAL_VIEWER.md) includes bounded text/hex preview, image decoding, and native Windows audio/video controls. It is **not yet Windows-build or playback verified**; PDF rendering and stronger decoder safeguards remain incomplete. A real screenshot will be added here only after verification.
+The [Universal Viewer prototype](docs/UNIVERSAL_VIEWER.md) includes bounded text/hex preview, image decoding, and native Windows audio/video controls. It passes Windows x64/ARM64 compilation; **actual playback and interactive preview behavior remain unverified**; PDF rendering and stronger decoder safeguards remain incomplete. A real screenshot will be added here only after verification.
 
 ### Folder DNA: understand a folder at a glance
 
@@ -314,7 +316,7 @@ The ideas below define the direction of the project. **Unless explicitly listed 
 | **Drop Shelf improvements** | Build on the implemented temporary collection with persistence options, clearer batch management, and stronger workflow integration. |
 | **Consequence Engine** | Extend the existing copy preflight into explainable operation plans, explicit revalidation and outcome receipts. Initial advisory plan and receipt contracts are in [development](docs/CONSEQUENCE_ENGINE.md); they are not yet wired into the interface. |
 | **Smart Collections** | Create dynamic, rule-based views without rearranging the files on disk. |
-| **Meridian TimeVault** | Explore Windows VSS snapshots, historical file versions, safe recovery exports, timeline views, and snapshot differences. Foundation code exists on the [TimeVault development branch](https://github.com/SeanShaffer88/Meridian/pull/37); the viewer and recovery UI are not implemented yet. |
+| **Meridian TimeVault** | Explore Windows VSS snapshots, historical file versions, safe recovery exports, timeline views, and snapshot differences. Foundation code exists on the [TimeVault development branch](https://github.com/SeanShaffer88/Meridian/pull/37); a read-only snapshot picker/listing exists, while the full historical explorer and recovery-export UI remain planned. |
 | **Relationship View** | Discover explainable connections between files, projects, and metadata. |
 | **Workflow Recipes** | Save understandable, reviewable sequences for repetitive tasks. |
 | **Adaptive navigation** | Choose the best way to explore: dual pane, Miller columns, comparisons, galleries, and more. |
@@ -390,7 +392,7 @@ Meridian is designed around conservative defaults, not irreversible surprises.
 
 **Important limitations:** There is no general undo engine, automatic restore point, dedicated audit log, post-copy checksum verification, or guaranteed transactional rollback. Cross-volume moves copy first and then remove the source; if removal fails, **both copies may remain**. Reparse-point and filesystem edge cases still require additional validation.
 
-**A future Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
+**An Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
 
 **Safety is a release blocker, not a preference.** Meridian's [Safety Contract](docs/SAFETY_CONTRACT.md) defines risk tiers, no-overwrite rules, mandatory previews and revalidation, verified recovery claims, failure testing, and strict gates for cleanup, restore management and encrypted vaults. These are **targets**, not claims that the preview already implements them.
 
@@ -424,7 +426,9 @@ Automated builds are not a substitute for testing actual devices, Windows shell 
 - **Portable package:** Close Meridian and delete the extracted application folder. Some settings may remain in per-user application data.
 - **Deleted a file?** Check the Windows Recycle Bin; restoration is not guaranteed.
 - **Copied, moved, or renamed something?** Inspect both locations before manually reversing it. Meridian does not currently provide universal undo.
-- **Copy failed?** Check for `.meridian-*.partial` leftovers; verify what they contain before removing anything.
+- **Copy failed?** Check for `.meridian-*.partial` leftovers; verify contents and that no operation is using them before removing anything.
+- **Startup failed?** Check `%LOCALAPPDATA%\Meridian\last-error.log` if present and keep the complete published folder, including `Meridian.pri`.
+- **Settings/privacy:** `%LOCALAPPDATA%\Meridian\workspace.json` stores paths, bookmark/tab labels and active-tab selection. Portable copies also use this location. Diagnostics can contain paths; see the [user guide](docs/USER_GUIDE.md#local-data-and-privacy).
 
 Uninstalling Meridian does **not** reverse file operations.
 

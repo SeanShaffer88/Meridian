@@ -1,47 +1,42 @@
-# Verification Report
+# Verification report
 
-**Status: NOT READY / UNVERIFIED**
+Reviewed 2026-10-17. **Stable-release status: NOT READY.** Automated baseline checks and limited x64 startup passed; complete interactive, clean-machine and security validation remains open.
 
-Date: 2026-10-17
+Application baseline: `2eef02a859058f91cab78615a43de4cd5a327039`, `feature/timevault-foundation`, [draft PR #37](https://github.com/SeanShaffer88/Meridian/pull/37). Documentation revisions do not retroactively change this tested application commit. Later application changes require new evidence.
 
-| Claim | Evidence | Result | Limitation |
-|---|---|---|---|
-| XML files parse | Static parser check in authoring environment | Pass | Does not validate WinUI XAML schema or generated code |
-| XAML event handlers match code-behind names | Static name scan | Pass | Does not prove delegate signatures or XAML compilation |
-| Project references resolve | Static path check | Pass | Does not prove MSBuild accepts the solution |
-| Core unit tests pass | GitHub Actions run [38993509004](https://github.com/SeanShaffer88/Meridian/actions/runs/38993509004), commit `049120a2`; Windows CI test job passed | Pass in CI | This is automated test evidence, not a substitute for manual runtime testing |
-| Windows x64 app publishes | GitHub Actions run [38993509004](https://github.com/SeanShaffer88/Meridian/actions/runs/38993509004), commit `049120a2`; x64 publish job passed | Pass in CI | Does not prove the app launches or behaves correctly on a real device |
-| Windows ARM64 app publishes | GitHub Actions run [38993509004](https://github.com/SeanShaffer88/Meridian/actions/runs/38993509004), commit `049120a2`; ARM64 publish job passed | Pass in CI | Does not prove runtime behavior on physical ARM64 hardware |
-| Archive integrity baseline verified | Windows CI [39061684075](https://github.com/SeanShaffer88/Meridian/actions/runs/39061684075), commit `d0d9d597` | Pass: core tests, x64 and ARM64 builds, publish and installers | Does not establish interactive runtime or clean-install behavior |
-| Published x64 app starts | Local Windows 11 Home x64, build 10.0.26300, host SEAN-MSI | Limited startup smoke passed after resource packaging fix | A window is created and the process remains running; interactive workflows and clean-install behavior remain unverified |
-| Performance budgets are met | Not measured | Unverified | Requires representative workloads |
-| Security review is complete | Not completed | Not ready | See threat model and release gate |
+## Evidence
 
-## Required next steps
-1. Inspect CI for each subsequent feature-branch revision and resolve failures before release.
-2. Launch the app on Windows 11 x64; test ARM64 on an appropriate device when available.
-3. Test navigation, file launch, copy cancellation, timestamp preservation, and staging cleanup with disposable data.
-4. Test access denied, disappearing entries, disk full, conflicts, long paths, Unicode, reparse points, network paths, and interruption.
-5. Measure startup, navigation, idle CPU/memory, and copy performance.
-6. Update this report with actual machine/runtime details and evidence.
+| Check | Evidence | Result and limit |
+| --- | --- | --- |
+| Core tests | [Windows CI run 39063293051](https://github.com/SeanShaffer88/Meridian/actions/runs/39063293051), core-tests job; local Release run | Pass; local run: 339 passed, zero failed/skipped. Not a complete adversarial/integration matrix |
+| x64/ARM64 build and publish | Same run, both architecture jobs | Pass; local builds/publish also passed with zero build warnings/errors. ARM64 is cross-compiled, not device-tested |
+| XAML resource packaging | Same run, both PRI assertions | Pass; Meridian.pri included; previous omission caused main-window startup failure |
+| Published x64 startup | Same run, startup smoke; fresh local output on SEAN-MSI, Windows 11 Home x64 10.0.26300 | Pass: process alive for ten seconds and a main window created. Does not verify navigation, media, VSS, dialogs or accessibility |
+| Installers and portable artifacts | Same run, both architecture packaging/upload jobs | Generation/upload passed. Install/upgrade/uninstall and clean-system execution unverified |
+| Junction ancestors | Five copy/move source/destination and rename regression cases | All pass; junction creation asserted rather than silently skipped. Four fail against preceding implementation. Not proof against path swaps |
+| Dependency advisory query | Local `dotnet list Meridian.sln package --vulnerable --include-transitive`, NuGet v3, 2026-10-17 | No known vulnerable packages reported. Not a full dependency/support/license/security audit |
+| ZIP/TAR/TGZ integrity | Core regression cases in passing suite | Selected corruption, limits, cancellation and cleanup covered. No blanket codec/ZIP64/PAX/GNU compatibility claim |
 
-## Local release-hardening verification — 2026-10-17
+CI uploads TRX results and artifacts with 14-day retention; downloads can expire. Job logs identify the SDK selected by floating `10.0.x` setup. Local runs used the workspace .NET 10 SDK; the exact local patch was not preserved in this record and is not claimed.
 
-- Windows host `SEAN-MSI`: Release core suite passed, 339 tests, zero failures or skips. Results are emitted to `TestResults/*.trx` (ignored local artifacts).
-- Release x64 application build passed with zero warnings and zero errors using the workspace-local .NET 10 SDK.
-- Release ARM64 application build also passed locally with zero warnings and zero errors. Cross-compilation is not an ARM64 device test.
-- NuGet vulnerability query across the solution, including transitive dependencies, reported no vulnerable packages from `https://api.nuget.org/v3/index.json` on 2026-10-17. This is advisory-feed evidence, not a complete dependency/license or security audit.
-- Five junction-ancestor regression cases exercise copy/move source and destination paths and rename. Four fail against the preceding implementation; all pass with full ancestor checks. Junction creation is asserted, so missing link privileges cannot silently pass these tests.
-- Copy, move and rename now reject existing reparse-point ancestors before work starts. This remains a path-based check, not a guarantee against concurrent path replacement or hard-link aliases.
-- Archive extraction retains the originating pane, refreshes it only if its location is unchanged, labels ZIP/TAR progress consistently, and defaults confirmation to Cancel. Interactive focus/navigation behavior still needs device testing.
-- No interactive workflow, clean-install, ARM64 device, accessibility, disk-full, crash-recovery or performance results are claimed by this local verification.
+## Resolved failures
 
-## Remaining first-release blockers
+Pre-fix publish omitted the app XAML resource index and exited with `0xC000027B`; managed diagnostics identified failure to locate `ms-appx:///MainWindow.xaml`. MSIX build tooling now includes Meridian.pri for the unpackaged app. WinUI control resources and valid Folder/MoveToFolder symbols are included. A fresh publish opened the window and CI reproduces the startup check.
 
-The release acceleration plan in [ROADMAP](ROADMAP.md#release-acceleration-plan) defines the first release; the complete long-term feature inventory remains future work. Before a stable release, collect runtime and installer evidence, finish the filesystem adversarial/failure matrix, measure performance, audit dependencies, and complete accessibility checks. Cross-volume moves still require stronger destination verification and source-change handling before claiming the Safety Contract is satisfied. Keep PR #37 unmerged until explicitly authorized.
+Copy/move/rename now inspect existing reparse-point ancestors. Archive extraction retains the originating pane, refreshes it only if its path is unchanged and defaults confirmation to Cancel. Pane/focus behavior still needs hands-on testing.
 
-## Published startup blocker resolved
+## Remaining blockers
 
-The original publish output omitted the application XAML resource index and exited during main-window loading with status 0xC000027B. Enabling MSIX build tooling for the unpackaged application includes Meridian.pri in publish output. A locally published x64 app then created the Meridian window and remained running. The app now includes WinUI control resources and valid Folder/MoveToFolder symbols. Startup failures write one local last-error.log under LocalApplicationData/Meridian; diagnostics remain on the device and may include exception paths.
+| Area | Evidence still needed |
+| --- | --- |
+| Distribution | Clean install/launch without developer tools, upgrade/uninstall, per-user state, artifact hashes/version/signing policy |
+| Everyday workflows | Navigation, missing paths, bookmark/tab restoration, rename, copy/cancel, move, delete and properties with disposable data |
+| Data safety | Cross-volume destination verification/source stability; disk-full/interruption/access-denied/collision races, UNC/long/Unicode paths, aliases/path swaps and recovery |
+| Viewer | Real image/media play/pause/seek/failure/disposal, malformed inputs, resource limits and codec matrix |
+| TimeVault | Controlled real VSS snapshots, volume mapping, denied/expired access and export drills before UI recovery |
+| ARM64 | Runtime and installer execution on suitable Windows 11 ARM64 hardware/VM |
+| Accessibility | Keyboard, focus, screen readers, high contrast, scaling and prompts |
+| Performance | Reproducible [measurements](PERFORMANCE.md); startup survival is not a startup benchmark |
+| Security/privacy | Dependency/license audit, parser/filesystem review and observed network behavior; no independent review completed |
 
-CI now requires the application resource index for both architectures and runs a bounded x64 main-window startup smoke check. This detects packaging/startup failures; it does not replace workflow, accessibility or clean-machine testing.
+Follow the focused [first-release sequence](ROADMAP.md#release-acceleration-plan) and [release gate](RELEASE_GATE.md). The extensive long-term roadmap is separate from first-release completion. Open gates must not be inferred to pass merely because source code exists.

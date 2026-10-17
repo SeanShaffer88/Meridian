@@ -2,6 +2,12 @@
 
 Do not publish a stable release until every applicable item has evidence.
 
+## Current evidence versus gate completion
+
+At the [dated baseline](STATUS.md), core tests, x64/ARM64 build/publish/installer jobs, resource packaging and an x64 startup smoke passed. These establish automated increments only. Composite checklist items below remain open when they include untested failure paths, clean-machine behavior or real-device checks. See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for the exact commit/run and remaining gaps; do not reuse an older passing run as evidence for a changed application.
+
+## Stable-release checklist
+
 - [ ] Windows 11 x64 and ARM64 builds succeed from a clean checkout with documented SDK versions.
 - [ ] Core tests pass and relevant failure paths have tests.
 - [ ] App launches on a clean Windows 11 VM without developer tools installed.

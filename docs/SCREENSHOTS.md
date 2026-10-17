@@ -2,6 +2,8 @@
 
 The README should become a visual tour of real, implemented features as Windows runtime verification becomes available.
 
+Current evidence includes a successful x64 main-window startup, not reviewed feature screenshots. No screenshot is implied by the startup check. Track captures separately from implementation and build status in [STATUS.md](STATUS.md) and the README gallery.
+
 ## Capture rules
 
 - Capture **the actual running Meridian application**, not a generated mockup, design render or edited composite passed off as a screenshot.

@@ -4,6 +4,38 @@
 
 Complete ZIP extraction checks the streamed payload against both its declared length and CRC-32 before reporting success. Single-file and tree staging discard failed output; the direct single-file API removes its partial file on managed failure. Catalog listings and bounded prefix previews do not verify complete payload integrity. CRC detects accidental corruption; it does not authenticate an archive.
 
+The [verified baseline](STATUS.md) includes the app commands **Inspect Archive**, **Create Archive** and **Extract Archive** for ZIP/TAR/TGZ. Both architecture builds and selected core regressions pass CI; hands-on archive workflows and broad format compatibility are not verified. These dialogs are not archive-as-folder navigation.
+
+## Implemented capability matrix
+
+| Format | Inspect | Whole-tree extraction | Creation | Entry prefix preview |
+| --- | --- | --- | --- | --- |
+| ZIP | UI and backend catalog | UI, staged new folder | UI, selected files/folders planned into a file map | Backend only |
+| TAR | UI and backend catalog | UI, staged new folder | UI, regular-file map | Not implemented |
+| TAR.GZ / TGZ | UI and backend catalog | UI, staged new folder | UI creates TAR.GZ; backend also accepts TGZ | Not implemented |
+| Standalone GZIP, BZIP2, XZ, Zstandard, 7z, RAR | Not implemented | Not implemented | Not implemented | Not implemented |
+
+Single-entry ZIP direct/staged extraction APIs exist but are not connected to entry-selection UI. No archive update, encrypted read/write, virtual-folder navigation or separate full integrity-test command exists. The .NET ZIP backend is not evidence that every ZIP64/codec/encryption combination is tested. TAR accepts supported regular-file/directory records and rejects links/special entries; comprehensive PAX/GNU dialect and metadata preservation remain unverified. Routing uses extensions and parser behavior, not a general signature-based capability detector.
+
+## Current limits and semantics
+
+| API/workflow | Default limit or behavior |
+| --- | --- |
+| ZIP and TAR catalogs | 10,000 entries, 4 GiB aggregate declared uncompressed bytes; catalog API entry limit configurable from 1 to 100,000 |
+| ZIP tree extraction | 10,000 entries / 4 GiB total by default; caller-configurable arguments, streamed length/CRC enforcement |
+| TAR tree extraction | Uses default bounded catalog and revalidates streamed entries; no separate caller budget arguments |
+| ZIP single-entry extraction | 256 MiB selected-entry default; catalog limits also apply |
+| ZIP prefix reader | 64 KiB default, caller range 1 byte–1 MiB; no complete-entry integrity guarantee |
+| Source planner used by UI | 10,000 files, 4 GiB total, default 10,000 traversed directories; rejects duplicate/overlapping selected sources and links; empty directories omitted |
+| Creators | ZIP uses a default 4 GiB byte budget and bounded source map; TAR accepts 1–10,000 files and a 4 GiB aggregate budget |
+| TAR trailing data | Remaining decompressed padding must be zero and no more than 1 MiB; draining forces gzip trailer checks |
+
+Catalog size/count checks do not constitute complete memory/CPU defenses: a ZIP central directory may be parsed before application limits are enforced, and TGZ listing itself decompresses data. Compression-ratio, time, path-depth and nested-archive budgets are not fully implemented. Metadata and paths can change between checks and opening; no handle-identity guarantee is made.
+
+Tree extraction refuses an existing final folder and publishes a staged directory only after successful processing. Managed failures attempt cleanup of `.meridian-extract-*` or `.meridian-tar-extract-*`; crash/cleanup failures can leave data behind. Direct single-entry ZIP extraction is a backend exception to whole-tree staging: a partial destination exists during copying and is removed on managed failure where possible.
+
+Creation publishes a new archive without replacing an existing output. API progress supports byte reporting for creation; the current UI displays status/cancellation but does not wire the creators' byte-progress callbacks. Tree extraction reports per-entry progress, capped below 100 until publication. Progress-observer exception handling differs by API; do not assume arbitrary observers are harmless across every ZIP path. Cancellation is cooperative and cannot undo an already-published result.
+
 ## Product contract
 
 Meridian must browse and extract supported archives without asking users to install WinRAR, 7-Zip, or command-line tools. Any native libraries required for decoding must be packaged with Meridian itself for Windows 11 x64 and ARM64. An optional system-installed archive manager must never be a prerequisite.

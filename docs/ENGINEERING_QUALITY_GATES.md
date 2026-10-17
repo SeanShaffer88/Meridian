@@ -20,7 +20,7 @@ Do not describe the application as tested, best-in-class, race-free, universal i
 
 ## Status
 
-The branch contains prototype viewer and player UI, Foresight and TimeVault foundations. Windows builds and hands-on validation have not yet been confirmed. The CI workflow is intended to exercise core tests and Windows builds; check its run results before claiming success.
+The branch contains integrated viewer, TimeVault discovery/listing and ZIP/TAR/TGZ workflows plus backend Foresight, Consequence Engine and Storage Reclaimer foundations. At the [dated baseline](STATUS.md), core tests, x64/ARM64 build/publish/installers and an x64 published startup smoke passed. Hands-on workflows, ARM64 execution, clean install, accessibility, performance and complete security validation remain open. Refer to [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for exact evidence; this status does not waive the gates above.
 
 ## CI evidence rule
 

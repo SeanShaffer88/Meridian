@@ -19,7 +19,7 @@
 1. Establish explicit trusted scan roots, path-boundary rules and protections for sensitive system/user folders.
 2. Prevent link and path-swap races with handle-based checks where supported.
 3. Distinguish user caches, operating-system-managed files and personal data; never classify arbitrary folders as safe.
-4. Add isolated tests for enumeration limits, cancellation, permission failures, reparse points and concurrent changes.
+4. Extend existing inventory/selection/revalidation unit tests with controlled permission, race and concurrent-change integration cases; existing bounds/cancellation tests do not establish complete failure coverage.
 5. Implement preview-first cleanup with explicit user confirmation and a receipt, only after Windows x64/ARM64 integration tests.
 6. Prefer supported Windows cleanup/servicing APIs. Avoid unsupported registry cleaners and manual component-store removal.
 

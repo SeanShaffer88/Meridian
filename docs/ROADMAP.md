@@ -2,6 +2,10 @@
 
 Meridian is an early-stage, offline-first file manager targeting Windows 11 only, across x64 and ARM64 architectures. This roadmap is a feature inventory and an ordering guide, not a claim that any unchecked item is implemented. Features will be delivered incrementally, with security, responsiveness, accessibility, tests, and honest Windows CI verification required alongside functionality.
 
+## Current baseline and checkbox meaning
+
+See [STATUS.md](STATUS.md) for the dated implemented/CI/runtime inventory. Checked items below identify delivered increments, not stable-release approval. Unchecked composite items can contain partial implementations; notes identify those parts. Build, automated-test, runtime and release completion are separate evidence levels.
+
 ## Meridian Foresight — signature intelligence initiative
 
 The [Foresight design and implementation status](FORESIGHT.md) describes an initial **read-only relationship analyzer** committed on the feature branch, plus future evidence graphs, consequence analysis, optional AI interpretation, and recovery-aware plans. **No AI model, UI integration, or autonomous file operations are implemented.** Every mutation remains subject to the [Safety Contract](SAFETY_CONTRACT.md).
@@ -19,7 +23,7 @@ The [Foresight design and implementation status](FORESIGHT.md) describes an init
 
 ### Signature experience candidates
 
-These are **aspirations, not implemented capabilities or promised release dates**. Validate each with prototypes, usability feedback, measurable performance, and safety tests.
+These describe broader intended experiences, not promised release dates. Smaller Drop Shelf, Folder DNA and advisory-copy increments already exist; consult [STATUS.md](STATUS.md) for their implemented scope. Validate expansions with usability feedback, measurable performance and safety tests.
 
 | Idea | User benefit | Initial deliverable |
 | --- | --- | --- |
@@ -124,10 +128,12 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 - [x] Paired workspace tabs with independent left/right locations and session persistence; later: reordering, locking, pinning, close-left/right, and color accents
 - [ ] Flexible one-, two-, and four-pane layouts, including horizontal/vertical splits and adjustable split ratios
-- [ ] Bookmarks/favorites and named workspaces; persist and restore tabs, pane layout, locations, and focus
+- [x] Named directory bookmarks and paired tabs with saved paths/tab names and active-tab index; interactive restoration checks remain open
+- [ ] Named workspace collections, alternate pane layouts and complete focus/layout restoration
 - [ ] Folder tree sidebar, with shared focus-synchronized or independent per-pane trees
 - [ ] Core view modes: icon sizes, list, compact list, tiles, content, and details/grid
-- [x] Live case-insensitive filtering by name, path, or type in each pane; sorting controls, type-ahead selection, and expanded keyboard shortcuts remain planned
+- [x] Live case-insensitive filtering and independent name/type/size/modified sorting in each pane; F5/F6, Ctrl+L/Ctrl+F and Alt history/up shortcuts
+- [ ] Type-ahead selection, configurable shortcuts and expanded command navigation
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
 - [x] Rename files and folders in place with validation and no-overwrite behavior
@@ -140,7 +146,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 - [ ] Miller Columns / cascading folder navigation
 - [ ] Mini/pruned tree containing visited or pinned directories
-- [ ] Drop shelf/stack for gathering files from multiple locations before a batch operation
+- [x] In-memory Drop Shelf with advisory preview, confirmed sequential copy, cancellation and partial-result reporting; persistence remains planned
 - [ ] Flat/branch view across nested directories
 - [ ] Per-folder view preferences stored in a local database (columns, sorting, icon size, and supported visual options), rather than depending on fragile registry Bags
 - [ ] Color labels, tags, and ratings stored locally; investigate optional NTFS alternate data stream (ADS) storage with explicit portability and privacy warnings
@@ -176,10 +182,13 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 ## Phase 5 — Preview and viewing
 
-- [ ] Quick preview popup (Spacebar-style) for supported images, text, Markdown, code, and document formats
+- [x] Toolbar Preview dialog for bounded text/hex, images and Windows audio/video controls (build verified; runtime behavior pending)
+- [ ] Spacebar quick preview and additional document renderers
 - [ ] Dockable universal viewer with text/source syntax highlighting, line numbers, word wrap, and code folding
-- [ ] Hex/binary viewer with byte/ASCII representation, search, and endianness display options
-- [ ] Media preview/playback for common audio and video formats
+- [x] Bounded hexadecimal prefix display (4 KiB in UI)
+- [ ] ASCII column, binary search, offsets/navigation and endianness controls
+- [x] Windows media player controls integrated without autoplay
+- [ ] Verify actual codecs/playback and resource/lifecycle behavior on x64/ARM64
 - [ ] PDF, Office, ePub, and SVG preview through carefully selected, license-audited components or system handlers
 - [ ] Folder peek/popover with top-level contents and optional thumbnails
 - [ ] Optional 3D preview for STL, OBJ, and glTF after core preview architecture is stable
@@ -187,7 +196,9 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 ## Phase 6 — Archives, devices, and virtual filesystems
 
-- [ ] ZIP browsing and safe extraction, followed by other supported formats such as 7z, RAR (subject to licensing/availability), TAR/GZ, ISO, CAB, and WIM
+- [x] ZIP/TAR/TGZ catalog dialogs, source planning, creation and staged whole-tree extraction; selected hostile-input regressions in CI
+- [ ] Archive-as-folder navigation, per-entry UI and complete runtime/safety/compatibility verification
+- [ ] Additional embedded formats such as 7z, RAR (licensing permitting), ISO, CAB and WIM
 - [ ] In-archive search and direct open/extract workflows; archive modification only where the format and library safely support it
 - [ ] SMB/network share browsing with resilient cancellation, timeouts, and offline/error handling
 - [ ] Optional remote clients for SFTP, FTP/FTPS, WebDAV, and SCP, with secure credential handling and explicit protocol support boundaries
@@ -220,7 +231,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 ## Proposed system utilities — Restore Center, Storage Reclaimer and Meridian Vaults
 
-**Status: PLANNED.** These modules are not implemented. They will be separately permissioned and opt-in; no feature should silently alter restore points, protected files or system cleanup targets.
+**Status: mostly PLANNED.** Storage Reclaimer has a backend-only read-only inventory/plan/selection/revalidation prototype; no cleanup executor or UI exists. Restore Center and Meridian Vaults remain unimplemented. They will be separately permissioned and opt-in; no feature should silently alter restore points, protected files or system cleanup targets.
 
 ### Restore Center — Windows System Restore manager
 
@@ -265,7 +276,7 @@ Inspired by the *category* of tools such as Auslogics Windows Slimmer; **no prop
 - [ ] Automated unit/integration tests plus Windows 11 x64 and ARM64 CI
 - [ ] Portable and installable deployment testing
 - [ ] Reproducible release artifacts, checksums, versioning, release notes, and documented rollback
-- [ ] Keep documentation aligned with actual behavior and clearly label planned, implemented, tested, and platform-dependent features
+- [x] Dated documentation baseline and capability/evidence separation added; ongoing updates required with every relevant change
 
 ## Scope notes
 

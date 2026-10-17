@@ -1,6 +1,6 @@
 # Universal Viewer and Integrated Player
 
-**Status:** backend routing and bounded binary preview are implemented on the feature branch. An initial WinUI Preview dialog and MediaPlayerElement transport controls are committed, but **Windows compilation and actual codec playback are not yet verified**. An initial Windows image decoder path is also committed but not verified. PDF rendering remains unimplemented.
+**Status:** backend routing and bounded binary preview are implemented on the feature branch. The WinUI Preview dialog, image path and MediaPlayerElement controls compile in the verified x64/ARM64 baseline. **Actual image decoding, codec playback and interactive lifecycle behavior remain unverified**; see [evidence](VERIFICATION_REPORT.md). PDF rendering remains unimplemented.
 
 ## Intended experience
 
@@ -12,21 +12,23 @@
 ## Implemented backend foundation
 
 - `ViewerRouter` classifies common extensions and explicitly distinguishes codec/renderer requirements.
-- `SafeFilePreview.ReadPrefixAsync` reads at most 1 MiB of an explicitly selected regular file; `HexDump` formats the bounded bytes. The current lexical/reparse checks are not race-proof.
+- `SafeFilePreview.ReadPrefixAsync` defaults to 64 KiB, accepts a caller limit up to 1 MiB and reads an explicitly selected regular file; `HexDump` formats the bounded bytes. The current lexical/reparse checks are not race-proof.
 
 ## Release gates
 
-- [x] Commit a Preview toolbar action with read-only text/hex display and an initial MediaPlayerElement dialog (not yet Windows-tested).
+- [x] Commit a Preview toolbar action with read-only text/hex display and an initial MediaPlayerElement dialog (build verified; interactive workflow testing pending).
 - [ ] Verify lifecycle disposal, selection changes and viewer usability on Windows.
-- [ ] Add MediaPlayerElement and verify actual video playback, seek, audio, subtitles and codec failures on Windows 11 x64/ARM64.
-- [x] Commit an initial image display path using Windows image decoding (not yet Windows-tested).
-- [ ] Add bounded text decoding, image decode resource limits, and sandboxed or reviewed PDF handling.
+- [x] Integrate MediaPlayerElement and no-autoplay transport controls.
+- [ ] Verify actual playback, seek, audio, lifecycle and codec failures on Windows 11 x64/ARM64; dedicated subtitle controls remain planned.
+- [x] Commit an initial image display path using Windows image decoding (build verified; interactive workflow testing pending).
+- [x] Add bounded strict UTF-8/BOM-marked UTF-16 decoding with binary/invalid-sequence fallback.
+- [ ] Add decoded-image resource limits and sandboxed or reviewed PDF handling.
 - [ ] Test malformed media, decompression bombs, symlinks/junctions, huge files, missing codecs, cancellation, and rapid selection changes.
 - [ ] Document supported formats from verified playback tests, not extension guesses.
 
 ## Current preview resource limits
 
-The WinUI prototype renders at most 4 KiB of hexadecimal data, reads at most 64 KiB for text previews, uses strict UTF-8 with a hexadecimal fallback for invalid sequences, and refuses image files larger than 64 MiB. These are initial defensive limits, **not** a guarantee against decompression bombs, codec vulnerabilities, or filesystem races. Decoded pixel count, parser isolation, media resource budgets and Windows hands-on testing remain open release blockers.
+The WinUI prototype renders at most 4 KiB of hexadecimal data, reads at most 64 KiB for text previews, uses strict UTF-8 or BOM-marked UTF-16 LE/BE with hexadecimal fallback for invalid sequences or NUL-containing content, and refuses image files larger than 64 MiB. These are initial defensive limits, **not** a guarantee against decompression bombs, codec vulnerabilities, or filesystem races. Decoded pixel count, parser isolation, media resource budgets and Windows hands-on testing remain open release blockers.
 
 ## Preview path boundaries
 

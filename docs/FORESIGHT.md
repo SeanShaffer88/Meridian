@@ -12,7 +12,7 @@ Foresight is the proposed intelligence and consequence-analysis layer for Meridi
 
 The `ForesightImpactAnalyzer.Preview(targetPath, contextPaths)` prototype also returns only hints associated with a proposed target and explicitly disclaims verified dependency coverage. It neither opens files nor authorizes an operation.
 
-The `DependencyImpactAnalyzer` additionally accepts explicit, provenance-bearing dependency edges from future trusted parsers and reports incoming references to a proposed target. **It does not discover or verify edges itself**; no format-specific evidence adapter exists yet.
+The `DependencyImpactAnalyzer` additionally accepts explicit, provenance-bearing dependency edges from future trusted parsers and reports incoming references to a proposed target. **It does not discover or verify edges itself**. The separate JSON string-reference reader below is a bounded extraction prototype, not a verified dependency adapter or automatic connection to this analyzer.
 
 ## Proposed architecture
 
@@ -25,11 +25,11 @@ The `DependencyImpactAnalyzer` additionally accepts explicit, provenance-bearing
 
 ## Milestones and exit criteria
 
-- [x] Read-only relationship hint model and unit tests committed (not yet run on Windows).
+- [x] Read-only relationship hint model and unit tests committed (included in the Windows CI core suite; no interactive UI or measured benchmark).
 - [x] Add indexed candidate discovery, output caps, cooperative cancellation and optional time budget (committed; Windows performance verification outstanding).
 - [ ] Read-only Windows shortcut and supported project-manifest evidence adapters, with adversarial fixtures.
-- [x] Initial metadata-only target impact preview and explicit uncertainty labels committed (not yet Windows-tested).
-- [x] Bounded incoming-dependency evidence model committed (not yet Windows-tested).
+- [x] Initial metadata-only target impact preview and explicit uncertainty labels committed (core tests included in the verified Windows CI baseline; no UI integration).
+- [x] Bounded incoming-dependency evidence model committed (core tests included in the verified Windows CI baseline; no UI integration).
 - [ ] Verified dependency evidence adapters and broader impact reporting.
 - [ ] UI preview that never implicitly initiates an operation.
 - [ ] Optional local AI interpretation behind an opt-in switch, privacy review and offline tests.

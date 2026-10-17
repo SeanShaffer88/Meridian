@@ -2,6 +2,8 @@
 
 **Normative design requirements.** This is the release standard for future Meridian operations, not a claim that the current preview already meets it. No software can guarantee every action is undoable.
 
+Compare these requirements with the dated [implementation status](STATUS.md), [threat model](THREAT_MODEL.md) and [verification evidence](VERIFICATION_REPORT.md). In particular, current cross-volume copy-then-delete does not establish the destination-verification/source-stability guarantees below. A checked implementation milestone or passing startup test does not waive a safety requirement.
+
 ## Safety tiers
 
 | Tier | Examples | Minimum behavior |
