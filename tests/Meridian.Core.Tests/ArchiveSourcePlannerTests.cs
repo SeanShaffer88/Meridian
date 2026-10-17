@@ -141,6 +141,41 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsInvalidDirectoryBudget()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => ArchiveSourcePlanner.Plan(Array.Empty<string>(), maxDirectories: 0));
+    }
+
+    [Fact]
+    public void RejectsDirectoryTreeBeyondTraversalBudget()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-directory-budget-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "first"));
+            Directory.CreateDirectory(Path.Combine(root, "second"));
+            Assert.Throws<InvalidDataException>(() => ArchiveSourcePlanner.Plan(new[] { root }, maxDirectories: 2));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void AcceptsDirectoryTreeAtTraversalBudget()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-directory-limit-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var child = Path.Combine(root, "child");
+            Directory.CreateDirectory(child);
+            File.WriteAllText(Path.Combine(child, "data.txt"), "data");
+            Assert.Single(ArchiveSourcePlanner.Plan(new[] { root }, maxDirectories: 2));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void RejectsSelectionContainingOnlyEmptyFolders()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-empty-folder-" + Guid.NewGuid().ToString("N"));
