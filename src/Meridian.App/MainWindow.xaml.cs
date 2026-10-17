@@ -619,6 +619,48 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void PreviewCopy_Click(object sender, RoutedEventArgs e)
+    {
+        var source = _activePane;
+        var destination = ReferenceEquals(source, _left) ? _right : _left;
+        if (source.List.SelectedItem is not FileEntry selected)
+        {
+            GlobalStatus.Text = "Select an item to preview copying.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(destination.CurrentPath))
+        {
+            GlobalStatus.Text = "Choose a destination folder in the other pane.";
+            return;
+        }
+
+        try
+        {
+            var plan = await Task.Run(() => OperationPreview.PreviewCopy([selected.FullPath], destination.CurrentPath));
+            var item = plan.Items[0];
+            var dialog = new ContentDialog
+            {
+                Title = "Operation Simulator · Copy preview",
+                Content = new TextBlock
+                {
+                    Text = $"From: {item.Source}\n\nTo: {item.Target ?? "(unavailable)"}\n\n" +
+                           $"Preflight: {item.Result}\n{item.Explanation}\n\n" +
+                           "No files have been copied or modified. This is a snapshot, not a reservation: " +
+                           "files and permissions may change before an actual copy. " +
+                           "Existing destinations are never overwritten by the normal copy operation.",
+                    TextWrapping = TextWrapping.Wrap
+                },
+                CloseButtonText = "Close",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not preview copy · " + ex.Message;
+        }
+    }
+
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
