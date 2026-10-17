@@ -384,7 +384,19 @@ public sealed partial class MainWindow : Window
                 player.SetMediaPlayer(mediaSession);
                 var mediaFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
                 mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromStorageFile(mediaFile);
+                var playbackStatus = new TextBlock
+                {
+                    Text = "Ready · press Play to start",
+                    TextWrapping = TextWrapping.Wrap
+                };
+                mediaSession.MediaFailed += (_, args) =>
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                        playbackStatus.Text = "Playback failed · the format or codec may be unsupported. " +
+                            args.ErrorMessage);
+                };
                 panel.Children.Add(player);
+                panel.Children.Add(playbackStatus);
             }
             else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
             {
