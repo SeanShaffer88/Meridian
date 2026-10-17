@@ -79,6 +79,7 @@ public static class ZipArchiveCreator
         long completedBytes = 0;
         cancellationToken.ThrowIfCancellationRequested();
         ReportProgress(0, total);
+        long lastReportedBytes = 0;
         var stage = Path.Combine(parent, ".meridian-zip-" + Guid.NewGuid().ToString("N") + ".tmp");
         var created = false;
         try
@@ -110,7 +111,13 @@ public static class ZipArchiveCreator
                             await compressed.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
                             copied += count;
                             completedBytes += count;
-                            ReportProgress(Math.Min(completedBytes, Math.Max(0, total - 1)), total);
+                            var visibleBytes = Math.Min(completedBytes, Math.Max(0, total - 1));
+                            if (visibleBytes > lastReportedBytes &&
+                                (visibleBytes - lastReportedBytes >= 1024 * 1024 || completedBytes == total))
+                            {
+                                lastReportedBytes = visibleBytes;
+                                ReportProgress(visibleBytes, total);
+                            }
                         }
                         if (copied != item.Length)
                             throw new InvalidDataException("Source file changed size during archive creation.");
