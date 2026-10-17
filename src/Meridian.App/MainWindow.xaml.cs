@@ -419,6 +419,10 @@ public sealed partial class MainWindow : Window
             archivePath, parent, folder, cancellationToken: token), token);
         GlobalStatus.Text = "Extracted " + receipt.FileCount + " files.";
         }
+        catch (OperationCanceledException)
+        {
+            GlobalStatus.Text = "ZIP extraction cancelled.";
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             GlobalStatus.Text = "ZIP extraction failed · " + ex.Message;
@@ -429,6 +433,13 @@ public sealed partial class MainWindow : Window
             _zipExtractionCancellation = null;
             _zipExtractionBusy = false;
         }
+    }
+
+    private void CancelZipExtraction_Click(object sender, RoutedEventArgs e)
+    {
+        _zipExtractionCancellation?.Cancel();
+        if (_zipExtractionCancellation is not null)
+            GlobalStatus.Text = "Cancelling ZIP extraction…";
     }
 
     private bool _previewDialogOpen;
