@@ -5,6 +5,55 @@ namespace Meridian.Core.Tests;
 public sealed class FileOperationAncestorTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void BatchPreflightRejectsLinkedAncestorsBeforeCopying(bool linkedDestination, bool execute)
+    {
+        using var temp = new TemporaryDirectory();
+        var real = Directory.CreateDirectory(Path.Combine(temp.Path, "real")).FullName;
+        var nested = Directory.CreateDirectory(Path.Combine(real, "nested")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var first = Path.Combine(temp.Path, "first.txt");
+        var second = Path.Combine(nested, "second.txt");
+        File.WriteAllText(first, "first source");
+        File.WriteAllText(second, "second source");
+        var link = Path.Combine(temp.Path, "alias");
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "/c", "mklink", "/J", link, real }) start.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+        try
+        {
+            var target = linkedDestination ? Path.Combine(link, "nested") : destination;
+            string[] sources = linkedDestination ? [first] : [first, Path.Combine(link, "nested", "second.txt")];
+            if (execute)
+                Assert.Throws<InvalidOperationException>(() => BatchCopy.Execute(sources, target));
+            else if (linkedDestination)
+                Assert.Throws<InvalidOperationException>(() => OperationPreview.PreviewCopy(sources, target));
+            else
+            {
+                var plan = OperationPreview.PreviewCopy(sources, target);
+                Assert.True(plan.HasBlockers);
+                Assert.Equal(OperationPreview.Status.Ready, plan.Items[0].Result);
+                Assert.Equal(OperationPreview.Status.ReparsePoint, plan.Items[1].Result);
+                Assert.Contains(link, plan.Items[1].Explanation);
+            }
+            Assert.Empty(Directory.GetFileSystemEntries(destination));
+            Assert.Equal(new[] { second }, Directory.GetFiles(nested));
+            Assert.Equal("first source", File.ReadAllText(first));
+            Assert.Equal("second source", File.ReadAllText(second));
+        }
+        finally { Directory.Delete(link); }
+    }
+
+    [Theory]
     [InlineData("copy-source")]
     [InlineData("copy-destination")]
     [InlineData("move-source")]
