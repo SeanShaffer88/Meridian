@@ -43,6 +43,12 @@ Inspired by the clear, category-by-category feature reference used by classic du
 
 **Availability key:** **[MAIN]** implemented in the main branch · **[DEV]** prototype or backend code in [draft PR #37](https://github.com/SeanShaffer88/Meridian/pull/37), not released · **[PLANNED]** not implemented · **[REQUIREMENT]** design or release criterion. Even [MAIN] and [DEV] items do **not** imply successful Windows 11 x64/ARM64 runtime verification.
 
+### Jump to a feature category
+
+[General interface](#general-features-and-interface) · [File operations](#file-operations-and-organization) · [Viewer and media](#built-in-viewer-images-audio-and-video) · [Archives](#archives-and-compressed-files) · [Search and intelligence](#search-discovery-and-file-intelligence) · [Recovery](#recovery-history-and-system-maintenance) · [Network and devices](#network-devices-and-extensions) · [Remote transfers](#network-transfer-and-remote-server-roadmap) · [Security and quality](#reliability-security-and-release-readiness)
+
+**Quick distinction:** The built-in ZIP catalog is a **read-only backend prototype**, not archive navigation or extraction in the app. The media player is an **unverified WinUI prototype**. No external archive application will be required for formats Meridian eventually supports.
+
 ### General features and interface
 
 - **[MAIN]** Windows 11 desktop application built with WinUI 3 and .NET 10; x64 and ARM64 are intended targets.
@@ -155,6 +161,21 @@ See [Archive Engine design and compatibility](docs/ARCHIVE_ENGINE.md).
 - **[PLANNED]** Git and developer-focused metadata, diffs and repository navigation.
 - **[PLANNED]** Extensible viewers, providers and automation commands with permission boundaries.
 - **[REQUIREMENT]** No implicit upload, background remote access or silent privilege escalation.
+
+### Network transfer and remote-server roadmap
+
+These are **planned**, not present in Meridian today. Remote file handling will require separate provider security and credential-management reviews.
+
+- **[PLANNED]** SFTP browser with saved connection profiles and host-key verification.
+- **[PLANNED]** FTPS support with TLS certificate verification; no insecure downgrade by default.
+- **[PLANNED]** Optional FTP compatibility for legacy servers, with prominent plaintext-credential warnings.
+- **[PLANNED]** HTTP(S) download-to-folder with progress, cancellation and safe destination handling.
+- **[PLANNED]** Resume interrupted downloads when the server supports verified range requests.
+- **[PLANNED]** Background transfer queue with bounded concurrency, retries and bandwidth controls.
+- **[PLANNED]** Proxy configuration and authenticated connection handling.
+- **[PLANNED]** Server-to-server transfer only when explicitly supported and approved; no implicit credential forwarding.
+- **[PLANNED]** Compare local and remote directory trees before synchronization.
+- **[REQUIREMENT]** Credentials must not appear in logs, URLs shown to other users, or exported operation receipts.
 
 ### Reliability, security and release readiness
 
