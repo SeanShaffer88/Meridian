@@ -76,7 +76,7 @@ public static class TarArchiveCreator
                         Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(item.Source, cancellationToken);
                         var currentLength = new FileInfo(item.Source).Length;
                         if (currentLength != item.Length)
-                            throw new InvalidDataException("TAR source file exceeds budget.");
+                            throw new InvalidDataException("TAR source file length changed after planning.");
                         using var input = new FileStream(item.Source, FileMode.Open,
                             FileAccess.Read, FileShare.Read, 8192, FileOptions.SequentialScan);
                         if (input.Length != item.Length)
