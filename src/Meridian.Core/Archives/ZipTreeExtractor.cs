@@ -53,9 +53,12 @@ public static class ZipTreeExtractor
         }
 
         var stage = Path.Combine(parent, ".meridian-extract-" + Guid.NewGuid().ToString("N"));
+        if (Directory.Exists(stage) || File.Exists(stage))
+            throw new IOException("Extraction staging path already exists.");
         var staged = false;
         try
         {
+            // Stage must be a newly created directory, not a pre-existing path.
             Directory.CreateDirectory(stage);
             staged = true;
             long total = 0;
