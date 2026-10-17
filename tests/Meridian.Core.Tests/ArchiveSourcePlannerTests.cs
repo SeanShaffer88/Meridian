@@ -6,6 +6,18 @@ namespace Meridian.Core.Tests;
 public sealed class ArchiveSourcePlannerTests
 {
     [Fact]
+    public void RejectsNullSourceCollection()
+    {
+        Assert.Throws<ArgumentNullException>(() => ArchiveSourcePlanner.Plan(null!));
+    }
+
+    [Fact]
+    public void RejectsRelativeSourceBeforeFilesystemAccess()
+    {
+        Assert.Throws<ArgumentException>(() => ArchiveSourcePlanner.Plan(new[] { "relative.txt" }));
+    }
+
+    [Fact]
     public void PlansFilesAndNestedFolderContents()
     {
         var root = Path.Combine(Path.GetTempPath(), "meridian-plan-" + Guid.NewGuid().ToString("N"));
