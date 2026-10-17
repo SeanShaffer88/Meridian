@@ -61,4 +61,6 @@ internal sealed class WorkspaceStore
     }
 }
 
-internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath);
+internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath, BookmarkSnapshot[]? Bookmarks = null);
+
+internal sealed record BookmarkSnapshot(string Name, string Path);
