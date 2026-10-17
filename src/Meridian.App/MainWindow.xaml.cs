@@ -205,6 +205,58 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void NewFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
+        {
+            GlobalStatus.Text = "Choose a folder before creating a new folder.";
+            return;
+        }
+
+        var nameBox = new TextBox { PlaceholderText = "Folder name", MinWidth = 280 };
+        var dialog = new ContentDialog
+        {
+            Title = "Create new folder",
+            Content = nameBox,
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var name = nameBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name is "." or ".." ||
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            name.Contains(Path.DirectorySeparatorChar) ||
+            name.Contains(Path.AltDirectorySeparatorChar) ||
+            Path.IsPathRooted(name))
+        {
+            GlobalStatus.Text = "Folder name is invalid. Enter a single folder name without path separators.";
+            return;
+        }
+
+        var target = Path.Combine(_activePane.CurrentPath, name);
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            GlobalStatus.Text = $"Cannot create folder · '{name}' already exists.";
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(target);
+            var pane = _activePane;
+            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            GlobalStatus.Text = $"Created folder · {name}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            GlobalStatus.Text = "Could not create folder · " + ex.Message;
+        }
+    }
+
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
