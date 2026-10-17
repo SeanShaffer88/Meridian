@@ -24,6 +24,28 @@ public sealed class ArchiveSourcePlannerTests
     }
 
     [Fact]
+    public void RejectsFolderThroughLinkedAncestor()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-linked-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var actual = Path.Combine(root, "actual");
+            var nested = Path.Combine(actual, "nested");
+            Directory.CreateDirectory(nested);
+            File.WriteAllText(Path.Combine(nested, "data.txt"), "data");
+            var link = Path.Combine(root, "linked");
+            try { Directory.CreateSymbolicLink(link, actual); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+            {
+                return; // Symbolic links are unavailable on this host.
+            }
+            Assert.Throws<IOException>(() => ArchiveSourcePlanner.Plan(new[] { Path.Combine(link, "nested") }));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void RejectsDriveRootBeforeEnumeratingIt()
     {
         var root = Path.GetPathRoot(Path.GetTempPath())!;
