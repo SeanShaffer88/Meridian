@@ -13,6 +13,7 @@ public class SnapshotDirectoryReaderInputTests
     [InlineData(@"C:\folder\..\Windows")]
     [InlineData(@"C:\folder\file:stream")]
     [InlineData(@"C:\folder.\subfolder")]
+    [InlineData(@"C:\folder\\subfolder")]
     [InlineData("relative-folder")]
     public async Task RejectsUnsafeFolderBeforeSnapshotAccess(string folder)
     {
