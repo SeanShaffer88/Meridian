@@ -3,9 +3,10 @@ namespace Meridian.Core.Archives;
 public static class ArchiveSourcePlanner
 {
     public static IReadOnlyDictionary<string, string> Plan(IEnumerable<string> paths,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int maxDirectories = 10000)
     {
         ArgumentNullException.ThrowIfNull(paths);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDirectories);
         var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sourceFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -39,6 +40,8 @@ public static class ArchiveSourcePlanner
                 var directory = pending.Pop();
                 if (!visitedDirectories.Add(directory))
                     throw new InvalidDataException("Archive source folder was selected more than once.");
+                if (visitedDirectories.Count > maxDirectories)
+                    throw new InvalidDataException("Archive source directory traversal budget exceeded.");
                 foreach (var child in Directory.EnumerateFileSystemEntries(directory))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
