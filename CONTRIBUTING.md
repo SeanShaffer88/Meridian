@@ -1,5 +1,7 @@
 # Contributing
 
+**Project stewardship:** Sean Shaffer, Author / Principal Architect. For sensitive security issues, use [private security reporting](SECURITY.md), not a public issue. For engineering delivery expectations, see the [high-throughput development pipeline](docs/HIGH_THROUGHPUT_DEVELOPMENT.md).
+
 Thanks for considering Meridian. The project is early-stage; correctness and safe file behavior matter more than adding features quickly.
 
 ## Before submitting
