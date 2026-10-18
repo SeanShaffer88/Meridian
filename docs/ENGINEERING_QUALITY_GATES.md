@@ -2,6 +2,10 @@
 
 Meridian aims to be turnkey, cohesive, lightweight, safe and production-grade. These are measurable release requirements, not claims of current completion.
 
+## Delivery workflow
+
+Use the [High-throughput Engineering Pipeline](HIGH_THROUGHPUT_DEVELOPMENT.md) for batched feature delivery, independent workstreams, evidence tracking, and integration rules. Faster iteration does **not** waive any release gate below.
+
 ## Blocking release gates
 
 1. **Build integrity:** clean Windows 11 x64 and ARM64 Release builds; reproducible package inputs; installer and portable artifacts verified on clean machines.
