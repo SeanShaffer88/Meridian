@@ -10,6 +10,7 @@ public static class DirectoryReader
     public static IReadOnlyList<FileEntry> Read(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        cancellationToken.ThrowIfCancellationRequested();
         var directory = new DirectoryInfo(path);
         if (!directory.Exists)
             throw new DirectoryNotFoundException($"The folder no longer exists: {path}");
@@ -43,8 +44,11 @@ public static class DirectoryReader
             }
         }
 
-        return entries.OrderByDescending(item => item.IsDirectory)
+        cancellationToken.ThrowIfCancellationRequested();
+        var sorted = entries.OrderByDescending(item => item.IsDirectory)
             .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        cancellationToken.ThrowIfCancellationRequested();
+        return sorted;
     }
 
     /// <summary>Filters a previously-read directory listing without touching the filesystem again.</summary>

@@ -1,0 +1,102 @@
+using System.Formats.Tar;
+using System.IO.Compression;
+
+namespace Meridian.Core.Archives;
+
+/// <summary>Read-only bounded catalog for TAR and gzip-compressed TAR, used by staged extraction.</summary>
+public static class TarArchiveCatalog
+{
+    public sealed record Entry(string Path, long Bytes, bool IsDirectory);
+
+    public static IReadOnlyList<Entry> List(string archivePath, int maxEntries = 10000,
+        long maxTotalBytes = 4L * 1024 * 1024 * 1024,
+        CancellationToken cancellationToken = default)
+    {
+        if (maxEntries is < 1 or > 100000) throw new ArgumentOutOfRangeException(nameof(maxEntries));
+        if (maxTotalBytes < 1) throw new ArgumentOutOfRangeException(nameof(maxTotalBytes));
+        var source = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(archivePath, cancellationToken);
+        if (!source.EndsWith(".tar", StringComparison.OrdinalIgnoreCase) &&
+            !source.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) &&
+            !source.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("Only TAR and compressed TAR catalogs are supported.");
+        using var file = File.OpenRead(source);
+        var compressed = source.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
+            source.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase);
+        using Stream stream = compressed ? new GZipStream(file, CompressionMode.Decompress, leaveOpen: true) : file;
+        using var reader = new TarReader(stream, leaveOpen: true);
+        var entries = new List<Entry>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ancestors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        long total = 0;
+        var buffer = new byte[8192];
+        TarEntry? entry;
+        while ((entry = reader.GetNextEntry(copyData: false)) is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var directory = entry.EntryType == TarEntryType.Directory;
+            if (!directory && entry.EntryType != TarEntryType.RegularFile &&
+                entry.EntryType != TarEntryType.V7RegularFile)
+                throw new InvalidDataException("TAR contains unsupported link or special entry.");
+            var name = ArchiveEntryPathPolicy.Normalize(entry.Name.TrimEnd('/'));
+            if (names.Contains(name)) throw new InvalidDataException("Duplicate TAR entry.");
+            var parent = name;
+            while (parent.Contains('/'))
+            {
+                parent = parent[..parent.LastIndexOf('/')];
+                ancestors.Add(parent);
+                if (fileNames.Contains(parent))
+                    throw new InvalidDataException("TAR entry conflicts with a parent file.");
+            }
+            if (!directory && ancestors.Contains(name))
+                throw new InvalidDataException("TAR file conflicts with existing descendants.");
+            if (entries.Count >= maxEntries || entry.Length < 0 || entry.Length > maxTotalBytes - total)
+                throw new InvalidDataException("TAR catalog size or entry limit exceeded.");
+            if (directory && entry.Length != 0)
+                throw new InvalidDataException("Directory TAR entry has a payload.");
+            if (!directory)
+                ValidatePayload(entry.DataStream, entry.Length, buffer, cancellationToken);
+            total += entry.Length;
+            names.Add(name);
+            entries.Add(new Entry(name, entry.Length, directory));
+            if (!directory) fileNames.Add(name);
+        }
+        ValidateTrailer(stream, cancellationToken);
+        return entries.AsReadOnly();
+    }
+
+    // Explicit reads prevent TarReader from skipping a large compressed payload
+    // without observing cancellation, and detect truncated seekable TAR files.
+    internal static void ValidatePayload(Stream? stream, long length, byte[] buffer,
+        CancellationToken cancellationToken)
+    {
+        while (length > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = stream?.Read(buffer, 0, (int)Math.Min(buffer.Length, length)) ?? 0;
+            if (read == 0) throw new InvalidDataException("Truncated TAR entry.");
+            length -= read;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    // TarReader stops at the end marker; consume bounded zero padding to force
+    // gzip checksum validation and reject hidden entries after that marker.
+    internal static void ValidateTrailer(Stream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[8192];
+        long padding = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = stream.Read(buffer, 0, buffer.Length);
+            if (read == 0) break;
+            padding += read;
+            if (padding > 1024 * 1024)
+                throw new InvalidDataException("TAR trailing padding exceeds 1 MiB.");
+            for (var i = 0; i < read; i++)
+                if (buffer[i] != 0)
+                    throw new InvalidDataException("TAR contains data after its end marker.");
+        }
+    }
+}

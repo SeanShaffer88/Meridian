@@ -4,6 +4,23 @@ namespace Meridian.Core.Tests;
 
 public sealed class DirectoryReaderTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Read_CancelledRequestDoesNotReturnEmptyListingOrMissingFolderError(bool folderExists)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-test-{Guid.NewGuid():N}");
+        if (folderExists) Directory.CreateDirectory(root);
+        try
+        {
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            var error = Assert.Throws<OperationCanceledException>(() => DirectoryReader.Read(root, cancellation.Token));
+            Assert.Equal(cancellation.Token, error.CancellationToken);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root); }
+    }
+
     [Fact]
     public void Read_ReturnsDirectoriesBeforeFiles()
     {

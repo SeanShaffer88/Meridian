@@ -19,11 +19,13 @@ public static class OperationPreview
     {
         ArgumentNullException.ThrowIfNull(sourcePaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+        cancellationToken.ThrowIfCancellationRequested();
         var destination = Path.GetFullPath(destinationDirectory);
         if (!Directory.Exists(destination))
             throw new DirectoryNotFoundException($"Destination folder does not exist: {destination}");
-        if ((File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
-            throw new InvalidOperationException("Destination folder is a reparse point and cannot be used for batch copying.");
+        var linkedDestination = FileOperations.FindReparsePointAncestor(destination);
+        if (linkedDestination is not null)
+            throw new InvalidOperationException($"Destination folder passes through a reparse point and cannot be used for batch copying: {linkedDestination}");
 
         var results = new List<Item>();
         var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -54,10 +56,10 @@ public static class OperationPreview
                 results.Add(new Item(source, target, Status.MissingSource, "Source is missing."));
                 continue;
             }
-            var attributes = File.GetAttributes(source);
-            if ((attributes & FileAttributes.ReparsePoint) != 0)
+            var linkedSource = FileOperations.FindReparsePointAncestor(source);
+            if (linkedSource is not null)
             {
-                results.Add(new Item(source, target, Status.ReparsePoint, "Reparse-point sources are not supported."));
+                results.Add(new Item(source, target, Status.ReparsePoint, $"Source passes through an unsupported reparse point: {linkedSource}"));
                 continue;
             }
             if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase))

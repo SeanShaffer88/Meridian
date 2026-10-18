@@ -1,5 +1,9 @@
 <Application x:Class="Meridian.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" RequestedTheme="Dark">
-  <Application.Resources><ResourceDictionary><ResourceDictionary.ThemeDictionaries><ResourceDictionary x:Key="Dark">
+  <Application.Resources><ResourceDictionary>
+    <ResourceDictionary.MergedDictionaries>
+      <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+    </ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary.ThemeDictionaries><ResourceDictionary x:Key="Dark">
     <SolidColorBrush x:Key="MeridianAccentBrush" Color="#F04444" /><SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#17191D" />
     <SolidColorBrush x:Key="MeridianPanelBrush" Color="#202329" /><SolidColorBrush x:Key="MeridianBorderBrush" Color="#343840" />
     <SolidColorBrush x:Key="MeridianMutedBrush" Color="#9CA3AF" />

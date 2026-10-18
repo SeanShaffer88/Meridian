@@ -1,8 +1,11 @@
 name: Windows CI
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 on:
   push:
@@ -14,18 +17,33 @@ on:
 jobs:
   core-tests:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
+      - name: Restore core tests
+        run: dotnet restore tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --locked-mode
       - name: Test core library
-        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release
+        run: dotnet test tests/Meridian.Core.Tests/Meridian.Core.Tests.csproj --configuration Release --no-restore --logger "trx;LogFileName=core-tests.trx" --results-directory TestResults
+      - name: Test artifact packaging and checksum rejection
+        shell: pwsh
+        run: ./scripts/test-packaging.ps1
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-core-test-results
+          path: TestResults/*.trx
+          if-no-files-found: warn
+          retention-days: 14
 
   app-build:
     name: Build Windows 11 (${{ matrix.architecture }})
     runs-on: windows-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -41,11 +59,43 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
-      - name: Restore solution
-        run: dotnet restore Meridian.sln
+          global-json-file: global.json
+      - name: Restore Windows app for target architecture
+        run: dotnet restore src/Meridian.App/Meridian.App.csproj --locked-mode -p:Platform=${{ matrix.architecture }} -p:RuntimeIdentifier=${{ matrix.runtime }} -p:SelfContained=true
+      - name: Compile Windows app before packaging
+        run: dotnet build src/Meridian.App/Meridian.App.csproj --configuration Release --no-restore -p:Platform=${{ matrix.architecture }} -p:RuntimeIdentifier=${{ matrix.runtime }} -p:SelfContained=true
       - name: Publish Windows 11 app (${{ matrix.runtime }})
-        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
+        run: dotnet publish src/Meridian.App/Meridian.App.csproj --configuration Release --no-restore --runtime ${{ matrix.runtime }} --self-contained true -p:Platform=${{ matrix.architecture }}
+
+      - name: Verify published XAML resource index
+        shell: pwsh
+        run: |
+          $publish = "src/Meridian.App/bin/${{ matrix.architecture }}/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish"
+          if (!(Test-Path -LiteralPath "$publish/Meridian.pri")) {
+            throw "Published app is missing Meridian.pri; the main window cannot load."
+          }
+
+      - name: Smoke test published x64 startup
+        if: matrix.architecture == 'x64'
+        shell: pwsh
+        run: |
+          $publish = (Resolve-Path "src/Meridian.App/bin/x64/Release/net10.0-windows10.0.22000.0/win-x64/publish").Path
+          $app = Start-Process -FilePath "$publish/Meridian.exe" -WorkingDirectory $publish -WindowStyle Hidden -PassThru
+          try {
+            if ($app.WaitForExit(10000)) {
+              $diagnostic = Join-Path $env:LOCALAPPDATA "Meridian/last-error.log"
+              if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic }
+              throw "Published app exited during startup: $($app.ExitCode)"
+            }
+            $app.Refresh()
+            if ($app.MainWindowHandle -eq 0) { throw "Published app did not create a main window." }
+          } finally {
+            if (!$app.HasExited) {
+              $app.CloseMainWindow() | Out-Null
+              if (!$app.WaitForExit(5000)) { $app.Kill() }
+            }
+            $app.Dispose()
+          }
 
       - name: Install Inno Setup
         shell: pwsh
@@ -62,6 +112,21 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "packaging/Meridian.iss" "/DPublishDir=$publishPath" "/DOutputDir=$outputPath" "/DAllowedArch=${{ matrix.inno_arch }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package portable ZIP and verify SHA-256 manifest
+        shell: pwsh
+        run: ./scripts/package.ps1 -PublishDirectory "src/Meridian.App/bin/${{ matrix.architecture }}/Release/net10.0-windows10.0.22000.0/${{ matrix.runtime }}/publish" -OutputDirectory artifacts -Architecture ${{ matrix.inno_arch }}
+
+      - name: Upload distribution files and SHA-256 manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-distribution-${{ matrix.runtime }}
+          path: |
+            artifacts/Meridian-Setup-win-${{ matrix.inno_arch }}.exe
+            artifacts/Meridian-Portable-win-${{ matrix.inno_arch }}.zip
+            artifacts/SHA256SUMS-win-${{ matrix.inno_arch }}.txt
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload installable Windows installer
         uses: actions/upload-artifact@v4
