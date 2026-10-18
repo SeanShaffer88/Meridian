@@ -38,6 +38,8 @@ Source planning canonicalizes selected folder paths, including trailing separato
 
 Tree extraction refuses an existing final folder and publishes a staged directory only after successful processing. Managed failures attempt cleanup of `.meridian-extract-*` or `.meridian-tar-extract-*`; crash/cleanup failures can leave data behind. Direct single-entry ZIP extraction is a backend exception to whole-tree staging: a partial destination exists during copying and is removed on managed failure where possible.
 
+ZIP extraction treats output flush and close as part of completion. Direct extraction marks success only after closing its output and checking cancellation; tree extraction explicitly flushes each file before publication. Operation-local output factories exercise the same core paths as the public APIs. Regression tests inject access denial, failed/partial/later writes, flush/close failures, cancellation during output finalization, later-entry tree failures and publication collisions, then check cleanup, source preservation and retry. These simulations do not establish real disk-full or crash recovery guarantees.
+
 Creation publishes a new archive without replacing an existing output. API progress supports byte reporting for creation; the current UI displays status/cancellation but does not wire the creators' byte-progress callbacks. Tree extraction reports per-entry progress, capped below 100 until publication. Progress-observer exception handling differs by API; do not assume arbitrary observers are harmless across every ZIP path. Cancellation is cooperative and cannot undo an already-published result.
 
 ## Product contract

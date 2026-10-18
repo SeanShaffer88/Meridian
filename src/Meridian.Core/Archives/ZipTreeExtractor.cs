@@ -11,8 +11,18 @@ public static class ZipTreeExtractor
 {
     public sealed record Receipt(string Directory, int FileCount, long BytesWritten);
 
-    public static async Task<Receipt> ExtractAsync(
+    public static Task<Receipt> ExtractAsync(
         string archivePath, string destinationDirectory, string newFolderName,
+        int maxEntries = 10000, long maxTotalBytes = 4L * 1024 * 1024 * 1024,
+        CancellationToken cancellationToken = default, IProgress<int>? progress = null)
+        => ExtractCoreAsync(archivePath, destinationDirectory, newFolderName,
+            static path => new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 8192, FileOptions.Asynchronous), maxEntries, maxTotalBytes,
+            cancellationToken, progress);
+
+    internal static async Task<Receipt> ExtractCoreAsync(
+        string archivePath, string destinationDirectory, string newFolderName,
+        Func<string, Stream> createOutput,
         int maxEntries = 10000, long maxTotalBytes = 4L * 1024 * 1024 * 1024,
         CancellationToken cancellationToken = default, IProgress<int>? progress = null)
     {
@@ -80,10 +90,10 @@ public static class ZipTreeExtractor
                 }
                 var containing = Path.GetDirectoryName(outputPath)!;
                 Directory.CreateDirectory(containing);
-                await using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write,
-                    FileShare.None, 8192, FileOptions.Asynchronous);
+                await using var output = createOutput(outputPath);
                 total += await ZipEntryCopy.CopyAsync(archive.Entries[i], output,
                     maxTotalBytes - total, cancellationToken);
+                await output.FlushAsync(cancellationToken);
                 fileCount++;
                 ReportProgressSafely(progress, (int)Math.Min(99L, (i + 1L) * 100 / catalog.Count));
             }

@@ -8,9 +8,17 @@ namespace Meridian.Core.Archives;
 /// </summary>
 public static class ZipStagedExtractor
 {
-    public static async Task<long> ExtractSingleAsync(
+    public static Task<long> ExtractSingleAsync(
         string archivePath, string entryName, string destinationDirectory,
         long maxUncompressedBytes = 256L * 1024 * 1024,
+        CancellationToken cancellationToken = default)
+        => ExtractSingleCoreAsync(archivePath, entryName, destinationDirectory,
+            static path => new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 8192, FileOptions.Asynchronous), maxUncompressedBytes, cancellationToken);
+
+    internal static async Task<long> ExtractSingleCoreAsync(
+        string archivePath, string entryName, string destinationDirectory,
+        Func<string, Stream> createOutput, long maxUncompressedBytes = 256L * 1024 * 1024,
         CancellationToken cancellationToken = default)
     {
         if (maxUncompressedBytes < 1)
@@ -64,8 +72,7 @@ public static class ZipStagedExtractor
         try
         {
             long total = 0;
-            await using (var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write,
-                FileShare.None, 8192, FileOptions.Asynchronous))
+            await using (var output = createOutput(staging))
             {
                 stagingCreated = true;
                 total = await ZipEntryCopy.CopyAsync(actual, output, maxUncompressedBytes, cancellationToken);

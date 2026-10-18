@@ -9,9 +9,17 @@ namespace Meridian.Core.Archives;
 /// </summary>
 public static class ZipSafeExtractor
 {
-    public static async Task<long> ExtractSingleAsync(
+    public static Task<long> ExtractSingleAsync(
         string archivePath, string entryPath, string destinationDirectory,
         long maxUncompressedBytes = 256L * 1024 * 1024,
+        CancellationToken cancellationToken = default)
+        => ExtractSingleCoreAsync(archivePath, entryPath, destinationDirectory,
+            static path => new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, 8192, FileOptions.Asynchronous), maxUncompressedBytes, cancellationToken);
+
+    internal static async Task<long> ExtractSingleCoreAsync(
+        string archivePath, string entryPath, string destinationDirectory,
+        Func<string, Stream> createOutput, long maxUncompressedBytes = 256L * 1024 * 1024,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
@@ -69,11 +77,16 @@ public static class ZipSafeExtractor
         var completed = false;
         try
         {
-            await using var output = new FileStream(destination, FileMode.CreateNew,
-                FileAccess.Write, FileShare.None, 8192, FileOptions.Asynchronous);
-            created = true;
-            var total = await ZipEntryCopy.CopyAsync(entry, output, maxUncompressedBytes, cancellationToken);
-            await output.FlushAsync(cancellationToken);
+            long total;
+            await using (var output = createOutput(destination))
+            {
+                created = true;
+                total = await ZipEntryCopy.CopyAsync(entry, output, maxUncompressedBytes, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+            }
+            // Closing the output is part of extraction: a close failure must
+            // follow the same cleanup path as a write or flush failure.
+            cancellationToken.ThrowIfCancellationRequested();
             completed = true;
             return total;
         }
