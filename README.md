@@ -432,6 +432,15 @@ Automated builds are not a substitute for testing actual devices, Windows shell 
 
 Uninstalling Meridian does **not** reverse file operations.
 
+## Project stewardship and support
+
+**Author & Principal Architect:** Sean Shaffer  
+**Contact & security inquiries:** [seanshaffer88@proton.me](mailto:seanshaffer88@proton.me)  
+**Repository & portfolio:** [github.com/SeanShaffer88](https://github.com/SeanShaffer88)  
+**Optional project support:** [Buy Me a Coffee](https://buymeacoffee.com/seanspawn88)
+
+Sponsorship is voluntary and does not affect Meridian's open-source license, access to features, or security-report handling. For sensitive vulnerability reports, use the contact email rather than posting exploit details in a public issue.
+
 ## Help shape Meridian
 
 Meridian is **MIT-licensed**, free, and open source. The most useful contributions right now are reproducible bug reports, accessibility feedback, real Windows 11 x64/ARM64 testing, and carefully scoped pull requests.
