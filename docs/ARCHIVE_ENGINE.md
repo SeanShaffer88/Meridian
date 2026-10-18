@@ -28,11 +28,13 @@ Single-entry ZIP direct/staged extraction APIs exist but are not connected to en
 | TAR tree extraction | Uses default bounded catalog and revalidates streamed entries; no separate caller budget arguments |
 | ZIP single-entry extraction | 256 MiB selected-entry default; catalog limits also apply |
 | ZIP prefix reader | 64 KiB default, caller range 1 byte–1 MiB; no complete-entry integrity guarantee |
-| Source planner used by UI | 10,000 files, 4 GiB total, default 10,000 traversed directories; rejects duplicate/overlapping selected sources and links; empty directories omitted |
+| Source planner used by UI | 10,000 files, 4 GiB total, default 10,000 discovered directories including queued work; rejects duplicate/overlapping selected sources, links and file/parent entry conflicts; empty directories omitted |
 | Creators | ZIP uses a default 4 GiB byte budget and bounded source map; TAR accepts 1–10,000 files and a 4 GiB aggregate budget |
 | TAR trailing data | Remaining decompressed padding must be zero and no more than 1 MiB; draining forces gzip trailer checks |
 
 Catalog size/count checks do not constitute complete memory/CPU defenses: a ZIP central directory may be parsed before application limits are enforced, and TGZ listing itself decompresses data. Compression-ratio, time, path-depth and nested-archive budgets are not fully implemented. Metadata and paths can change between checks and opening; no handle-identity guarantee is made.
+
+Source planning canonicalizes selected folder paths, including trailing separators, before duplicate detection. Its directory budget is shared across the selection and enforced before queuing each directory. Directory ancestors are checked again before enumeration; these path checks reduce exposure to changed links but do not eliminate filesystem races.
 
 Tree extraction refuses an existing final folder and publishes a staged directory only after successful processing. Managed failures attempt cleanup of `.meridian-extract-*` or `.meridian-tar-extract-*`; crash/cleanup failures can leave data behind. Direct single-entry ZIP extraction is a backend exception to whole-tree staging: a partial destination exists during copying and is removed on managed failure where possible.
 
