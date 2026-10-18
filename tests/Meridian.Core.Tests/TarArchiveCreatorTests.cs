@@ -182,17 +182,19 @@ public sealed class TarArchiveCreatorTests
             await File.WriteAllBytesAsync(source, new byte[2 * 1024 * 1024]);
             var archive = Path.Combine(root, "bundle" + extension);
             var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var completionPublished = new List<bool>();
             var progress = new InlineProgress<(long CompletedBytes, long TotalBytes)>(value =>
             {
                 updates.Add(value);
                 if (value.CompletedBytes == value.TotalBytes)
-                    Assert.True(File.Exists(archive));
+                    completionPublished.Add(File.Exists(archive));
             });
             await TarArchiveCreator.CreateAsync(archive,
                 new Dictionary<string, string> { ["input.bin"] = source }, progress: progress);
             Assert.Equal((0L, 2L * 1024 * 1024), updates[0]);
             Assert.Equal((2L * 1024 * 1024, 2L * 1024 * 1024), updates[^1]);
             Assert.Contains(updates, update => update.CompletedBytes > 0 && update.CompletedBytes < update.TotalBytes);
+            Assert.Equal(new[] { true }, completionPublished);
             Assert.Single(TarArchiveCatalog.List(archive));
         }
         finally { Directory.Delete(root, true); }
@@ -267,18 +269,17 @@ public sealed class TarArchiveCreatorTests
             await File.WriteAllBytesAsync(source, Array.Empty<byte>());
             var archive = Path.Combine(root, "bundle" + extension);
             var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var publishedAtNotification = new List<bool>();
             var progress = new InlineProgress<(long CompletedBytes, long TotalBytes)>(value =>
             {
                 updates.Add(value);
-                if (updates.Count == 1)
-                    Assert.False(File.Exists(archive));
-                else
-                    Assert.True(File.Exists(archive));
+                publishedAtNotification.Add(File.Exists(archive));
             });
             await TarArchiveCreator.CreateAsync(archive,
                 new Dictionary<string, string> { ["empty.txt"] = source }, progress: progress);
             Assert.Equal(2, updates.Count);
             Assert.All(updates, update => Assert.Equal((0L, 0L), update));
+            Assert.Equal(new[] { false, true }, publishedAtNotification);
             Assert.Single(TarArchiveCatalog.List(archive));
             Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
         }
