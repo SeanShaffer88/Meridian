@@ -371,6 +371,37 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tar.gz")]
+    [InlineData(".tgz")]
+    public async Task MultipleSourcesReportMonotonicAggregateProgress(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-multi-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var first = Path.Combine(root, "first.bin");
+            var second = Path.Combine(root, "second.bin");
+            await File.WriteAllBytesAsync(first, new byte[1024 * 1024]);
+            await File.WriteAllBytesAsync(second, new byte[2 * 1024 * 1024]);
+            var archive = Path.Combine(root, "bundle" + extension);
+            var updates = new List<(long CompletedBytes, long TotalBytes)>();
+            var progress = new InlineProgress<(long CompletedBytes, long TotalBytes)>(updates.Add);
+            await TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["first.bin"] = first, ["second.bin"] = second },
+                progress: progress);
+            Assert.Equal((0L, 3L * 1024 * 1024), updates[0]);
+            Assert.Equal((3L * 1024 * 1024, 3L * 1024 * 1024), updates[^1]);
+            Assert.All(updates, value => Assert.Equal(3L * 1024 * 1024, value.TotalBytes));
+            for (var i = 1; i < updates.Count; i++)
+                Assert.True(updates[i].CompletedBytes >= updates[i - 1].CompletedBytes);
+            Assert.Equal(2, TarArchiveCatalog.List(archive).Count);
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
     {
         public void Report(T value) => callback(value);
