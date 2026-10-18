@@ -342,6 +342,35 @@ public sealed class TarArchiveCreatorTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(".tar")]
+    [InlineData(".tgz")]
+    public async Task CancellingOnFinalProgressDoesNotUndoPublishedArchive(string extension)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "meridian-tar-final-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "input.txt");
+            await File.WriteAllTextAsync(source, "published");
+            var archive = Path.Combine(root, "bundle" + extension);
+            using var cts = new CancellationTokenSource();
+            var progress = new InlineProgress<(long CompletedBytes, long TotalBytes)>(value =>
+            {
+                if (value.CompletedBytes == value.TotalBytes)
+                    cts.Cancel();
+            });
+            await TarArchiveCreator.CreateAsync(archive,
+                new Dictionary<string, string> { ["input.txt"] = source },
+                cancellationToken: cts.Token, progress: progress);
+            Assert.True(cts.IsCancellationRequested);
+            Assert.True(File.Exists(archive));
+            Assert.Single(TarArchiveCatalog.List(archive));
+            Assert.Empty(Directory.GetFiles(root, ".meridian-tar-*.tmp"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
     {
         public void Report(T value) => callback(value);
