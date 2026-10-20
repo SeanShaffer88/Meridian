@@ -89,7 +89,11 @@ public sealed class BatchCopyTests
             File.WriteAllText(source, "source");
             using var cts = new CancellationTokenSource();
             cts.Cancel();
-            Assert.Throws<OperationCanceledException>(() => BatchCopy.Execute([source], destination, cts.Token));
+            var result = BatchCopy.Execute([source], destination, cts.Token);
+            Assert.True(result.Cancelled);
+            Assert.Empty(result.CompletedTargets);
+            Assert.Equal(source, result.FailedSource);
+            Assert.True(File.Exists(source));
             Assert.False(File.Exists(Path.Combine(destination, "a.txt")));
         }
         finally { Directory.Delete(root, recursive: true); }
