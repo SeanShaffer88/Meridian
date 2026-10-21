@@ -44,7 +44,7 @@ These features are **implemented on the main development branch**. They are not 
 | --- | --- |
 | **Two-pane workspace** | Browse two folders side by side, navigate history, open items, and refresh without arranging multiple windows. |
 | **Paired workspace tabs** | Keep two locations together in a tab; restore saved sessions and bookmarks where paths are available. |
-| **Instant filtering** | Filter either pane's current listing by name, path, or type, independently and without scanning the whole drive. |
+| **Instant filtering** | Filter either pane's current listing by filename or type, independently and without scanning the whole drive. The reusable core filter can also match full paths, but the pane UI deliberately excludes that option. |
 | **Independent sorting** | Sort each pane by name, type, size, or modified date, ascending or descending. |
 | **Keyboard-first navigation** | Switch panes, focus location or filter fields, refresh, and navigate history with shortcuts. |
 | **Folder DNA — first signature experience** | See a quick profile of the active folder: file/folder counts, known file sizes, date range, and largest type groups. |
@@ -68,9 +68,9 @@ It does **not** recursively calculate folder sizes, hash files, or scan nested d
 
 ### Drop Shelf + Operation Simulator: collect first, decide later
 
-Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview lists up to 100 individual results while counting the whole batch.
+Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview shows up to 100 individual results while counting the whole batch.
 
-**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Live batch progress and cancellation are available: the status area reports completed/total items, and **Cancel batch** requests cancellation at a safe checkpoint. A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
+**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Per-item batch progress and cancellation are available: the status area reports completed/total items, and **Cancel batch** requests cancellation during execution at supported checkpoints. The initial confirmation preflight is not cancellable from this button on `main` (see PR #41). A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
 
 ### A workspace that follows your thinking
 
