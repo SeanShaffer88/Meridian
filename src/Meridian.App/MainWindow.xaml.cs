@@ -898,6 +898,40 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void ViewCapsules_Click(object sender, RoutedEventArgs e)
+    {
+        var summary = _capsules.Count == 0
+            ? "No Capsules saved in this session. Add items to the Drop Shelf and choose Save Capsule."
+            : string.Join("\n\n", _capsules.Select(capsule =>
+            {
+                var states = capsule.Inspect();
+                var available = states.Count(item => item.State == ContextCapsule.Presence.Present);
+                var preview = string.Join("\n", states.Take(12).Select(item =>
+                    (item.State == ContextCapsule.Presence.Present ? "Available: " : "Unavailable: ") + item.Path));
+                var omitted = states.Count > 12 ? $"\n… and {states.Count - 12} more references" : "";
+                return $"{capsule.Name} · {available}/{states.Count} available\n{preview}{omitted}";
+            }));
+        var dialog = new ContentDialog
+        {
+            Title = "Context Capsules · read-only",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 440,
+                MaxWidth = 720,
+                Content = new TextBlock
+                {
+                    Text = summary,
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true
+                }
+            },
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
     private void CancelShelf_Click(object sender, RoutedEventArgs e)
     {
         _batchCancellation?.Cancel();
