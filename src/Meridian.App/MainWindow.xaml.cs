@@ -730,13 +730,17 @@ public sealed partial class MainWindow : Window
             var sources = _dropShelf.Paths.ToArray();
             var destination = _activePane.CurrentPath;
             var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
-            var lines = plan.Items.Take(100).Select(item =>
+            var impact = ConsequenceMap.Explain(plan);
+            var risks = impact.Risks.Count == 0
+                ? "No known blockers identified at preview time."
+                : string.Join("\n", impact.Risks.Select(risk => $"• {risk.Count:N0} {risk.Status}: {risk.Explanation}"));
+            var lines = impact.DisplayedItems.Select(item =>
                 $"[{item.Result}] {Path.GetFileName(item.Source)}\n  {item.Explanation}\n  → {item.Target ?? "(unavailable)"}");
             var summary = $"Destination: {plan.DestinationDirectory}\n" +
-                $"Collected: {plan.Items.Count:N0} · Ready: {plan.ReadyCount:N0} · " +
-                $"Blocked: {plan.Items.Count - plan.ReadyCount:N0}\n\n" +
+                $"Collected: {impact.TotalItems:N0} · Ready: {impact.ReadyItems:N0} · " +
+                $"Blocked: {impact.BlockedItems:N0}\n\nRisk summary:\n{risks}\n\n" +
                 string.Join("\n\n", lines) +
-                (plan.Items.Count > 100 ? $"\n\n…and {plan.Items.Count - 100:N0} more items not shown." : "") +
+                (impact.OmittedItems > 0 ? $"\n\n…and {impact.OmittedItems:N0} more items not shown." : "") +
                 "\n\nREAD-ONLY PREVIEW: No files were copied, moved, or deleted. " +
                 "A preview cannot reserve paths or guarantee a later operation will succeed.";
             var dialog = new ContentDialog
