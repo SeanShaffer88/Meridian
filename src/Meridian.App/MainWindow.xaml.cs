@@ -783,9 +783,7 @@ public sealed partial class MainWindow : Window
             };
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
             cancellation.Token.ThrowIfCancellationRequested();
-            try
-            {
-                GlobalStatus.Text = "Copying Drop Shelf items…";
+            GlobalStatus.Text = "Copying Drop Shelf items…";
                 var progress = new Progress<BatchCopy.Progress>(state =>
                 {
                     if (_batchCancellation == cancellation)
@@ -824,7 +822,6 @@ public sealed partial class MainWindow : Window
                     };
                     await details.ShowAsync();
                 }
-            }
         }
         catch (OperationCanceledException)
         {
