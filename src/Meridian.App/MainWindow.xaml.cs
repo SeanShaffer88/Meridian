@@ -752,10 +752,14 @@ public sealed partial class MainWindow : Window
         }
         var sources = _dropShelf.Paths.ToArray();
         var destination = _activePane.CurrentPath;
+        var destinationPane = _activePane;
+        using var cancellation = new CancellationTokenSource();
+        _batchCancellation = cancellation;
+        CancelShelfButton.IsEnabled = true;
         _batchPreparing = true;
         try
         {
-            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
+            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination, cancellation.Token), cancellation.Token);
             if (plan.HasBlockers)
             {
                 GlobalStatus.Text = $"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.";
@@ -778,9 +782,7 @@ public sealed partial class MainWindow : Window
                 XamlRoot = Content.XamlRoot
             };
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
-            using var cancellation = new CancellationTokenSource();
-            _batchCancellation = cancellation;
-            CancelShelfButton.IsEnabled = true;
+            cancellation.Token.ThrowIfCancellationRequested();
             try
             {
                 GlobalStatus.Text = "Copying Drop Shelf items…";
@@ -790,7 +792,7 @@ public sealed partial class MainWindow : Window
                         GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}";
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
-                await NavigateAsync(_activePane, destination, addHistory: false);
+                await NavigateAsync(destinationPane, destination, addHistory: false);
                 GlobalStatus.Text = result.Succeeded
                     ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
                     : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
@@ -823,11 +825,10 @@ public sealed partial class MainWindow : Window
                     await details.ShowAsync();
                 }
             }
-            finally
-            {
-                _batchCancellation = null;
-                CancelShelfButton.IsEnabled = false;
-            }
+        }
+        catch (OperationCanceledException)
+        {
+            GlobalStatus.Text = "Batch preparation cancelled · No copy started.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
             ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException)
@@ -836,6 +837,8 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _batchCancellation = null;
+            CancelShelfButton.IsEnabled = false;
             _batchPreparing = false;
         }
     }
