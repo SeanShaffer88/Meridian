@@ -14,7 +14,7 @@ Free · Open source · Offline-first · Windows 11
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![WinUI 3](https://img.shields.io/badge/interface-WinUI%203-444444)
 
-**[Get a preview build](#try-meridian)** · **[See what works](#what-you-can-use-today)** · **[Explore the vision](#what-makes-meridian-different)** · **[Contribute](#help-shape-meridian)**
+**[Get a preview build](#try-meridian)** · **[See what works](#what-you-can-use-today)** · **[Explore the vision](#what-makes-meridian-different)** · **[Contribute](#help-shape-meridian)** · **[Engineering standards](docs/QUALITY-GATES.md)**
 
 </div>
 
