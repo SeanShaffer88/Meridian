@@ -16,6 +16,7 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
     private readonly DropShelf _dropShelf = new();
+    private readonly List<ContextCapsule> _capsules = [];
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
@@ -857,6 +858,43 @@ public sealed partial class MainWindow : Window
         finally
         {
             _batchPreparing = false;
+        }
+    }
+
+    private async void SaveCapsule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dropShelf.Paths.Count == 0)
+        {
+            GlobalStatus.Text = "Add files or folders to the Drop Shelf before saving a Capsule.";
+            return;
+        }
+
+        var nameBox = new TextBox
+        {
+            Header = "Capsule name",
+            Text = $"Task {_capsules.Count + 1}",
+            MaxLength = ContextCapsule.MaximumNameLength
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Save read-only Context Capsule",
+            Content = nameBox,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            var capsule = ContextCapsule.Capture(nameBox.Text, _dropShelf.Paths);
+            _capsules.Add(capsule);
+            var available = capsule.Inspect().Count(item => item.State == ContextCapsule.Presence.Present);
+            GlobalStatus.Text = $"Capsule '{capsule.Name}' saved in this session · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            GlobalStatus.Text = "Could not capture Capsule · " + ex.Message;
         }
     }
 
