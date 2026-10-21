@@ -67,7 +67,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [x] Background directory enumeration
 - [x] Conservative copy path that refuses overwrite
 - [x] Core unit-test source
-- [ ] Build and run on Windows 11 x64 and ARM64; resolve compiler/runtime issues and record actual CI results
+- [ ] Complete both CI builds and native runtime validation on Windows 11 x64 and ARM64; record evidence separately (cross-publishing is not native execution)
 - [x] Cover nested directory copy, destination collisions, self/descendant prevention, and cancellation before a copy starts
 - [ ] Test cancellation during an active copy and staging cleanup, disappearing sources, access-denied cases, and reparse-point edge cases
 - [ ] Establish operation contracts, structured error reporting, cancellation semantics, and path/reparse-point safety
@@ -77,10 +77,10 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 - [x] Paired workspace tabs with independent left/right locations and session persistence; later: reordering, locking, pinning, close-left/right, and color accents
 - [ ] Flexible one-, two-, and four-pane layouts, including horizontal/vertical splits and adjustable split ratios
-- [ ] Bookmarks/favorites and named workspaces; persist and restore tabs, pane layout, locations, and focus
+- [ ] Expand implemented bookmarks and paired workspace tabs with full pane-layout/focus restoration and named workspaces; path/tab persistence already exists
 - [ ] Folder tree sidebar, with shared focus-synchronized or independent per-pane trees
 - [ ] Core view modes: icon sizes, list, compact list, tiles, content, and details/grid
-- [x] Live case-insensitive filtering by name, path, or type in each pane; sorting controls, type-ahead selection, and expanded keyboard shortcuts remain planned
+- [x] Case-insensitive filename/type filtering in directory panes (optional full-path matching remains available to core API callers); independent sorting controls are implemented. Type-ahead selection and expanded shortcuts remain planned
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
 - [x] Rename files and folders in place with validation and no-overwrite behavior
@@ -93,7 +93,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 
 - [ ] Miller Columns / cascading folder navigation
 - [ ] Mini/pruned tree containing visited or pinned directories
-- [ ] Drop shelf/stack for gathering files from multiple locations before a batch operation
+- [x] In-memory Drop Shelf for gathering paths across locations, with read-only preview and confirmed sequential batch copy; persistence and advanced queueing remain planned
 - [ ] Flat/branch view across nested directories
 - [ ] Per-folder view preferences stored in a local database (columns, sorting, icon size, and supported visual options), rather than depending on fragile registry Bags
 - [ ] Color labels, tags, and ratings stored locally; investigate optional NTFS alternate data stream (ADS) storage with explicit portability and privacy warnings

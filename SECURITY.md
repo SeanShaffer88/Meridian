@@ -2,7 +2,7 @@
 
 Meridian is in early development and is not yet suitable for high-risk or irreplaceable data.
 
-Please do not publish exploitable vulnerabilities as public issues before maintainers have assessed them. Use GitHub private vulnerability reporting if enabled; otherwise contact the repository owner privately.
+Please do not publish exploitable vulnerabilities as public issues before maintainers have assessed them. Use GitHub private vulnerability reporting if enabled; otherwise contact the maintainer privately at **seanshaffer88@proton.me**. Do not include exploit details in public issues.
 
 Relevant issues include unintended data loss or overwrite, path traversal, reparse-point traversal, unsafe preview/handler behavior, privilege escalation, and unexpected network access.
 
