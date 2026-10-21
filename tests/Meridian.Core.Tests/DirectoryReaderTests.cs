@@ -56,7 +56,7 @@ public sealed class DirectoryReaderTests
     {
         var entries = new[]
         {
-            new Meridian.Models.FileEntry { Name = "report.bin", IsDirectory = false, FullPath = @"C:\archive\report.bin", IsDirectory = false, TypeLabel = "BIN file", SizeLabel = "1 B", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "report.bin", FullPath = @"C:\archive\report.bin", IsDirectory = false, TypeLabel = "BIN file", SizeLabel = "1 B", ModifiedLabel = "" },
             new Meridian.Models.FileEntry { Name = "notes.txt", FullPath = @"C:\work\notes.txt", IsDirectory = false, TypeLabel = "TXT file", SizeLabel = "1 B", ModifiedLabel = "" }
         };
 
@@ -69,7 +69,7 @@ public sealed class DirectoryReaderTests
     {
         var entries = new[]
         {
-            new Meridian.Models.FileEntry { Name = "report.bin", FullPath = @"C:\archive\report.bin", TypeLabel = "BIN file", SizeLabel = "", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "report.bin", FullPath = @"C:\archive\report.bin", IsDirectory = false, TypeLabel = "BIN file", SizeLabel = "", ModifiedLabel = "" },
             new Meridian.Models.FileEntry { Name = "archive-note.txt", IsDirectory = false, FullPath = @"C:\archive\archive-note.txt", TypeLabel = "TXT file", SizeLabel = "", ModifiedLabel = "" }
         };
 
