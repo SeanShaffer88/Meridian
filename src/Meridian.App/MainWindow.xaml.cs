@@ -16,6 +16,7 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
     private readonly DropShelf _dropShelf = new();
+    private readonly List<ContextCapsule> _capsules = [];
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
@@ -858,6 +859,77 @@ public sealed partial class MainWindow : Window
         {
             _batchPreparing = false;
         }
+    }
+
+    private async void SaveCapsule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dropShelf.Paths.Count == 0)
+        {
+            GlobalStatus.Text = "Add files or folders to the Drop Shelf before saving a Capsule.";
+            return;
+        }
+
+        var nameBox = new TextBox
+        {
+            Header = "Capsule name",
+            Text = $"Task {_capsules.Count + 1}",
+            MaxLength = ContextCapsule.MaximumNameLength
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Save read-only Context Capsule",
+            Content = nameBox,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            var capsule = ContextCapsule.Capture(nameBox.Text, _dropShelf.Paths);
+            _capsules.Add(capsule);
+            var available = capsule.Inspect().Count(item => item.State == ContextCapsule.Presence.Present);
+            GlobalStatus.Text = $"Capsule '{capsule.Name}' saved in this session · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            GlobalStatus.Text = "Could not capture Capsule · " + ex.Message;
+        }
+    }
+
+    private async void ViewCapsules_Click(object sender, RoutedEventArgs e)
+    {
+        var summary = _capsules.Count == 0
+            ? "No Capsules saved in this session. Add items to the Drop Shelf and choose Save Capsule."
+            : string.Join("\n\n", _capsules.Select(capsule =>
+            {
+                var states = capsule.Inspect();
+                var available = states.Count(item => item.State == ContextCapsule.Presence.Present);
+                var preview = string.Join("\n", states.Take(12).Select(item =>
+                    (item.State == ContextCapsule.Presence.Present ? "Available: " : "Unavailable: ") + item.Path));
+                var omitted = states.Count > 12 ? $"\n… and {states.Count - 12} more references" : "";
+                return $"{capsule.Name} · {available}/{states.Count} available\n{preview}{omitted}";
+            }));
+        var dialog = new ContentDialog
+        {
+            Title = "Context Capsules · read-only",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 440,
+                MaxWidth = 720,
+                Content = new TextBlock
+                {
+                    Text = summary,
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true
+                }
+            },
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
     }
 
     private void CancelShelf_Click(object sender, RoutedEventArgs e)
