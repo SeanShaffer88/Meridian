@@ -302,7 +302,7 @@ public sealed partial class MainWindow : Window
     private void ApplyFilter(PaneState pane)
     {
         var query = pane.FilterBox.Text.Trim();
-        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending);
+        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
 
         pane.Items.Clear();
         foreach (var item in matches)
