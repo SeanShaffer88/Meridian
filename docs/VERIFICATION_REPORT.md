@@ -7,7 +7,7 @@ This report separates GitHub CI evidence from unperformed device tests. Historic
 | Revision | CI evidence | What passed | What it does not prove |
 | --- | --- | --- | --- |
 | `91131ddcff5cae1254b8eb57735799b64607e709` (merged PR #39) | [run 39587149653](https://github.com/SeanShaffer88/Meridian/actions/runs/39587149653) | Core tests; Windows x64 and ARM64 publishing jobs | Integrated GUI behavior or native ARM64 runtime |
-| `427f086e7019317c03d0aaca370460568d30f341` (merged PR #40; current `main` at this review) | [run 39587543706](https://github.com/SeanShaffer88/Meridian/actions/runs/39587543706) | Core-tests job passed when last inspected | x64/ARM64 publish jobs were still running at last inspection; do not infer completion |
+| `427f086e7019317c03d0aaca370460568d30f341` (merged PR #40; current `main` at this review) | [run 39587543706](https://github.com/SeanShaffer88/Meridian/actions/runs/39587543706) | Core tests, Windows x64 publish and ARM64 cross-publish jobs all succeeded | CI does not prove native ARM64 execution or clean installation |
 | `049120a2` (historical foundation) | [run 38993509004](https://github.com/SeanShaffer88/Meridian/actions/runs/38993509004) | Historical core tests and x64/ARM64 publish jobs | Present main revision |
 
 A Windows CI **ARM64 build** is cross-publishing on the workflow's `windows-latest` runner, not a native ARM64 functional test. CI output is not evidence that a clean installer launches, uninstalls cleanly, or supports all relevant accessibility features.
