@@ -266,7 +266,7 @@ public sealed partial class MainWindow : Window
         BookmarksBox.SelectedItem = null;
     }
 
-    private async Task NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
+    private async Task<bool> NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
     {
         string fullPath;
         try
@@ -276,27 +276,39 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return;
-        }
-        if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            pane.BackHistory.Push(pane.CurrentPath); pane.ForwardHistory.Clear();
+            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
         var token = pane.ReadCancellation.Token;
-        pane.CurrentPath = fullPath; pane.PathBox.Text = fullPath; SetPaneStatus(pane, "Loading folder…");
+        SetPaneStatus(pane, "Loading folder…");
         try
         {
             var entries = await Task.Run(() => DirectoryReader.Read(fullPath, token), token);
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested) return false;
+            if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                pane.BackHistory.Push(pane.CurrentPath);
+                pane.ForwardHistory.Clear();
+            }
+            pane.CurrentPath = fullPath;
+            pane.PathBox.Text = fullPath;
             pane.AllItems = entries;
             ApplyFilter(pane);
             GlobalStatus.Text = "Ready · Local-only · No telemetry";
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
+            return true;
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { return false; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        { SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Could not read folder · " + ex.Message; }
+        {
+            if (!token.IsCancellationRequested)
+            {
+                SetPaneStatus(pane, ex.Message);
+                GlobalStatus.Text = "Could not read folder · " + ex.Message;
+                pane.PathBox.Text = pane.CurrentPath;
+            }
+            return false;
+        }
     }
 
     private void ApplyFilter(PaneState pane)
@@ -338,16 +350,24 @@ public sealed partial class MainWindow : Window
     private async Task NavigateBackAsync(PaneState pane)
     {
         if (pane.BackHistory.Count == 0) return;
-        var target = pane.BackHistory.Pop();
-        if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.ForwardHistory.Push(pane.CurrentPath);
-        await NavigateAsync(pane, target, addHistory: false);
+        var target = pane.BackHistory.Peek();
+        var previous = pane.CurrentPath;
+        if (await NavigateAsync(pane, target, addHistory: false))
+        {
+            pane.BackHistory.Pop();
+            if (!string.IsNullOrWhiteSpace(previous)) pane.ForwardHistory.Push(previous);
+        }
     }
     private async Task NavigateForwardAsync(PaneState pane)
     {
         if (pane.ForwardHistory.Count == 0) return;
-        var target = pane.ForwardHistory.Pop();
-        if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.BackHistory.Push(pane.CurrentPath);
-        await NavigateAsync(pane, target, addHistory: false);
+        var target = pane.ForwardHistory.Peek();
+        var previous = pane.CurrentPath;
+        if (await NavigateAsync(pane, target, addHistory: false))
+        {
+            pane.ForwardHistory.Pop();
+            if (!string.IsNullOrWhiteSpace(previous)) pane.BackHistory.Push(previous);
+        }
     }
     private async Task OpenSelectedAsync(PaneState pane)
     {
