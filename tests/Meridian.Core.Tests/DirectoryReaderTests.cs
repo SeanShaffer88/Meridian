@@ -65,6 +65,21 @@ public sealed class DirectoryReaderTests
     }
 
     [Fact]
+    public void Filter_WithoutFullPath_DoesNotMatchSharedParentDirectory()
+    {
+        var entries = new[]
+        {
+            new Meridian.Models.FileEntry { Name = "report.bin", FullPath = @"C:\archive\report.bin", TypeLabel = "BIN file", SizeLabel = "", ModifiedLabel = "" },
+            new Meridian.Models.FileEntry { Name = "archive-note.txt", FullPath = @"C:\archive\archive-note.txt", TypeLabel = "TXT file", SizeLabel = "", ModifiedLabel = "" }
+        };
+
+        var results = DirectoryReader.Filter(entries, "archive", includeFullPath: false);
+
+        Assert.Equal("archive-note.txt", Assert.Single(results).Name);
+        Assert.Equal(2, DirectoryReader.Filter(entries, "archive").Count);
+    }
+
+    [Fact]
     public void Filter_EmptyQueryReturnsAllSortedItems()
     {
         var entries = new[]
