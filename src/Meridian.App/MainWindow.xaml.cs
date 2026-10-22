@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
     private readonly List<ContextCapsule> _capsules = [];
     private readonly ContextCapsuleStore _capsuleStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "capsules.json"));
     private bool _capsuleStorageUnavailable;
+    private bool _capsuleSaving;
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
@@ -879,6 +880,23 @@ public sealed partial class MainWindow : Window
 
     private async void SaveCapsule_Click(object sender, RoutedEventArgs e)
     {
+        if (_capsuleSaving) return;
+        _capsuleSaving = true;
+        SaveCapsuleButton.IsEnabled = false;
+        try { await SaveCapsuleAsync(); }
+        catch (InvalidOperationException ex)
+        {
+            GlobalStatus.Text = "Could not open Capsule save · " + ex.Message;
+        }
+        finally
+        {
+            _capsuleSaving = false;
+            SaveCapsuleButton.IsEnabled = true;
+        }
+    }
+
+    private async Task SaveCapsuleAsync()
+    {
         if (_capsuleStorageUnavailable)
         {
             GlobalStatus.Text = "Capsule saving disabled: the existing saved file could not be read. Back it up and repair it before saving.";
@@ -886,7 +904,7 @@ public sealed partial class MainWindow : Window
         }
         if (_capsules.Count >= ContextCapsuleFormat.MaximumCapsules)
         {
-            GlobalStatus.Text = "Capsule limit reached. Export or remove saved Capsules before adding more.";
+            GlobalStatus.Text = "Capsule limit reached. No new Capsule was saved; existing Capsules are unchanged.";
             return;
         }
         if (_dropShelf.Paths.Count == 0)

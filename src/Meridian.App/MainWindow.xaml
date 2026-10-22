@@ -58,8 +58,8 @@
       <Button Grid.Column="5" Content="Preview shelf → active folder" Click="PreviewShelf_Click" ToolTipService.ToolTip="Inspect all collected items against the active folder without copying anything" />
       <Button Grid.Column="6" Content="Copy shelf…" Click="CopyShelf_Click" ToolTipService.ToolTip="Preview and confirm a no-overwrite batch copy" />
       <Button x:Name="CancelShelfButton" Grid.Column="7" Content="Cancel batch" Click="CancelShelf_Click" IsEnabled="False" />
-      <Button Grid.Column="8" Content="Save Capsule" Click="SaveCapsule_Click" ToolTipService.ToolTip="Capture current shelf paths as a temporary read-only task context" />
-      <Button Grid.Column="9" Content="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review task references saved during this session" />
+      <Button x:Name="SaveCapsuleButton" Grid.Column="8" Content="Save Capsule" Click="SaveCapsule_Click" ToolTipService.ToolTip="Save current shelf path references locally; file contents are not copied" />
+      <Button Grid.Column="9" Content="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review locally saved task references, including unavailable paths" />
       <ComboBox x:Name="ShelfItemsBox" Grid.Column="10" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" />
     </Grid>
     <Grid Grid.Row="5" Margin="12" ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
