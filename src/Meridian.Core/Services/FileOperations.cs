@@ -146,25 +146,29 @@ public static class FileOperations
         if (File.Exists(finalPath) || Directory.Exists(finalPath))
             throw new IOException($"'{name}' already exists in the destination. Nothing was overwritten.");
         var stagingPath = Path.Combine(destinationRoot, $".meridian-{Guid.NewGuid():N}.partial");
+        var ownsStaging = false;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (Directory.Exists(source))
             {
+                if (File.Exists(stagingPath) || Directory.Exists(stagingPath))
+                    throw new IOException("The staging path is already occupied; refusing to use it.");
                 Directory.CreateDirectory(stagingPath);
+                ownsStaging = true;
                 CopyDirectoryContents(source, stagingPath, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 Directory.Move(stagingPath, finalPath);
             }
             else
             {
-                CopyFileWithCancellation(source, stagingPath, cancellationToken);
+                CopyFileWithCancellation(source, stagingPath, cancellationToken, () => ownsStaging = true);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(stagingPath, finalPath);
             }
             return finalPath;
         }
-        catch { TryDeleteStaging(stagingPath); throw; }
+        catch { if (ownsStaging) TryDeleteStaging(stagingPath); throw; }
     }
 
     private static void CopyDirectoryContents(string source, string destination, CancellationToken cancellationToken)
@@ -184,7 +188,7 @@ public static class FileOperations
         }
     }
 
-    private static void CopyFileWithCancellation(string source, string destination, CancellationToken cancellationToken)
+    private static void CopyFileWithCancellation(string source, string destination, CancellationToken cancellationToken, Action? onCreated = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var creationTime = File.GetCreationTimeUtc(source);
@@ -194,6 +198,7 @@ public static class FileOperations
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
         using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.SequentialScan))
         {
+            onCreated?.Invoke();
             int read;
             while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
             {
