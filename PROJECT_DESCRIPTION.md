@@ -1,6 +1,6 @@
 # Meridian — Project Description
 
-Meridian is a Windows 11 file manager concept built around a modern, power-user workflow. The first implementation is a dual-pane shell with path navigation, background listing, launching files through the Windows shell, and conservative copy operations.
+Meridian is an early-preview Windows 11 dual-pane file manager built around a modern, power-user workflow. The current `main` branch includes paired workspace tabs, bookmarks, Folder DNA, a temporary Drop Shelf, copy previews, and explicitly confirmed batch copying in addition to navigation and basic file actions.
 
 ## Product principles
 - Fast navigation and responsive UI.
@@ -9,4 +9,4 @@ Meridian is a Windows 11 file manager concept built around a modern, power-user 
 - Minimal dependencies and transparent security posture.
 - Feature depth earned through tests and measured performance, not unchecked feature count.
 
-This is an early development foundation. It has not been confirmed to compile or run on Windows yet.
+This remains an early development preview. Windows CI has compiled/published the application and run core tests on specific commits; clean-device behavior, native ARM64 execution, and accessibility verification are not established by those checks.

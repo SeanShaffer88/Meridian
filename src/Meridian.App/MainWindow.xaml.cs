@@ -16,6 +16,7 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
     private readonly DropShelf _dropShelf = new();
+    private readonly List<ContextCapsule> _capsules = [];
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
@@ -266,7 +267,7 @@ public sealed partial class MainWindow : Window
         BookmarksBox.SelectedItem = null;
     }
 
-    private async Task NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
+    private async Task<bool> NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
     {
         string fullPath;
         try
@@ -276,33 +277,45 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return;
-        }
-        if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            pane.BackHistory.Push(pane.CurrentPath); pane.ForwardHistory.Clear();
+            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
         var token = pane.ReadCancellation.Token;
-        pane.CurrentPath = fullPath; pane.PathBox.Text = fullPath; SetPaneStatus(pane, "Loading folder…");
+        SetPaneStatus(pane, "Loading folder…");
         try
         {
             var entries = await Task.Run(() => DirectoryReader.Read(fullPath, token), token);
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested) return false;
+            if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                pane.BackHistory.Push(pane.CurrentPath);
+                pane.ForwardHistory.Clear();
+            }
+            pane.CurrentPath = fullPath;
+            pane.PathBox.Text = fullPath;
             pane.AllItems = entries;
             ApplyFilter(pane);
             GlobalStatus.Text = "Ready · Local-only · No telemetry";
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
+            return true;
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { return false; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        { SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Could not read folder · " + ex.Message; }
+        {
+            if (!token.IsCancellationRequested)
+            {
+                SetPaneStatus(pane, ex.Message);
+                GlobalStatus.Text = "Could not read folder · " + ex.Message;
+                pane.PathBox.Text = pane.CurrentPath;
+            }
+            return false;
+        }
     }
 
     private void ApplyFilter(PaneState pane)
     {
         var query = pane.FilterBox.Text.Trim();
-        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending);
+        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
 
         pane.Items.Clear();
         foreach (var item in matches)
@@ -338,16 +351,24 @@ public sealed partial class MainWindow : Window
     private async Task NavigateBackAsync(PaneState pane)
     {
         if (pane.BackHistory.Count == 0) return;
-        var target = pane.BackHistory.Pop();
-        if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.ForwardHistory.Push(pane.CurrentPath);
-        await NavigateAsync(pane, target, addHistory: false);
+        var target = pane.BackHistory.Peek();
+        var previous = pane.CurrentPath;
+        if (await NavigateAsync(pane, target, addHistory: false))
+        {
+            pane.BackHistory.Pop();
+            if (!string.IsNullOrWhiteSpace(previous)) pane.ForwardHistory.Push(previous);
+        }
     }
     private async Task NavigateForwardAsync(PaneState pane)
     {
         if (pane.ForwardHistory.Count == 0) return;
-        var target = pane.ForwardHistory.Pop();
-        if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.BackHistory.Push(pane.CurrentPath);
-        await NavigateAsync(pane, target, addHistory: false);
+        var target = pane.ForwardHistory.Peek();
+        var previous = pane.CurrentPath;
+        if (await NavigateAsync(pane, target, addHistory: false))
+        {
+            pane.ForwardHistory.Pop();
+            if (!string.IsNullOrWhiteSpace(previous)) pane.BackHistory.Push(previous);
+        }
     }
     private async Task OpenSelectedAsync(PaneState pane)
     {
@@ -709,13 +730,17 @@ public sealed partial class MainWindow : Window
             var sources = _dropShelf.Paths.ToArray();
             var destination = _activePane.CurrentPath;
             var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
-            var lines = plan.Items.Take(100).Select(item =>
+            var impact = ConsequenceMap.Explain(plan);
+            var risks = impact.Risks.Count == 0
+                ? "No known blockers identified at preview time."
+                : string.Join("\n", impact.Risks.Select(risk => $"• {risk.Count:N0} {risk.Status}: {risk.Explanation}"));
+            var lines = impact.DisplayedItems.Select(item =>
                 $"[{item.Result}] {Path.GetFileName(item.Source)}\n  {item.Explanation}\n  → {item.Target ?? "(unavailable)"}");
             var summary = $"Destination: {plan.DestinationDirectory}\n" +
-                $"Collected: {plan.Items.Count:N0} · Ready: {plan.ReadyCount:N0} · " +
-                $"Blocked: {plan.Items.Count - plan.ReadyCount:N0}\n\n" +
+                $"Collected: {impact.TotalItems:N0} · Ready: {impact.ReadyItems:N0} · " +
+                $"Blocked: {impact.BlockedItems:N0}\n\nRisk summary:\n{risks}\n\n" +
                 string.Join("\n\n", lines) +
-                (plan.Items.Count > 100 ? $"\n\n…and {plan.Items.Count - 100:N0} more items not shown." : "") +
+                (impact.OmittedItems > 0 ? $"\n\n…and {impact.OmittedItems:N0} more items not shown." : "") +
                 "\n\nREAD-ONLY PREVIEW: No files were copied, moved, or deleted. " +
                 "A preview cannot reserve paths or guarantee a later operation will succeed.";
             var dialog = new ContentDialog
@@ -840,10 +865,96 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void SaveCapsule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dropShelf.Paths.Count == 0)
+        {
+            GlobalStatus.Text = "Add files or folders to the Drop Shelf before saving a Capsule.";
+            return;
+        }
+
+        var nameBox = new TextBox
+        {
+            Header = "Capsule name",
+            Text = $"Task {_capsules.Count + 1}",
+            MaxLength = ContextCapsule.MaximumNameLength
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Save read-only Context Capsule",
+            Content = nameBox,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            var capsule = ContextCapsule.Capture(nameBox.Text, _dropShelf.Paths);
+            _capsules.Add(capsule);
+            var available = capsule.Inspect().Count(item => item.State == ContextCapsule.Presence.Present);
+            GlobalStatus.Text = $"Capsule '{capsule.Name}' saved in this session · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            GlobalStatus.Text = "Could not capture Capsule · " + ex.Message;
+        }
+    }
+
+    private async void ViewCapsules_Click(object sender, RoutedEventArgs e)
+    {
+        var summary = _capsules.Count == 0
+            ? "No Capsules saved in this session. Add items to the Drop Shelf and choose Save Capsule."
+            : string.Join("\n\n", _capsules.Select(capsule =>
+            {
+                var states = capsule.Inspect();
+                var available = states.Count(item => item.State == ContextCapsule.Presence.Present);
+                var preview = string.Join("\n", states.Take(12).Select(item =>
+                    (item.State == ContextCapsule.Presence.Present ? "Available: " : "Unavailable: ") + item.Path));
+                var omitted = states.Count > 12 ? $"\n… and {states.Count - 12} more references" : "";
+                return $"{capsule.Name} · {available}/{states.Count} available\n{preview}{omitted}";
+            }));
+        var dialog = new ContentDialog
+        {
+            Title = "Context Capsules · read-only",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 440,
+                MaxWidth = 720,
+                Content = new TextBlock
+                {
+                    Text = summary,
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true
+                }
+            },
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
     private void CancelShelf_Click(object sender, RoutedEventArgs e)
     {
         _batchCancellation?.Cancel();
         GlobalStatus.Text = "Cancelling batch copy…";
+    }
+
+    private void PruneShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_batchCancellation is not null || _batchPreparing)
+        {
+            GlobalStatus.Text = "Wait until the batch copy is finished before pruning the shelf.";
+            return;
+        }
+        var removed = _dropShelf.RemoveMissing();
+        _shelfPaths.Clear();
+        foreach (var path in _dropShelf.Paths) _shelfPaths.Add(path);
+        GlobalStatus.Text = removed == 0
+            ? "Drop Shelf · No missing references found."
+            : $"Drop Shelf · Removed {removed:N0} missing references; no files were deleted.";
     }
 
     private void ClearShelf_Click(object sender, RoutedEventArgs e)

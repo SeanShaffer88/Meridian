@@ -4,7 +4,7 @@
 
 ### Beyond File Management.
 
-**A new kind of workspace for exploring, understanding, and organizing what lives on your computer.**
+**An offline-first Windows 11 file manager with dual-pane browsing, workspace tabs, Folder DNA, and safer copy previews.**
 
 Free · Open source · Offline-first · Windows 11
 
@@ -22,6 +22,18 @@ Free · Open source · Offline-first · Windows 11
 > **Meridian is an early development preview, not a finished release.** Automated Windows x64/ARM64 builds and core tests exist, but hands-on runtime, installer, and accessibility testing is incomplete. **Back up important data and start with disposable test folders.** Preview installers are unsigned.
 
 ---
+
+## Start here
+
+| Your goal | Next step |
+| --- | --- |
+| Try a Windows preview | Follow [Try Meridian](#try-meridian) for CI artifacts, architecture selection, and launch requirements. |
+| See implemented features | Read [What you can use today](#what-you-can-use-today); future ideas are listed separately. |
+| Understand a folder | Explore [Folder DNA](#folder-dna-understand-a-folder-at-a-glance), based on the loaded directory listing. |
+| Collect files before copying | Try [Drop Shelf and Operation Simulator](#drop-shelf--operation-simulator-collect-first-decide-later) using disposable test files. |
+| Build or contribute | Use the [source build guide](#build-from-source) and [contribution guidance](CONTRIBUTING.md). |
+
+**Preview scope:** Windows 11, C#/.NET 10, and WinUI 3. Automated x64/ARM64 packaging exists; hands-on runtime and accessibility acceptance remain incomplete. See [verification status](docs/VERIFICATION_REPORT.md) before relying on a workflow.
 
 ## File management should feel different
 
@@ -44,7 +56,7 @@ These features are **implemented on the main development branch**. They are not 
 | --- | --- |
 | **Two-pane workspace** | Browse two folders side by side, navigate history, open items, and refresh without arranging multiple windows. |
 | **Paired workspace tabs** | Keep two locations together in a tab; restore saved sessions and bookmarks where paths are available. |
-| **Instant filtering** | Filter either pane's current listing by name, path, or type, independently and without scanning the whole drive. |
+| **Instant filtering** | Filter either pane's current listing by filename or type, independently and without scanning the whole drive. The reusable core filter can also match full paths, but the pane UI deliberately excludes that option. |
 | **Independent sorting** | Sort each pane by name, type, size, or modified date, ascending or descending. |
 | **Keyboard-first navigation** | Switch panes, focus location or filter fields, refresh, and navigate history with shortcuts. |
 | **Folder DNA — first signature experience** | See a quick profile of the active folder: file/folder counts, known file sizes, date range, and largest type groups. |
@@ -68,9 +80,9 @@ It does **not** recursively calculate folder sizes, hash files, or scan nested d
 
 ### Drop Shelf + Operation Simulator: collect first, decide later
 
-Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview lists up to 100 individual results while counting the whole batch.
+Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview shows up to 100 individual results while counting the whole batch.
 
-**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Live batch progress and cancellation are available: the status area reports completed/total items, and **Cancel batch** requests cancellation at a safe checkpoint. A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
+**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Per-item batch progress and cancellation are available: the status area reports completed/total items, and **Cancel batch** requests cancellation during execution at supported checkpoints. The initial confirmation preflight is not cancellable from this button on `main` (see PR #41). A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
 
 ### A workspace that follows your thinking
 
@@ -123,6 +135,16 @@ See the full [innovation-first roadmap](docs/ROADMAP.md).
 > [!NOTE]
 > GitHub may require sign-in to download workflow artifacts. CI artifacts expire (currently after 14 days). Installers are **unsigned**, so Windows may warn about the publisher. Only run an artifact if you trust its source. Portable mode does **not yet guarantee** that all settings remain beside the executable.
 
+### Installation and troubleshooting
+
+- **No download under Artifacts?** Select a completed, successful workflow run. GitHub may require sign-in, and artifacts expire after the workflow's configured retention period (currently 14 days).
+- **Windows displays an unknown-publisher warning?** The preview installer is unsigned. Verify the repository and build provenance before deciding whether to run it; don't disable system-wide security protections.
+- **App does not start?** Confirm Windows 11 build 22000+, choose the architecture matching your device, extract the *entire* portable artifact before launching `Meridian.exe`, and include the OS build, architecture, artifact run URL, and exact error when reporting a bug.
+- **A file operation fails?** Check source/destination access and collisions. Meridian intentionally refuses known overwrites; after a partial batch, inspect the destination before retrying. Do not delete a `.meridian-*.partial` path before determining whether it contains recoverable data.
+- **Portable settings?** The current workspace file is stored under `%LOCALAPPDATA%\\Meridian\\workspace.json`; a completely self-contained portable settings mode is not yet verified.
+
+See [known limitations and verification status](docs/VERIFICATION_REPORT.md), [security reporting](SECURITY.md), and [contributing instructions](CONTRIBUTING.md).
+
 ### Your first two minutes
 
 1. Enter one folder path in the **left** pane and another in the **right**; press **Enter**.
@@ -161,7 +183,7 @@ Meridian is designed around conservative defaults, not irreversible surprises.
 
 **Important limitations:** There is no general undo engine, automatic restore point, dedicated audit log, post-copy checksum verification, or guaranteed transactional rollback. Cross-volume moves copy first and then remove the source; if removal fails, **both copies may remain**. Reparse-point and filesystem edge cases still require additional validation.
 
-**A future Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
+**An Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
 
 For detailed risks and verification requirements, see the [threat model](docs/THREAT_MODEL.md) and [release gate](docs/RELEASE_GATE.md).
 
@@ -175,7 +197,7 @@ On a Windows development machine, install the .NET 10 SDK and the WinUI 3 / Wind
 ./scripts/test.ps1
 ./scripts/build.ps1 -Configuration Release -Runtime win-x64
 
-# For Windows on ARM:
+# To cross-publish for Windows on ARM (native device testing still required):
 ./scripts/build.ps1 -Configuration Release -Runtime win-arm64
 ```
 
@@ -203,7 +225,7 @@ Meridian is **MIT-licensed**, free, and open source. The most useful contributio
 
 Start with the [roadmap](docs/ROADMAP.md), [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [release checklist](docs/RELEASE_GATE.md). See [CHANGELOG.md](CHANGELOG.md) for recorded changes and [CREDITS.md](CREDITS.md) for third-party acknowledgments.
 
-**Have an unconventional idea that makes working with files meaningfully better? That's exactly the kind of idea Meridian wants to explore.**
+**Have an unconventional idea that makes working with files meaningfully better?** Open a focused issue describing the workflow, proposed behavior, and important safety cases.
 
 ---
 

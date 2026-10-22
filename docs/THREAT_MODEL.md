@@ -13,9 +13,9 @@ Meridian accesses files using the current user's Windows permissions. Names, met
 
 ## Known risks and gaps
 - Copy is not a transactional filesystem operation; crashes or disk errors may leave staging files.
-- UI does not expose cancellation or an operation queue yet.
+- UI exposes cancellation during individual copy and batch execution, but not a general pause/resume operation queue. The initial batch preflight is not cancellable from its UI button on `main`.
 - File launching may invoke arbitrary handlers configured by the user or system.
-- Archive parsing, previews, scripting, plugins, and metadata handlers are not implemented.
+- Archive parsing and richer viewers are not implemented on `main` (some code is proposed in open PR #37). There is a read-only copy Operation Simulator preview; scripting/plugins are not implemented.
 - Race conditions remain possible between path checks and use.
 - No formal security review has been completed.
 

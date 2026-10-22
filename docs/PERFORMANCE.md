@@ -1,11 +1,11 @@
 # Performance Plan
 
-No performance claims are made yet; measurements have not been collected.
+No representative device-level performance measurements have been recorded in this document. Automated builds and tests are not performance evidence.
 
 ## Metrics to capture on Windows 11
 - Cold startup to interactive window.
 - Navigation latency for folders with 1k, 10k, and 100k entries.
-- UI responsiveness during enumeration and file copies.
+- UI responsiveness during enumeration, live name/type filtering and file copies.
 - Idle and active CPU usage, working set, and private bytes.
 - Copy throughput for small files, large files, and mixed trees.
 - Cancellation responsiveness and memory growth over repeated navigation.
