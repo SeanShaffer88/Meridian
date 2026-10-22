@@ -17,6 +17,9 @@ public sealed partial class MainWindow : Window
     private readonly WorkspaceStore _workspaceStore = new();
     private readonly DropShelf _dropShelf = new();
     private readonly List<ContextCapsule> _capsules = [];
+    private readonly ContextCapsuleStore _capsuleStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "capsules.json"));
+    private bool _capsuleStorageUnavailable;
+    private bool _capsuleSaving;
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
@@ -48,6 +51,16 @@ public sealed partial class MainWindow : Window
 
     private async Task InitializeAsync(string documents, string downloads)
     {
+        try
+        {
+            _capsules.AddRange(await _capsuleStore.LoadAsync());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        {
+            // Never replace unreadable saved data with a new empty document.
+            _capsuleStorageUnavailable = true;
+            GlobalStatus.Text = "Saved Capsules could not be loaded; saving is disabled to preserve the original file · " + ex.Message;
+        }
         var saved = await _workspaceStore.LoadAsync();
         _bookmarks.Clear();
         foreach (var bookmark in saved?.Bookmarks ?? []) _bookmarks.Add(bookmark);
@@ -777,10 +790,14 @@ public sealed partial class MainWindow : Window
         }
         var sources = _dropShelf.Paths.ToArray();
         var destination = _activePane.CurrentPath;
+        var destinationPane = _activePane;
+        using var cancellation = new CancellationTokenSource();
+        _batchCancellation = cancellation;
+        CancelShelfButton.IsEnabled = true;
         _batchPreparing = true;
         try
         {
-            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
+            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination, cancellation.Token), cancellation.Token);
             if (plan.HasBlockers)
             {
                 GlobalStatus.Text = $"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.";
@@ -803,19 +820,15 @@ public sealed partial class MainWindow : Window
                 XamlRoot = Content.XamlRoot
             };
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
-            using var cancellation = new CancellationTokenSource();
-            _batchCancellation = cancellation;
-            CancelShelfButton.IsEnabled = true;
-            try
-            {
-                GlobalStatus.Text = "Copying Drop Shelf items…";
+            cancellation.Token.ThrowIfCancellationRequested();
+            GlobalStatus.Text = "Copying Drop Shelf items…";
                 var progress = new Progress<BatchCopy.Progress>(state =>
                 {
                     if (_batchCancellation == cancellation)
                         GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}";
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
-                await NavigateAsync(_activePane, destination, addHistory: false);
+                await NavigateAsync(destinationPane, destination, addHistory: false);
                 GlobalStatus.Text = result.Succeeded
                     ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
                     : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
@@ -847,12 +860,10 @@ public sealed partial class MainWindow : Window
                     };
                     await details.ShowAsync();
                 }
-            }
-            finally
-            {
-                _batchCancellation = null;
-                CancelShelfButton.IsEnabled = false;
-            }
+        }
+        catch (OperationCanceledException)
+        {
+            GlobalStatus.Text = "Batch preparation cancelled · No copy started.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
             ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException)
@@ -861,12 +872,41 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _batchCancellation = null;
+            CancelShelfButton.IsEnabled = false;
             _batchPreparing = false;
         }
     }
 
     private async void SaveCapsule_Click(object sender, RoutedEventArgs e)
     {
+        if (_capsuleSaving) return;
+        _capsuleSaving = true;
+        SaveCapsuleButton.IsEnabled = false;
+        try { await SaveCapsuleAsync(); }
+        catch (InvalidOperationException ex)
+        {
+            GlobalStatus.Text = "Could not open Capsule save · " + ex.Message;
+        }
+        finally
+        {
+            _capsuleSaving = false;
+            SaveCapsuleButton.IsEnabled = true;
+        }
+    }
+
+    private async Task SaveCapsuleAsync()
+    {
+        if (_capsuleStorageUnavailable)
+        {
+            GlobalStatus.Text = "Capsule saving disabled: the existing saved file could not be read. Back it up and repair it before saving.";
+            return;
+        }
+        if (_capsules.Count >= ContextCapsuleFormat.MaximumCapsules)
+        {
+            GlobalStatus.Text = "Capsule limit reached. No new Capsule was saved; existing Capsules are unchanged.";
+            return;
+        }
         if (_dropShelf.Paths.Count == 0)
         {
             GlobalStatus.Text = "Add files or folders to the Drop Shelf before saving a Capsule.";
@@ -892,20 +932,22 @@ public sealed partial class MainWindow : Window
         try
         {
             var capsule = ContextCapsule.Capture(nameBox.Text, _dropShelf.Paths);
+            var updated = _capsules.Concat(new[] { capsule }).ToArray();
+            await _capsuleStore.SaveAsync(updated);
             _capsules.Add(capsule);
             var available = capsule.Inspect().Count(item => item.State == ContextCapsule.Presence.Present);
-            GlobalStatus.Text = $"Capsule '{capsule.Name}' saved in this session · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.";
+            GlobalStatus.Text = $"Capsule '{capsule.Name}' saved locally · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.";
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not capture Capsule · " + ex.Message;
+            GlobalStatus.Text = "Could not save Capsule · " + ex.Message;
         }
     }
 
     private async void ViewCapsules_Click(object sender, RoutedEventArgs e)
     {
         var summary = _capsules.Count == 0
-            ? "No Capsules saved in this session. Add items to the Drop Shelf and choose Save Capsule."
+            ? "No Capsules saved. Add items to the Drop Shelf and choose Save Capsule."
             : string.Join("\n\n", _capsules.Select(capsule =>
             {
                 var states = capsule.Inspect();
