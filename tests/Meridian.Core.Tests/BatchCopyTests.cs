@@ -5,6 +5,32 @@ namespace Meridian.Core.Tests;
 public sealed class BatchCopyTests
 {
     [Fact]
+    public void Execute_CancelledBeforePreflightReturnsResultWithoutCopying()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"meridian-preflight-cancel-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "source.txt");
+            var destination = Path.Combine(root, "destination");
+            File.WriteAllText(source, "preserve");
+            Directory.CreateDirectory(destination);
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var result = BatchCopy.Execute([source], destination, cts.Token);
+
+            Assert.True(result.Cancelled);
+            Assert.False(result.Succeeded);
+            Assert.Empty(result.CompletedTargets);
+            Assert.Equal(source, result.FailedSource);
+            Assert.True(File.Exists(source));
+            Assert.False(File.Exists(Path.Combine(destination, "source.txt")));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public void Execute_CopiesMultipleItemsWithoutDeletingSources()
     {
         var root = Path.Combine(Path.GetTempPath(), $"meridian-batch-{Guid.NewGuid():N}");
@@ -63,7 +89,11 @@ public sealed class BatchCopyTests
             File.WriteAllText(source, "source");
             using var cts = new CancellationTokenSource();
             cts.Cancel();
-            Assert.Throws<OperationCanceledException>(() => BatchCopy.Execute([source], destination, cts.Token));
+            var result = BatchCopy.Execute([source], destination, cts.Token);
+            Assert.True(result.Cancelled);
+            Assert.Empty(result.CompletedTargets);
+            Assert.Equal(source, result.FailedSource);
+            Assert.True(File.Exists(source));
             Assert.False(File.Exists(Path.Combine(destination, "a.txt")));
         }
         finally { Directory.Delete(root, recursive: true); }
