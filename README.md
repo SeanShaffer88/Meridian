@@ -23,6 +23,18 @@ Free · Open source · Offline-first · Windows 11
 
 ---
 
+## Start here
+
+| Your goal | Next step |
+| --- | --- |
+| Try a Windows preview | Follow [Try Meridian](#try-meridian) for CI artifacts, architecture selection, and launch requirements. |
+| See implemented features | Read [What you can use today](#what-you-can-use-today); future ideas are listed separately. |
+| Understand a folder | Explore [Folder DNA](#folder-dna-understand-a-folder-at-a-glance), based on the loaded directory listing. |
+| Collect files before copying | Try [Drop Shelf and Operation Simulator](#drop-shelf--operation-simulator-collect-first-decide-later) using disposable test files. |
+| Build or contribute | Use the [source build guide](#build-from-source) and [contribution guidance](CONTRIBUTING.md). |
+
+**Preview scope:** Windows 11, C#/.NET 10, and WinUI 3. Automated x64/ARM64 packaging exists; hands-on runtime and accessibility acceptance remain incomplete. See [verification status](docs/VERIFICATION_REPORT.md) before relying on a workflow.
+
 ## File management should feel different
 
 Most file managers answer one question: **Where is my file?**
