@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The window now uses a custom title bar: the header row is the title bar, with the minimize, maximize and close buttons at its top-right corner, and the operations toolbar (Copy, Move, New folder, Rename, and the archive and view actions) sits in the header beside the Meridian wordmark. On narrow windows the toolbar's extra actions move into its "…" menu instead of crowding the header.
+- Workspace tabs are removed. Meridian keeps a single session — the two panes reopen where you left them, with the same layouts, bookmarks and saved locations as before. A settings file saved by an earlier version with several workspace tabs restores the tab that was active and ignores the rest.
+- Layout now fills the window at any size: the panes, sidebar and file lists stretch with the window with no empty bands, and the window keeps a sensible minimum size. The right pane's Home page now renders in the right pane (it was declared inside the left pane's layout).
+
 ## 0.3.1
 
 - Fix: the program failed to open in 0.3.0 — a grouping control reported its starting value while the window was still being built, before the panes existed. The grouping and filter paths now guard against that, and a test checks every control that can report during window construction.

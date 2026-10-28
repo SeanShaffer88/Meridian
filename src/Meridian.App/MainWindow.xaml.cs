@@ -54,13 +54,9 @@ public sealed partial class MainWindow : Window
     private bool _capsuleSaving;
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
-    private readonly List<WorkspaceTab> _workspaceTabs = [];
-    private int _activeWorkspaceTabIndex;
-    private int _nextWorkspaceTabNumber = 1;
-    private bool _switchingWorkspaceTab;
     private PaneState _activePane;
     private OrganizeSection _openOrganizeSection = OrganizeSection.None;
-    private bool _restoringWorkspace;
+    private bool _restoringSession;
     private CancellationTokenSource? _copyCancellation;
     private CancellationTokenSource? _batchCancellation;
     private bool _batchPreparing;
@@ -89,6 +85,7 @@ public sealed partial class MainWindow : Window
         _appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(
             Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)));
         _appWindow.Changed += AppWindow_Changed;
+        SetupCustomTitleBar();
         if (Content is FrameworkElement rootElement) rootElement.Loaded += RootElement_Loaded;
         _uiSettings.ColorValuesChanged += UiSettings_ColorValuesChanged;
         Activated += MainWindow_Activated;
@@ -146,36 +143,19 @@ public sealed partial class MainWindow : Window
         _bookmarks.Clear();
         foreach (var bookmark in saved?.Bookmarks ?? []) _bookmarks.Add(bookmark);
 
-        var defaultLeft = saved?.LeftPath is { Length: > 0 } savedLeft && Directory.Exists(savedLeft) ? savedLeft : documents;
-        var defaultRight = saved?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
-        if (saved?.Tabs is { Length: > 0 })
-        {
-            foreach (var tab in saved.Tabs)
-            {
-                if (tab is null) continue;
-                var tabName = string.IsNullOrWhiteSpace(tab.Name) ? $"Workspace {_workspaceTabs.Count + 1}" : tab.Name;
-                _workspaceTabs.Add(new WorkspaceTab(tabName, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight, ParsePaneLayout(tab.LeftLayout), ParsePaneLayout(tab.RightLayout)));
-            }
-        }
-        if (_workspaceTabs.Count == 0)
-            _workspaceTabs.Add(new WorkspaceTab("Workspace 1", defaultLeft, defaultRight));
-        _activeWorkspaceTabIndex = Math.Clamp(saved?.ActiveTabIndex ?? 0, 0, _workspaceTabs.Count - 1);
-        _nextWorkspaceTabNumber = _workspaceTabs.Count + 1;
-        RefreshWorkspaceTabs();
+        // One session only. A file written while the app had workspace tabs
+        // resolves to the tab that was active; its other tabs are ignored.
+        var session = saved is null ? null : WorkspaceStore.ResolveSession(saved);
+        var leftPath = session?.LeftPath is { Length: > 0 } savedLeft && Directory.Exists(savedLeft) ? savedLeft : documents;
+        var rightPath = session?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
+        _left.Layout = ParsePaneLayout(session?.LeftLayout);
+        _right.Layout = ParsePaneLayout(session?.RightLayout);
         await _folderViewStore.LoadAsync();
         _folderViewsLoaded = true;
         await _recentsStore.LoadAsync();
         BuildSidebar();
 
-        var activeTab = _workspaceTabs[_activeWorkspaceTabIndex];
-        var leftPath = Directory.Exists(activeTab.LeftPath) ? activeTab.LeftPath : defaultLeft;
-        var rightPath = Directory.Exists(activeTab.RightPath) ? activeTab.RightPath : defaultRight;
-        activeTab.LeftPath = leftPath;
-        activeTab.RightPath = rightPath;
-        _left.Layout = activeTab.LeftLayout;
-        _right.Layout = activeTab.RightLayout;
-
-        _restoringWorkspace = true;
+        _restoringSession = true;
         try
         {
             await NavigateAsync(_left, leftPath, addHistory: false);
@@ -183,26 +163,27 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
-            _restoringWorkspace = false;
+            _restoringSession = false;
         }
 
-        await PersistWorkspaceAsync();
+        await PersistSessionAsync();
     }
 
-    private async Task<bool> PersistWorkspaceAsync()
+    private async Task<bool> PersistSessionAsync()
     {
-        if (_restoringWorkspace) return false;
+        if (_restoringSession) return false;
         try
         {
-            StoreCurrentWorkspaceTab();
-            var tabs = _workspaceTabs.Select(tab => new WorkspaceTabSnapshot(tab.Name, tab.LeftPath, tab.RightPath, tab.LeftLayout.ToString(), tab.RightLayout.ToString())).ToArray();
-            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(), tabs, _activeWorkspaceTabIndex));
+            await _workspaceStore.SaveAsync(new WorkspaceSnapshot(
+                _left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(),
+                Tabs: null, ActiveTabIndex: 0,
+                _left.Layout.ToString(), _right.Layout.ToString()));
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            // Workspace persistence is a convenience; file browsing must continue if it fails.
-            SetStatus("Workspace could not be saved · " + ex.Message, StatusSeverity.Error);
+            // Session persistence is a convenience; file browsing must continue if it fails.
+            SetStatus("Session could not be saved · " + ex.Message, StatusSeverity.Error);
         }
         return false;
     }
@@ -248,139 +229,6 @@ public sealed partial class MainWindow : Window
         _ => OrganizeSection.None
     };
 
-    private string NextWorkspaceTabName()
-    {
-        string name;
-        do { name = $"Workspace {_nextWorkspaceTabNumber++}"; }
-        while (_workspaceTabs.Any(tab => string.Equals(tab.Name, name, StringComparison.OrdinalIgnoreCase)));
-        return name;
-    }
-
-    private void StoreCurrentWorkspaceTab()
-    {
-        if (_workspaceTabs.Count == 0 || _activeWorkspaceTabIndex < 0 || _activeWorkspaceTabIndex >= _workspaceTabs.Count) return;
-        var active = _workspaceTabs[_activeWorkspaceTabIndex];
-        if (!string.IsNullOrWhiteSpace(_left.CurrentPath)) active.LeftPath = _left.CurrentPath;
-        if (!string.IsNullOrWhiteSpace(_right.CurrentPath)) active.RightPath = _right.CurrentPath;
-        active.LeftLayout = _left.Layout;
-        active.RightLayout = _right.Layout;
-    }
-
-    private void RefreshWorkspaceTabs()
-    {
-        WorkspaceTabsPanel.Children.Clear();
-        for (var i = 0; i < _workspaceTabs.Count; i++)
-        {
-            var tab = _workspaceTabs[i];
-            var tabButton = new Button
-            {
-                Content = (i == _activeWorkspaceTabIndex ? "▸ " : "") + tab.Name,
-                Tag = tab,
-                MinWidth = 110,
-                Padding = new Thickness(10, 4, 10, 4)
-            };
-            AutomationProperties.SetName(tabButton, (i == _activeWorkspaceTabIndex ? "Active workspace tab: " : "Workspace tab: ") + tab.Name);
-            tabButton.Click += WorkspaceTab_Click;
-            WorkspaceTabsPanel.Children.Add(tabButton);
-            if (_workspaceTabs.Count > 1)
-            {
-                var closeButton = new Button
-                {
-                    Content = new SymbolIcon { Symbol = Symbol.Cancel },
-                    Tag = tab,
-                    Width = 28,
-                    Height = 28,
-                    Padding = new Thickness(0)
-                };
-                AutomationProperties.SetName(closeButton, "Close workspace tab: " + tab.Name);
-                ToolTipService.SetToolTip(closeButton, "Close " + tab.Name);
-                closeButton.Click += CloseWorkspaceTab_Click;
-                WorkspaceTabsPanel.Children.Add(closeButton);
-            }
-        }
-    }
-
-    private async void AddWorkspaceTab_Click(object sender, RoutedEventArgs e)
-    {
-        if (_workspaceTabs.Count >= WorkspaceStore.MaximumTabs)
-        {
-            SetStatus($"Workspace tab limit reached · {WorkspaceStore.MaximumTabs}", StatusSeverity.Warning);
-            return;
-        }
-        if (_switchingWorkspaceTab) return;
-        StoreCurrentWorkspaceTab();
-        var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
-        var rightPath = string.IsNullOrWhiteSpace(_right.CurrentPath) ? leftPath : _right.CurrentPath;
-        var tab = new WorkspaceTab(NextWorkspaceTabName(), leftPath, rightPath, _left.Layout, _right.Layout);
-        _workspaceTabs.Add(tab);
-        _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
-        RefreshWorkspaceTabs();
-        await PersistWorkspaceAsync();
-        SetStatus($"Opened {tab.Name}");
-    }
-
-    private async void WorkspaceTab_Click(object sender, RoutedEventArgs e)
-    {
-        if (_switchingWorkspaceTab || (sender as Button)?.Tag is not WorkspaceTab tab) return;
-        var index = _workspaceTabs.IndexOf(tab);
-        if (index < 0 || index == _activeWorkspaceTabIndex) return;
-        StoreCurrentWorkspaceTab();
-        _activeWorkspaceTabIndex = index;
-        RefreshWorkspaceTabs();
-        await LoadWorkspaceTabAsync(tab);
-    }
-
-    private async void CloseWorkspaceTab_Click(object sender, RoutedEventArgs e)
-    {
-        if (_switchingWorkspaceTab || (sender as Button)?.Tag is not WorkspaceTab tab) return;
-        var index = _workspaceTabs.IndexOf(tab);
-        if (index < 0 || _workspaceTabs.Count <= 1) return;
-
-        var wasActive = index == _activeWorkspaceTabIndex;
-        if (wasActive) StoreCurrentWorkspaceTab();
-        _workspaceTabs.RemoveAt(index);
-        if (index < _activeWorkspaceTabIndex) _activeWorkspaceTabIndex--;
-        else if (wasActive) _activeWorkspaceTabIndex = Math.Min(index, _workspaceTabs.Count - 1);
-        RefreshWorkspaceTabs();
-
-        if (wasActive)
-            await LoadWorkspaceTabAsync(_workspaceTabs[_activeWorkspaceTabIndex]);
-        else
-            await PersistWorkspaceAsync();
-    }
-
-    private async Task LoadWorkspaceTabAsync(WorkspaceTab tab)
-    {
-        if (_switchingWorkspaceTab) return;
-        _switchingWorkspaceTab = true;
-        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (!Directory.Exists(documents)) documents = profile;
-        var downloads = Path.Combine(profile, "Downloads");
-        if (!Directory.Exists(downloads)) downloads = documents;
-        var leftPath = Directory.Exists(tab.LeftPath) ? tab.LeftPath : documents;
-        var rightPath = Directory.Exists(tab.RightPath) ? tab.RightPath : downloads;
-        _left.List.SelectedItem = null;
-        _right.List.SelectedItem = null;
-        _left.Layout = tab.LeftLayout;
-        _right.Layout = tab.RightLayout;
-        _restoringWorkspace = true;
-        try
-        {
-            await NavigateAsync(_left, leftPath, addHistory: false);
-            await NavigateAsync(_right, rightPath, addHistory: false);
-        }
-        finally
-        {
-            _restoringWorkspace = false;
-            _switchingWorkspaceTab = false;
-        }
-        tab.LeftPath = _left.CurrentPath;
-        tab.RightPath = _right.CurrentPath;
-        await PersistWorkspaceAsync();
-        SetStatus($"Switched to {tab.Name}");
-    }
-
     private async Task AddBookmarkAsync()
     {
         if (_bookmarks.Count >= WorkspaceStore.MaximumBookmarks)
@@ -406,7 +254,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name)) name = path;
         _bookmarks.Add(new BookmarkSnapshot(name, path));
         BuildSidebar();
-        await PersistWorkspaceAsync();
+        await PersistSessionAsync();
         SetStatus($"Bookmarked · {name}", StatusSeverity.Success);
     }
 
@@ -423,7 +271,7 @@ public sealed partial class MainWindow : Window
         _bookmarks.Remove(selected);
         BuildSidebar();
         BookmarksBox.SelectedItem = null;
-        await PersistWorkspaceAsync();
+        await PersistSessionAsync();
         SetStatus($"Removed bookmark · {selected.Name}", StatusSeverity.Success);
     }
 
@@ -482,7 +330,7 @@ public sealed partial class MainWindow : Window
             _ = _recentsStore.RecordAsync(fullPath, isDirectory: true);
             RefreshDetailsStrip();
             SetStatus("Ready · Local-only · No telemetry");
-            if (!_restoringWorkspace) await PersistWorkspaceAsync();
+            if (!_restoringSession) await PersistSessionAsync();
             return true;
         }
         catch (OperationCanceledException) { return false; }
@@ -528,7 +376,7 @@ public sealed partial class MainWindow : Window
         SetPaneStatus(pane, "Home · pinned folders, drives and recent items");
         RefreshDetailsStrip();
         SetStatus("Ready · Local-only · No telemetry");
-        if (!_restoringWorkspace) await PersistWorkspaceAsync();
+        if (!_restoringSession) await PersistSessionAsync();
         return true;
     }
 
@@ -600,7 +448,6 @@ public sealed partial class MainWindow : Window
         if (pane.Layout == layout) { ApplyPaneMode(pane); return; }
         pane.Layout = layout;
         if (layout == PaneLayout.Columns) CancelFolderSizeMeasurement(pane);
-        StoreCurrentWorkspaceTab();
         if (layout == PaneLayout.Columns)
         {
             pane.Chain = new ColumnChain(pane.CurrentPath);
@@ -617,7 +464,7 @@ public sealed partial class MainWindow : Window
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
         }
         RecordFolderView(pane);
-        await PersistWorkspaceAsync();
+        await PersistSessionAsync();
     }
 
     // ----- View modes (Details / Grid / Tiles), grouping, per-folder view memory -----
@@ -837,11 +684,11 @@ public sealed partial class MainWindow : Window
         Enum.TryParse<GroupMode>(value, out var mode) ? mode : GroupMode.None;
 
     /// <summary>Remembers the pane's current view state for the folder it is in.
-    /// Skipped while a workspace is being restored, while a remembered state is
+    /// Skipped while the session is being restored, while a remembered state is
     /// being applied, at Home, and before the store has loaded.</summary>
     private void RecordFolderView(PaneState pane)
     {
-        if (!_folderViewsLoaded || _restoringWorkspace || _switchingWorkspaceTab || _applyingViewState) return;
+        if (!_folderViewsLoaded || _restoringSession || _applyingViewState) return;
         if (pane.IsHome || string.IsNullOrWhiteSpace(pane.CurrentPath)) return;
         var state = new FolderViewState(
             pane.Layout.ToString(),
@@ -1191,7 +1038,7 @@ public sealed partial class MainWindow : Window
         UpdateSelectionStatus(pane);
         if (ReferenceEquals(_activePane, pane)) RefreshDetailsStrip();
         _ = _recentsStore.RecordAsync(chain.CurrentFolderPath, isDirectory: true);
-        if (!_restoringWorkspace) await PersistWorkspaceAsync();
+        if (!_restoringSession) await PersistSessionAsync();
     }
 
     /// <summary>Column keyboard model: Up/Down stay native to the list;
@@ -3206,6 +3053,7 @@ public sealed partial class MainWindow : Window
             // background color and refreshed when Windows changes it.
             _ => IsSystemDarkTheme() ? ElementTheme.Dark : ElementTheme.Light
         };
+        ApplyTitleBarButtonForeground();
         ApplyAccentBrushes();
         UpdateActivePaneVisuals();
         // Rebuild the item containers so per-row finishes that resolve theme
@@ -3319,22 +3167,88 @@ public sealed partial class MainWindow : Window
         _ = PersistSettingsAsync();
     }
 
-    private void RootElement_Loaded(object sender, RoutedEventArgs e) => EnforceMinimumWindowSize();
+    private void SetupCustomTitleBar()
+    {
+        // If titlebar customization is unavailable the window keeps the
+        // system title bar and stays fully functional; never block startup.
+        if (_appWindow is null || !Microsoft.UI.Windowing.AppWindowTitleBar.IsCustomizationSupported()) return;
+        // The header row is the window's title bar: content extends into the
+        // titlebar area, the header grid becomes the drag region (its
+        // interactive children — the sidebar toggle and the CommandBar —
+        // stay clickable), and Windows keeps drawing the real caption
+        // buttons at the top-right corner, blended into the header through
+        // transparent button backgrounds.
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+        _appWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        _appWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        ApplyTitleBarButtonForeground();
+        UpdateTitleBarInsets();
+        ApplyPresenterMinimumSize();
+    }
+
+    private void ApplyTitleBarButtonForeground()
+    {
+        if (_appWindow is null) return;
+        // The caption glyphs must contrast with the header in both themes.
+        var foreground = RootGrid.ActualTheme == ElementTheme.Dark
+            ? Microsoft.UI.Colors.White
+            : Microsoft.UI.Colors.Black;
+        var titleBar = _appWindow.TitleBar;
+        titleBar.ButtonForegroundColor = foreground;
+        titleBar.ButtonInactiveForegroundColor = foreground;
+        titleBar.ButtonHoverForegroundColor = foreground;
+        titleBar.ButtonPressedForegroundColor = foreground;
+    }
+
+    private void UpdateTitleBarInsets()
+    {
+        // Reserve the system caption region inside the header so nothing is
+        // hidden under the caption buttons. The insets are physical pixels;
+        // XAML padding is in device-independent units.
+        if (_appWindow is null) return;
+        if (Content.XamlRoot is not null) _rasterizationScale = Content.XamlRoot.RasterizationScale;
+        var scale = _rasterizationScale <= 0 ? 1.0 : _rasterizationScale;
+        var titleBar = _appWindow.TitleBar;
+        AppTitleBar.Padding = new Thickness(titleBar.LeftInset / scale, 0, titleBar.RightInset / scale, 0);
+    }
+
+    private void ApplyPresenterMinimumSize()
+    {
+        // The overlapped presenter enforces the ≈960×640 floor (in
+        // device-independent units) natively; the clamp in
+        // EnforceMinimumWindowSize remains as a fallback.
+        if (_appWindow?.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter) return;
+        if (Content.XamlRoot is not null) _rasterizationScale = Content.XamlRoot.RasterizationScale;
+        var scale = _rasterizationScale <= 0 ? 1.0 : _rasterizationScale;
+        presenter.PreferredMinimumWidth = (int)Math.Round(960 * scale);
+        presenter.PreferredMinimumHeight = (int)Math.Round(640 * scale);
+    }
+
+    private void RootElement_Loaded(object sender, RoutedEventArgs e)
+    {
+        EnforceMinimumWindowSize();
+        UpdateTitleBarInsets();
+        ApplyPresenterMinimumSize();
+    }
 
     private void AppWindow_Changed(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
     {
         if (args.DidSizeChange) EnforceMinimumWindowSize();
+        UpdateTitleBarInsets();
+        ApplyPresenterMinimumSize();
     }
 
     private void EnforceMinimumWindowSize()
     {
-        // The WinUI presenter exposes no minimum size, so the ≈900×600 floor
-        // (in device-independent units) is enforced by clamping: once at
-        // startup and again whenever the window is resized below it.
+        // Fallback for the ≈960×640 floor (in device-independent units):
+        // the overlapped presenter's preferred minimums are the primary
+        // enforcement (ApplyPresenterMinimumSize); this clamp covers any
+        // state where they are not yet in effect.
         if (_appWindow is null || _enforcingMinimumWindowSize) return;
         if (Content.XamlRoot is not null) _rasterizationScale = Content.XamlRoot.RasterizationScale;
-        var minimumWidth = (int)Math.Round(900 * _rasterizationScale);
-        var minimumHeight = (int)Math.Round(600 * _rasterizationScale);
+        var minimumWidth = (int)Math.Round(960 * _rasterizationScale);
+        var minimumHeight = (int)Math.Round(640 * _rasterizationScale);
         var size = _appWindow.Size;
         if (size.Width >= minimumWidth && size.Height >= minimumHeight) return;
         _enforcingMinimumWindowSize = true;
@@ -4537,15 +4451,6 @@ public sealed partial class MainWindow : Window
             }.ShowAsync();
         }
         finally { _timeVaultBusy = false; }
-    }
-
-    private sealed class WorkspaceTab(string name, string leftPath, string rightPath, PaneLayout leftLayout = PaneLayout.Standard, PaneLayout rightLayout = PaneLayout.Standard)
-    {
-        public string Name { get; } = name;
-        public string LeftPath { get; set; } = leftPath;
-        public string RightPath { get; set; } = rightPath;
-        public PaneLayout LeftLayout { get; set; } = leftLayout;
-        public PaneLayout RightLayout { get; set; } = rightLayout;
     }
 
     private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel, ScrollViewer columnsView, StackPanel columnsPanel, ToggleButton standardLayoutToggle, ToggleButton columnsLayoutToggle, ToggleButton detailsViewToggle, ToggleButton gridViewToggle, ToggleButton tilesViewToggle, ComboBox groupBox)

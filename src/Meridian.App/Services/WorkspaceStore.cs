@@ -3,12 +3,15 @@ using System.Text.Json;
 namespace Meridian.Services;
 
 /// <summary>
-/// Persists pane paths, bookmark labels/paths, paired tab names/paths and the active tab index.
-/// State is stored in the user's local application data directory; the in-memory shelf is excluded.
-/// A tab also carries each pane's layout name ("Standard" or "Columns"); layout
-/// names are deliberately not validated — an unrecognised name (written by a
-/// newer build) reads as Standard in the window instead of invalidating the
-/// whole workspace file.
+/// Persists the single session's pane paths and layout names, plus bookmark
+/// labels/paths. State is stored in the user's local application data
+/// directory; the in-memory shelf is excluded.
+/// Files written while the app had workspace tabs also carry tab names/paths
+/// and an active tab index; those fields stay readable so <see cref="ResolveSession"/>
+/// can migrate the file — the active tab becomes the one session and the rest
+/// are ignored. Layout names are deliberately not validated — an unrecognised
+/// name (written by a newer build) reads as Standard in the window instead of
+/// invalidating the whole workspace file.
 /// </summary>
 internal sealed class WorkspaceStore
 {
@@ -23,6 +26,28 @@ internal sealed class WorkspaceStore
     {
         _filePath = Path.GetFullPath(filePath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "workspace.json"));
+    }
+
+    /// <summary>
+    /// Resolves the one session a saved workspace represents. When the file
+    /// carries workspace tabs (written by 0.3.x), the tab that was active
+    /// wins, with the top-level paths as fallback for either pane it left
+    /// unset; without tabs the top-level state is the session.
+    /// </summary>
+    internal static SessionSnapshot ResolveSession(WorkspaceSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot.Tabs is { Length: > 0 } tabs)
+        {
+            var active = tabs[Math.Clamp(snapshot.ActiveTabIndex, 0, tabs.Length - 1)];
+            if (active is not null)
+                return new SessionSnapshot(
+                    active.LeftPath ?? snapshot.LeftPath,
+                    active.RightPath ?? snapshot.RightPath,
+                    active.LeftLayout,
+                    active.RightLayout);
+        }
+        return new SessionSnapshot(snapshot.LeftPath, snapshot.RightPath, snapshot.LeftLayout, snapshot.RightLayout);
     }
 
     public async Task<WorkspaceSnapshot?> LoadAsync()
@@ -99,7 +124,13 @@ internal sealed class WorkspaceStore
         ? optional : label.Length <= 1024 && !label.Any(char.IsControl) && (optional || !string.IsNullOrWhiteSpace(label));
 }
 
-internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath, BookmarkSnapshot[]? Bookmarks = null, WorkspaceTabSnapshot[]? Tabs = null, int ActiveTabIndex = 0);
+internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath, BookmarkSnapshot[]? Bookmarks = null, WorkspaceTabSnapshot[]? Tabs = null, int ActiveTabIndex = 0, string? LeftLayout = null, string? RightLayout = null);
+
+/// <summary>
+/// The one browsing session the window restores: both pane paths and both
+/// pane layout names, after any multi-tab file has been resolved.
+/// </summary>
+internal sealed record SessionSnapshot(string? LeftPath, string? RightPath, string? LeftLayout, string? RightLayout);
 
 internal sealed record WorkspaceTabSnapshot(string Name, string? LeftPath, string? RightPath, string? LeftLayout = null, string? RightLayout = null);
 
