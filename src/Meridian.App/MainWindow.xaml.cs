@@ -136,20 +136,22 @@ public sealed partial class MainWindow : Window
         await PersistWorkspaceAsync();
     }
 
-    private async Task PersistWorkspaceAsync()
+    private async Task<bool> PersistWorkspaceAsync()
     {
-        if (_restoringWorkspace) return;
+        if (_restoringWorkspace) return false;
         try
         {
             StoreCurrentWorkspaceTab();
             var tabs = _workspaceTabs.Select(tab => new WorkspaceTabSnapshot(tab.Name, tab.LeftPath, tab.RightPath)).ToArray();
             await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(), tabs, _activeWorkspaceTabIndex));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             // Workspace persistence is a convenience; file browsing must continue if it fails.
             SetStatus("Workspace could not be saved · " + ex.Message, StatusSeverity.Error);
         }
+        return false;
     }
 
     private async Task PersistSettingsAsync()
@@ -239,6 +241,11 @@ public sealed partial class MainWindow : Window
 
     private async void AddWorkspaceTab_Click(object sender, RoutedEventArgs e)
     {
+        if (_workspaceTabs.Count >= WorkspaceStore.MaximumTabs)
+        {
+            SetStatus($"Workspace tab limit reached · {WorkspaceStore.MaximumTabs}", StatusSeverity.Warning);
+            return;
+        }
         if (_switchingWorkspaceTab) return;
         StoreCurrentWorkspaceTab();
         var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
@@ -313,6 +320,11 @@ public sealed partial class MainWindow : Window
 
     private async Task AddBookmarkAsync()
     {
+        if (_bookmarks.Count >= WorkspaceStore.MaximumBookmarks)
+        {
+            SetStatus($"Bookmark limit reached · {WorkspaceStore.MaximumBookmarks}", StatusSeverity.Warning);
+            return;
+        }
         var path = _activePane.CurrentPath;
         if (string.IsNullOrWhiteSpace(path)) return;
         if (_bookmarks.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)))
@@ -354,18 +366,26 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
     {
+        pane.ReadCancellation?.Cancel();
+        pane.ReadCancellation?.Dispose();
+        pane.ReadCancellation = new CancellationTokenSource();
+        var token = pane.ReadCancellation.Token;
+        SetPaneStatus(pane, "Checking folder…");
         string fullPath;
         try
         {
             fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(requestedPath.Trim().Trim('"')));
-            if (!Directory.Exists(fullPath)) throw new DirectoryNotFoundException($"Folder not found: {fullPath}");
+            var exists = await Task.Run(() => Directory.Exists(fullPath), token);
+            if (token.IsCancellationRequested) return false;
+            if (!exists) throw new DirectoryNotFoundException($"Folder not found: {fullPath}");
         }
+        catch (OperationCanceledException) { return false; }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
             SetPaneStatus(pane, ex.Message); SetStatus("Navigation failed · " + ex.Message, StatusSeverity.Error); pane.PathBox.Text = pane.CurrentPath; return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
-        var token = pane.ReadCancellation.Token;
+        token = pane.ReadCancellation.Token;
         SetPaneStatus(pane, "Loading folder…");
         try
         {
@@ -456,6 +476,367 @@ public sealed partial class MainWindow : Window
             if (!string.IsNullOrWhiteSpace(previous)) pane.BackHistory.Push(previous);
         }
     }
+
+    private bool _zipInspectionOpen;
+
+    private async void InspectZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_zipInspectionOpen || _zipCreationBusy || _zipExtractionBusy || _previewDialogOpen) return;
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
+            Meridian.Core.Archives.ArchiveCapabilities.ForPath(selected.FullPath)?.CanList != true)
+        {
+            SetStatus("Select a supported archive to inspect.", StatusSeverity.Warning);
+            return;
+        }
+        _zipInspectionOpen = true;
+        try
+        {
+            var isZip = string.Equals(Path.GetExtension(selected.FullPath), ".zip", StringComparison.OrdinalIgnoreCase);
+            var entries = await Task.Run(() => isZip
+                ? Meridian.Core.Archives.ZipArchiveCatalog.List(selected.FullPath)
+                    .Select(item => (item.Path, Bytes: item.UncompressedBytes, item.IsDirectory)).ToArray()
+                : Meridian.Core.Archives.TarArchiveCatalog.List(selected.FullPath)
+                    .Select(item => (item.Path, item.Bytes, item.IsDirectory)).ToArray());
+            var totalBytes = entries.Where(entry => !entry.IsDirectory).Sum(entry => entry.Bytes);
+            var fileCount = entries.Count(entry => !entry.IsDirectory);
+            var folderCount = entries.Length - fileCount;
+            var listing = string.Join(Environment.NewLine,
+                entries.Select(entry => (entry.IsDirectory ? "[DIR] " : "[FILE] ") +
+                    entry.Path + " (" + entry.Bytes.ToString("N0") + " bytes)"));
+            await new ContentDialog
+            {
+                Title = "Archive contents · " + selected.Name + " · " + entries.Length.ToString("N0") +
+                    " entries (" + fileCount.ToString("N0") + " files, " +
+                    folderCount.ToString("N0") + " folders) · " + totalBytes.ToString("N0") + " bytes",
+                Content = new TextBox { Text = listing, IsReadOnly = true,
+                    AcceptsReturn = true, MinWidth = 540, Height = 380 },
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            SetStatus("Archive inspection failed · " + ex.Message, StatusSeverity.Error);
+        }
+        finally { _zipInspectionOpen = false; }
+    }
+
+    private bool _zipExtractionBusy;
+    private CancellationTokenSource? _zipExtractionCancellation;
+
+    private async void ExtractZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_zipExtractionBusy || _zipCreationBusy || _zipInspectionOpen || _previewDialogOpen) return;
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
+            Meridian.Core.Archives.ArchiveCapabilities.ForPath(selected.FullPath)?.CanExtract != true)
+        {
+            SetStatus("Select a supported archive to extract.", StatusSeverity.Warning);
+            return;
+        }
+        _zipExtractionBusy = true;
+        var extractionPane = _activePane;
+        try
+        {
+        var archivePath = selected.FullPath;
+        var parent = extractionPane.CurrentPath;
+        var folder = Path.GetFileNameWithoutExtension(archivePath);
+        if (folder.EndsWith(".tar", StringComparison.OrdinalIgnoreCase))
+            folder = folder[..^4];
+        var isZip = string.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase);
+        var entryCount = await Task.Run(() => isZip
+            ? Meridian.Core.Archives.ZipArchiveCatalog.List(archivePath).Count
+            : Meridian.Core.Archives.TarArchiveCatalog.List(archivePath).Count);
+        var dialog = new ContentDialog
+        {
+            Title = "Extract archive?",
+            Content = new TextBlock { Text = entryCount + " entries to " + Path.Combine(parent, folder) },
+            PrimaryButtonText = "Extract",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = LeftPath.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        _zipExtractionCancellation = new CancellationTokenSource();
+        SetStatus("Extracting archive · " + selected.Name);
+        var token = _zipExtractionCancellation.Token;
+        var progress = new Progress<int>(percent =>
+            SetStatus("Extracting archive · " + percent + "%"));
+        var extractedFiles = await Task.Run(async () => isZip
+            ? (await Meridian.Core.Archives.ZipTreeExtractor.ExtractAsync(
+                archivePath, parent, folder, cancellationToken: token, progress: progress)).FileCount
+            : (await Meridian.Core.Archives.TarTreeExtractor.ExtractAsync(
+                archivePath, parent, folder, cancellationToken: token, progress: progress)).FileCount, token);
+        SetStatus("Extracted " + extractedFiles + " files.", StatusSeverity.Success);
+        if (string.Equals(extractionPane.CurrentPath, parent, StringComparison.OrdinalIgnoreCase))
+            await NavigateAsync(extractionPane, parent, addHistory: false);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("Archive extraction cancelled.", StatusSeverity.Warning);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            SetStatus("Archive extraction failed · " + ex.Message, StatusSeverity.Error);
+        }
+        finally
+        {
+            _zipExtractionCancellation?.Dispose();
+            _zipExtractionCancellation = null;
+            _zipExtractionBusy = false;
+        }
+    }
+
+    private void CancelZipExtraction_Click(object sender, RoutedEventArgs e)
+    {
+        _zipExtractionCancellation?.Cancel();
+        if (_zipExtractionCancellation is not null)
+            SetStatus("Cancelling ZIP extraction…");
+    }
+
+    private bool _zipCreationBusy;
+    private CancellationTokenSource? _zipCreationCancellation;
+
+    private async void CreateZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_zipCreationBusy || _zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
+        if (_activePane.List.SelectedItem is not FileEntry selected)
+        {
+            SetStatus("Select files or folders to archive.", StatusSeverity.Warning);
+            return;
+        }
+        var sources = _activePane.List.SelectedItems.OfType<FileEntry>().ToArray();
+        if (sources.Length == 0)
+        {
+            SetStatus("Select at least one file or folder to archive.", StatusSeverity.Warning);
+            return;
+        }
+        var creationPane = _activePane;
+        var creationParent = creationPane.CurrentPath;
+        var destination = Path.Combine(creationParent,
+            (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
+        var formatPicker = new ComboBox { SelectedIndex = 0, MinWidth = 260 };
+        formatPicker.Items.Add("ZIP (.zip)");
+        formatPicker.Items.Add("TAR (.tar)");
+        formatPicker.Items.Add("TAR.GZ (.tar.gz)");
+        var confirmation = new ContentDialog
+        {
+            Title = "Create archive?",
+            Content = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock { Text = "Archive format" },
+                    formatPicker,
+                    new TextBlock { Text = "A new archive will be created in the current folder. Existing files are never overwritten.", TextWrapping = TextWrapping.Wrap }
+                }
+            },
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            XamlRoot = LeftPath.XamlRoot
+        };
+        _zipCreationBusy = true;
+        ContentDialogResult confirmationResult;
+        try
+        {
+            confirmationResult = await confirmation.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            _zipCreationBusy = false;
+            SetStatus("Archive dialog failed · " + ex.Message, StatusSeverity.Error);
+            return;
+        }
+        if (confirmationResult != ContentDialogResult.Primary)
+        {
+            _zipCreationBusy = false;
+            return;
+        }
+        var extension = formatPicker.SelectedIndex switch
+        {
+            1 => ".tar",
+            2 => ".tar.gz",
+            _ => ".zip"
+        };
+        destination = Path.ChangeExtension(destination, extension);
+        if (File.Exists(destination) || Directory.Exists(destination))
+        {
+            SetStatus("Archive destination already exists · " + destination, StatusSeverity.Warning);
+            _zipCreationBusy = false;
+            return;
+        }
+        _zipCreationCancellation = new CancellationTokenSource();
+        try
+        {
+            SetStatus("Creating archive · " + selected.Name);
+            var token = _zipCreationCancellation.Token;
+            var planned = await Task.Run(() => Meridian.Core.Archives.ArchiveSourcePlanner.Plan(
+                sources.Select(entry => entry.FullPath), token), token);
+            if (extension == ".zip")
+                await Task.Run(() => Meridian.Core.Archives.ZipArchiveCreator.CreateAsync(
+                    destination, planned, cancellationToken: token), token);
+            else
+                await Task.Run(() => Meridian.Core.Archives.TarArchiveCreator.CreateAsync(
+                    destination, planned, cancellationToken: token), token);
+            if (string.Equals(creationPane.CurrentPath, creationParent, StringComparison.OrdinalIgnoreCase))
+                await NavigateAsync(creationPane, creationParent, addHistory: false);
+            SetStatus("Archive created · " + destination, StatusSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("Archive creation cancelled.", StatusSeverity.Warning);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            SetStatus("Archive creation failed · " + ex.Message, StatusSeverity.Error);
+        }
+        finally
+        {
+            _zipCreationCancellation?.Dispose();
+            _zipCreationCancellation = null;
+            _zipCreationBusy = false;
+        }
+    }
+
+    private void CancelZipCreation_Click(object sender, RoutedEventArgs e)
+    {
+        _zipCreationCancellation?.Cancel();
+        if (_zipCreationCancellation is not null)
+            SetStatus("Cancelling ZIP creation…");
+    }
+
+    private bool _previewDialogOpen;
+
+    private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (_previewDialogOpen) return;
+        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
+        {
+            SetStatus("Select a file to preview.", StatusSeverity.Warning);
+            return;
+        }
+
+        var path = selected.FullPath;
+        var decision = Meridian.Core.Viewer.ViewerRouter.Classify(path);
+        var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = decision.Reason,
+            TextWrapping = TextWrapping.Wrap
+        });
+        Microsoft.UI.Xaml.Controls.MediaPlayerElement? player = null;
+        Windows.Media.Playback.MediaPlayer? mediaSession = null;
+        _previewDialogOpen = true;
+        try
+        {
+            path = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(path);
+            if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
+            {
+                player = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
+                {
+                    AreTransportControlsEnabled = true,
+                    AutoPlay = false,
+                    Height = decision.Kind == Meridian.Core.Viewer.ViewerKind.Video ? 320 : 100
+                };
+                mediaSession = new Windows.Media.Playback.MediaPlayer();
+                player.SetMediaPlayer(mediaSession);
+                var mediaFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromStorageFile(mediaFile);
+                var playbackStatus = new TextBlock
+                {
+                    Text = "Ready · press Play to start",
+                    TextWrapping = TextWrapping.Wrap
+                };
+                mediaSession.MediaFailed += (_, args) =>
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                        playbackStatus.Text = "Playback failed · the format or codec may be unsupported. " +
+                            args.ErrorMessage);
+                };
+                panel.Children.Add(player);
+                panel.Children.Add(playbackStatus);
+            }
+            else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
+            {
+                const long maximumImageFileBytes = 64L * 1024 * 1024;
+                if (new FileInfo(path).Length > maximumImageFileBytes)
+                    throw new IOException("Image exceeds the 64 MiB preview file limit. Open it in a dedicated image editor.");
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                using var stream = await file.OpenReadAsync();
+                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                await bitmap.SetSourceAsync(stream);
+                panel.Children.Add(new Microsoft.UI.Xaml.Controls.Image
+                {
+                    Source = bitmap,
+                    MaxHeight = 440,
+                    MaxWidth = 780,
+                    Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+                });
+            }
+            else if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Text or Meridian.Core.Viewer.ViewerKind.Hex)
+            {
+                var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path,
+                    maxBytes: decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex ? 4096 : 65536);
+                string display;
+                if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex)
+                {
+                    display = Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes);
+                }
+                else
+                {
+                    if (Meridian.Core.Viewer.PreviewTextDecoder.TryDecode(bytes, out var decoded))
+                        display = decoded;
+                    else
+                        display = "Text encoding is unsupported or binary content detected. Showing the first 4 KiB as hexadecimal.\n\n" +
+                            Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes.AsSpan(0, Math.Min(bytes.Length, 4096)));
+                }
+                panel.Children.Add(new ScrollViewer
+                {
+                    MaxHeight = 420,
+                    Content = new TextBox
+                    {
+                        Text = display,
+                        IsReadOnly = true,
+                        AcceptsReturn = true,
+                        TextWrapping = TextWrapping.NoWrap,
+                        MinHeight = 220
+                    }
+                });
+            }
+            else
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "This format does not yet have an integrated renderer. No external application will be launched.",
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            await new ContentDialog
+            {
+                Title = "Preview · " + selected.Name,
+                Content = panel,
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+            System.Runtime.InteropServices.COMException or System.Security.SecurityException)
+        {
+            SetStatus("Preview unavailable · " + ex.Message, StatusSeverity.Error);
+        }
+        finally
+        {
+            _previewDialogOpen = false;
+            if (player is not null)
+            {
+                mediaSession?.Pause();
+                player.SetMediaPlayer(null);
+                mediaSession?.Dispose();
+            }
+        }
+    }
+
     private async Task OpenSelectedAsync(PaneState pane)
     {
         if (pane.List.SelectedItem is not FileEntry selected) return;
@@ -474,6 +855,9 @@ public sealed partial class MainWindow : Window
         }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
+        var confirmedPaths = selection.Select(item => item.FullPath).ToArray();
+        var confirmedSource = source.CurrentPath;
+        var confirmedDestination = destination.CurrentPath;
         ContentDialog dialog;
         if (selection.Count == 1)
         {
@@ -482,7 +866,7 @@ public sealed partial class MainWindow : Window
             dialog = new ContentDialog
             {
                 Title = "Move item?",
-                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.\n\nIf you change your mind, you can move it back from the destination folder.",
+                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original.\n\nIf you change your mind, you can move it back from the destination folder.",
                 PrimaryButtonText = "Move",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -494,7 +878,7 @@ public sealed partial class MainWindow : Window
             dialog = new ContentDialog
             {
                 Title = "Move items?",
-                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. If an item cannot be moved, the move stops and items already moved stay moved.\n\nYou can move items back from the destination folder afterwards.",
+                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original. If an item cannot be moved, the move stops and items already moved stay moved.\n\nYou can move items back from the destination folder afterwards.",
                 PrimaryButtonText = "Move",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -502,6 +886,15 @@ public sealed partial class MainWindow : Window
             };
         }
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var currentPaths = GetSelectedEntries(source).Select(item => item.FullPath).ToArray();
+        if (!currentPaths.SequenceEqual(confirmedPaths) ||
+            !string.Equals(source.CurrentPath, confirmedSource, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(destination.CurrentPath, confirmedDestination, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("Move cancelled · The selection or a pane location changed. Review the item and destination again.", StatusSeverity.Warning);
+            return;
+        }
 
         ClearPinnedError();
         var sourcePaths = selection.Select(item => item.FullPath).ToArray();
@@ -566,11 +959,18 @@ public sealed partial class MainWindow : Window
         SetStatus(sourcePaths.Length == 1 ? $"Copying {selection[0].Name}…" : $"Copying {sourcePaths.Length:N0} items…");
         if (sourcePaths.Length == 1) ShowOperationProgress($"Copying {selection[0].Name}", null);
         SetPaneStatus(source, "Copy in progress…");
+        var acceptingProgress = true;
         try
         {
             if (sourcePaths.Length == 1)
             {
-                var copiedTo = await Task.Run(() => FileOperations.CopyItem(sourcePaths[0], destinationPath, cancellation.Token), cancellation.Token);
+                var progress = new Progress<FileOperations.CopyProgress>(update =>
+                {
+                    if (acceptingProgress && ReferenceEquals(_copyCancellation, cancellation))
+                        ShowOperationProgress($"Copying {selection[0].Name} · {FormatFileSize(update.BytesCopied)} written", null);
+                });
+                var copiedTo = await Task.Run(() => FileOperations.CopyItem(sourcePaths[0], destinationPath, cancellation.Token, progress), cancellation.Token);
+                acceptingProgress = false;
                 if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
                 SetPaneStatus(source, "Ready"); SetStatus($"Copied {Path.GetFileName(copiedTo)} to {destinationPath}", StatusSeverity.Success);
             }
@@ -610,6 +1010,7 @@ public sealed partial class MainWindow : Window
         { SetPaneStatus(source, "Copy failed"); SetStatus("Copy failed · " + ex.Message, StatusSeverity.Error); }
         finally
         {
+            acceptingProgress = false;
             if (ReferenceEquals(_copyCancellation, cancellation)) _copyCancellation = null;
             CancelCopyButton.IsEnabled = false;
             HideOperationProgress();
@@ -627,6 +1028,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var pane = _activePane;
+        var parentPath = pane.CurrentPath;
         var nameBox = new TextBox { PlaceholderText = "Folder name", MinWidth = 280 };
         AutomationProperties.SetName(nameBox, "Folder name");
         var newFolderContent = new StackPanel { Spacing = 8 };
@@ -669,7 +1072,6 @@ public sealed partial class MainWindow : Window
         try
         {
             Directory.CreateDirectory(target);
-            var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
             SetStatus($"Created folder · {name}", StatusSeverity.Success);
         }
@@ -689,6 +1091,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var parentPath = pane.CurrentPath;
         var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
         AutomationProperties.SetName(nameBox, "New name");
         var renameContent = new StackPanel { Spacing = 8 };
@@ -807,6 +1210,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var confirmedPaths = selection.Select(item => item.FullPath).ToArray();
+        var confirmedPath = pane.CurrentPath;
         ContentDialog dialog;
         if (selection.Count == 1)
         {
@@ -836,6 +1241,14 @@ public sealed partial class MainWindow : Window
         }
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var currentPaths = GetSelectedEntries(pane).Select(item => item.FullPath).ToArray();
+        if (!currentPaths.SequenceEqual(confirmedPaths) ||
+            !string.Equals(pane.CurrentPath, confirmedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("Recycle Bin request cancelled · The selection or pane location changed. Review the item again.", StatusSeverity.Warning);
+            return;
+        }
 
         ClearPinnedError();
         var deletedCount = 0;
@@ -1049,7 +1462,8 @@ public sealed partial class MainWindow : Window
                             state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
-                await NavigateAsync(destinationPane, destination, addHistory: false);
+                if (string.Equals(destinationPane.CurrentPath, destination, StringComparison.OrdinalIgnoreCase))
+                    await NavigateAsync(destinationPane, destination, addHistory: false);
                 if (result.Succeeded)
                     SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destination}", StatusSeverity.Success);
                 else if (result.Cancelled)
@@ -1883,6 +2297,90 @@ public sealed partial class MainWindow : Window
     private enum OrganizeSection { None, Bookmarks, Shelf }
 
     private enum StatusSeverity { Info, Success, Warning, Error }
+
+    private bool _timeVaultBusy;
+
+    private async void TimeVault_Click(object sender, RoutedEventArgs e)
+    {
+        if (_timeVaultBusy) return;
+        _timeVaultBusy = true;
+        SetStatus("TimeVault · discovering existing snapshots…");
+        try
+        {
+            Meridian.Core.TimeVault.IShadowCopyCatalog catalog = new Meridian.Core.TimeVault.WindowsShadowCopyCatalog();
+            var snapshots = await catalog.ListAsync();
+            var selectedPath = _activePane.CurrentPath;
+            var panel = new StackPanel { Spacing = 8 };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Existing snapshots only · read-only · no recovery operations",
+                TextWrapping = TextWrapping.Wrap
+            });
+            var selector = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Choose a snapshot" };
+            foreach (var snapshot in snapshots.OrderByDescending(item => item.CreatedAt))
+            {
+                selector.Items.Add(new ComboBoxItem
+                {
+                    Content = $"{(snapshot.CreatedAt == DateTimeOffset.MinValue ? "Unknown date" : snapshot.CreatedAt.ToLocalTime().ToString("g"))} · {snapshot.OriginalVolume}",
+                    Tag = snapshot
+                });
+            }
+            panel.Children.Add(selector);
+            var listing = new TextBlock
+            {
+                Text = snapshots.Count == 0
+                    ? "No accessible shadow copies reported by Windows."
+                    : "Select a snapshot, then inspect the active pane's folder.",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            };
+            var inspect = new Button { Content = "Inspect current folder (read-only)", IsEnabled = snapshots.Count > 0 };
+            inspect.Click += async (_, _) =>
+            {
+                if (selector.SelectedItem is not ComboBoxItem { Tag: Meridian.Core.TimeVault.ShadowCopy selected }) return;
+                inspect.IsEnabled = false;
+                listing.Text = "Reading snapshot folder…";
+                try
+                {
+                    var entries = await new Meridian.Core.TimeVault.SnapshotDirectoryReader().ListAsync(selected, selectedPath);
+                    listing.Text = entries.Count == 0
+                        ? "Snapshot folder is empty."
+                        : string.Join("\n", entries.Take(250).Select(item => (item.IsDirectory ? "[Folder] " : "[File] ") + item.Name))
+                            + (entries.Count > 250 ? $"\n… and {entries.Count - 250} more entries (display limited)." : "");
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+                    PlatformNotSupportedException or System.ComponentModel.Win32Exception)
+                {
+                    listing.Text = "Cannot inspect this snapshot folder: " + ex.Message;
+                }
+                finally { inspect.IsEnabled = true; }
+            };
+            panel.Children.Add(inspect);
+            panel.Children.Add(new ScrollViewer { MaxHeight = 340, Content = listing });
+            await new ContentDialog
+            {
+                Title = $"TimeVault · {snapshots.Count} snapshot(s)",
+                Content = panel,
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+            SetStatus($"TimeVault · {snapshots.Count} snapshot(s) discovered", StatusSeverity.Success);
+        }
+        catch (Exception ex) when (ex is System.Management.ManagementException or
+            System.Runtime.InteropServices.COMException or UnauthorizedAccessException or
+            IOException or PlatformNotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            SetStatus("TimeVault discovery unavailable · " + ex.Message, StatusSeverity.Error);
+            await new ContentDialog
+            {
+                Title = "TimeVault discovery unavailable",
+                Content = "Windows could not enumerate shadow copies. This may be caused by permissions, WMI availability, or VSS configuration.\n\n" + ex.Message,
+                CloseButtonText = "Close",
+                XamlRoot = LeftPath.XamlRoot
+            }.ShowAsync();
+        }
+        finally { _timeVaultBusy = false; }
+    }
 
     private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
     {

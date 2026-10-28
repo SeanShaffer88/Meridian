@@ -41,7 +41,7 @@ public static class BatchCopy
         var completed = new List<string>();
         foreach (var item in plan.Items)
         {
-            progress?.Report(new Progress(completed.Count, plan.Items.Count, item.Source));
+            ReportSafely(progress, new Progress(completed.Count, plan.Items.Count, item.Source));
             if (cancellationToken.IsCancellationRequested)
                 return new Result(completed.AsReadOnly(), item.Source, null, Cancelled: true);
 
@@ -50,7 +50,7 @@ public static class BatchCopy
                 // FileOperations rechecks paths and refuses collisions at execution time.
                 var target = FileOperations.CopyItem(item.Source, plan.DestinationDirectory, cancellationToken);
                 completed.Add(target);
-                progress?.Report(new Progress(completed.Count, plan.Items.Count, item.Source));
+                ReportSafely(progress, new Progress(completed.Count, plan.Items.Count, item.Source));
             }
             catch (OperationCanceledException)
             {
@@ -63,5 +63,11 @@ public static class BatchCopy
             }
         }
         return new Result(completed.AsReadOnly(), null, null, Cancelled: false);
+    }
+
+    private static void ReportSafely(IProgress<Progress>? observer, Progress update)
+    {
+        try { observer?.Report(update); }
+        catch { /* Progress cannot invalidate completed copies or their result. */ }
     }
 }

@@ -38,8 +38,8 @@
           </StackPanel>
           <SplitButton.Flyout>
             <MenuFlyout>
-              <MenuFlyoutItem Text="Copy left → right" Click="CopyLeftToRight_Click" />
-              <MenuFlyoutItem Text="Copy right → left" Click="CopyRightToLeft_Click" />
+              <MenuFlyoutItem Text="Copy left \u2192 right" Click="CopyLeftToRight_Click" />
+              <MenuFlyoutItem Text="Copy right \u2192 left" Click="CopyRightToLeft_Click" />
             </MenuFlyout>
           </SplitButton.Flyout>
         </SplitButton>
@@ -52,15 +52,22 @@
           </StackPanel>
           <SplitButton.Flyout>
             <MenuFlyout>
-              <MenuFlyoutItem Text="Move left → right" Click="MoveLeftToRight_Click" />
-              <MenuFlyoutItem Text="Move right → left" Click="MoveRightToLeft_Click" />
+              <MenuFlyoutItem Text="Move left \u2192 right" Click="MoveLeftToRight_Click" />
+              <MenuFlyoutItem Text="Move right \u2192 left" Click="MoveRightToLeft_Click" />
             </MenuFlyout>
           </SplitButton.Flyout>
         </SplitButton>
       </AppBarElementContainer>
       <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" ToolTipService.ToolTip="Create a new folder in the active pane (Ctrl+Shift+N)" />
       <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" ToolTipService.ToolTip="Rename the selected item (F2)" />
+      <AppBarButton Icon="View" Label="Preview" Click="PreviewSelected_Click" ToolTipService.ToolTip="Read-only viewer and integrated media player" />
       <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" ToolTipService.ToolTip="View properties of the selected item (Alt+Enter)" />
+      <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
+      <AppBarButton Icon="View" Label="Inspect Archive" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP, TAR, or TGZ contents" />
+      <AppBarButton Icon="Save" Label="Create Archive" Click="CreateZip_Click" ToolTipService.ToolTip="Create ZIP, TAR, or TAR.GZ from selected files and folders" />
+      <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active archive creation" />
+      <AppBarButton Icon="Folder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
+      <AppBarButton Icon="Cancel" Label="Cancel Extract" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active archive extraction" />
       <AppBarButton Icon="Setting" Label="Tools">
         <AppBarButton.Flyout>
           <MenuFlyout>
