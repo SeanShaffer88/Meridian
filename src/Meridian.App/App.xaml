@@ -4,52 +4,69 @@
       <ResourceDictionary.MergedDictionaries>
         <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
       </ResourceDictionary.MergedDictionaries>
+      <!--
+        Theme tokens. The Dark dictionary is the authored source: near-black
+        layered surfaces in the Windows Terminal dark character, white primary
+        text, neutral gray tiers, and the red brand accent. The Light
+        dictionary is DERIVED from the same keys by rule, never hand-tuned
+        per token: neutral colours invert their HSL lightness; chromatic
+        colours (accent, success, warning, error) keep hue and saturation
+        and lower lightness in 0.02 steps until they reach 4.75:1 contrast
+        against the light panel (#E4E4E4) — the same rule AccentPalette
+        applies at runtime to preset and custom accents, so the static
+        Light accent below (#BF0F0F) is exactly the derived brand red.
+        OnAccent stays white in both themes because the derived light
+        chromatic colours are dark enough to carry it (6:1 or better).
+        Alpha overlays swap white for black at the same strengths.
+      -->
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="MeridianAccentBrush" Color="#F04444" />
-          <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#17191D" />
-          <SolidColorBrush x:Key="MeridianPanelBrush" Color="#202329" />
-          <SolidColorBrush x:Key="MeridianChromeBrush" Color="#1B1D22" />
-          <SolidColorBrush x:Key="MeridianBorderBrush" Color="#343840" />
-          <SolidColorBrush x:Key="MeridianMutedBrush" Color="#9CA3AF" />
+          <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#0C0C0C" />
+          <SolidColorBrush x:Key="MeridianPanelBrush" Color="#1B1B1B" />
+          <SolidColorBrush x:Key="MeridianChromeBrush" Color="#131313" />
+          <SolidColorBrush x:Key="MeridianBorderBrush" Color="#2E2E2E" />
+          <SolidColorBrush x:Key="MeridianMutedBrush" Color="#B3B3B3" />
           <SolidColorBrush x:Key="MeridianTextPrimaryBrush" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#9CA3AF" />
-          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#8A919C" />
-          <SolidColorBrush x:Key="MeridianDialogLabelBrush" Color="#808080" />
+          <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#B3B3B3" />
+          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#A6A6A6" />
+          <SolidColorBrush x:Key="MeridianDialogLabelBrush" Color="#A6A6A6" />
           <SolidColorBrush x:Key="MeridianOnAccentBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#4ADE80" />
           <SolidColorBrush x:Key="MeridianWarningBrush" Color="#F5C044" />
           <SolidColorBrush x:Key="MeridianErrorBrush" Color="#F04444" />
           <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#F04444" />
-          <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#24272E" />
+          <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#262626" />
           <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#33F04444" />
           <SolidColorBrush x:Key="MeridianSelectionForegroundBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianHoverBackgroundBrush" Color="#1AFFFFFF" />
           <SolidColorBrush x:Key="MeridianPressedBackgroundBrush" Color="#29FFFFFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
-          <SolidColorBrush x:Key="MeridianAccentBrush" Color="#D92B2B" />
-          <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#F3F4F6" />
-          <SolidColorBrush x:Key="MeridianPanelBrush" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="MeridianChromeBrush" Color="#E8EAED" />
-          <SolidColorBrush x:Key="MeridianBorderBrush" Color="#D4D7DC" />
-          <SolidColorBrush x:Key="MeridianMutedBrush" Color="#6B7280" />
-          <SolidColorBrush x:Key="MeridianTextPrimaryBrush" Color="#17191D" />
-          <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#6B7280" />
-          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#6B7280" />
-          <SolidColorBrush x:Key="MeridianDialogLabelBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="MeridianAccentBrush" Color="#BF0F0F" />
+          <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="MeridianPanelBrush" Color="#E4E4E4" />
+          <SolidColorBrush x:Key="MeridianChromeBrush" Color="#ECECEC" />
+          <SolidColorBrush x:Key="MeridianBorderBrush" Color="#D1D1D1" />
+          <SolidColorBrush x:Key="MeridianMutedBrush" Color="#4C4C4C" />
+          <SolidColorBrush x:Key="MeridianTextPrimaryBrush" Color="#000000" />
+          <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#4C4C4C" />
+          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#595959" />
+          <SolidColorBrush x:Key="MeridianDialogLabelBrush" Color="#595959" />
           <SolidColorBrush x:Key="MeridianOnAccentBrush" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#16A34A" />
-          <SolidColorBrush x:Key="MeridianWarningBrush" Color="#D97706" />
-          <SolidColorBrush x:Key="MeridianErrorBrush" Color="#DC2626" />
-          <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#D92B2B" />
-          <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#EDEFF2" />
-          <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#33D92B2B" />
-          <SolidColorBrush x:Key="MeridianSelectionForegroundBrush" Color="#17191D" />
+          <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#147036" />
+          <SolidColorBrush x:Key="MeridianWarningBrush" Color="#7B5807" />
+          <SolidColorBrush x:Key="MeridianErrorBrush" Color="#BF0F0F" />
+          <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#BF0F0F" />
+          <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#D9D9D9" />
+          <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#33BF0F0F" />
+          <SolidColorBrush x:Key="MeridianSelectionForegroundBrush" Color="#000000" />
           <SolidColorBrush x:Key="MeridianHoverBackgroundBrush" Color="#14000000" />
           <SolidColorBrush x:Key="MeridianPressedBackgroundBrush" Color="#24000000" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
+      <CornerRadius x:Key="MeridianCardCornerRadius">8</CornerRadius>
+      <CornerRadius x:Key="MeridianControlCornerRadius">4</CornerRadius>
       <Thickness x:Key="MeridianHeaderMargin">12,8</Thickness>
       <Thickness x:Key="MeridianChromeMargin">8,4</Thickness>
       <Thickness x:Key="MeridianWorkAreaMargin">8</Thickness>

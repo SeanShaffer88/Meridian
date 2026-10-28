@@ -21,7 +21,9 @@ public sealed partial class MainWindow : Window
     private readonly Windows.UI.ViewManagement.UISettings _uiSettings = new();
     private ThemePreference _themePreference = ThemePreference.Dark;
     private DensityPreference _densityPreference = DensityPreference.Comfortable;
-    private bool _followWindowsAccent;
+    private AccentMode _accentMode = AccentMode.Preset;
+    private string? _accentPresetId = AccentPalette.DefaultPresetId;
+    private string? _accentCustomColor;
     private double _paneSplitFraction = 0.5;
     private Microsoft.UI.Windowing.AppWindow? _appWindow;
     private double _rasterizationScale = 1.0;
@@ -78,7 +80,9 @@ public sealed partial class MainWindow : Window
         {
             _themePreference = ParseThemePreference(settings.Theme);
             _densityPreference = ParseDensityPreference(settings.Density);
-            _followWindowsAccent = settings.FollowWindowsAccent;
+            _accentMode = AccentPalette.ParseMode(settings.AccentMode, settings.FollowWindowsAccent);
+            _accentPresetId = settings.AccentPreset ?? AccentPalette.DefaultPresetId;
+            _accentCustomColor = settings.AccentCustomColor;
             _paneSplitFraction = Math.Clamp(settings.PaneSplitFraction, 0.25, 0.75);
             ApplyThemePreference();
             ApplyDensityPreference();
@@ -161,9 +165,12 @@ public sealed partial class MainWindow : Window
             await _settingsStore.SaveAsync(new SettingsSnapshot(
                 _themePreference.ToString(),
                 _densityPreference.ToString(),
-                _followWindowsAccent,
+                _accentMode == AccentMode.FollowWindows,
                 _paneSplitFraction,
-                _openOrganizeSection.ToString()));
+                _openOrganizeSection.ToString(),
+                _accentMode.ToString(),
+                _accentPresetId,
+                _accentCustomColor));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -1835,27 +1842,32 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() =>
         {
             if (_themePreference == ThemePreference.System) ApplyThemePreference();
-            else if (_followWindowsAccent) ApplyAccentBrushes();
+            else if (_accentMode == AccentMode.FollowWindows) ApplyAccentBrushes();
         });
     }
 
     private void ApplyAccentBrushes()
     {
-        Windows.UI.Color? systemAccent = null;
-        if (_followWindowsAccent)
+        AccentColor? windowsAccent = null;
+        if (_accentMode == AccentMode.FollowWindows)
         {
-            try { systemAccent = _uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent); }
-            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { systemAccent = null; }
+            try
+            {
+                var live = _uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+                windowsAccent = new AccentColor(live.R, live.G, live.B);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { windowsAccent = null; }
         }
-        // Mutate the shared brush objects in both theme dictionaries so every
-        // ThemeResource consumer and code-side lookup sees the same accent.
+        // Resolve per theme dictionary (the light theme uses the derived
+        // variant of preset and custom colours), then mutate the shared brush
+        // objects so every ThemeResource consumer and code-side lookup sees
+        // the same accent, applied live with no restart.
         foreach (var entry in Application.Current.Resources.ThemeDictionaries)
         {
             if (entry.Value is not ResourceDictionary dictionary) continue;
-            var brandAccent = string.Equals(entry.Key?.ToString(), "Light", StringComparison.OrdinalIgnoreCase)
-                ? Windows.UI.Color.FromArgb(0xFF, 0xD9, 0x2B, 0x2B)
-                : Windows.UI.Color.FromArgb(0xFF, 0xF0, 0x44, 0x44);
-            var accent = systemAccent ?? brandAccent;
+            var lightTheme = string.Equals(entry.Key?.ToString(), "Light", StringComparison.OrdinalIgnoreCase);
+            var resolved = AccentPalette.Resolve(_accentMode, _accentPresetId, _accentCustomColor, lightTheme, windowsAccent);
+            var accent = Windows.UI.Color.FromArgb(0xFF, resolved.R, resolved.G, resolved.B);
             SetBrushColor(dictionary, "MeridianAccentBrush", accent);
             SetBrushColor(dictionary, "MeridianActivePaneBorderBrush", accent);
             SetBrushColor(dictionary, "MeridianSelectionBackgroundBrush", Windows.UI.Color.FromArgb(0x33, accent.R, accent.G, accent.B));
@@ -1963,12 +1975,122 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(densityButtons, "Density");
         var accentToggle = new ToggleSwitch
         {
-            Header = "Accent color",
-            IsOn = _followWindowsAccent,
-            OnContent = "Windows accent color",
-            OffContent = "Meridian brand red"
+            Header = "Follow Windows accent color",
+            IsOn = _accentMode == AccentMode.FollowWindows
         };
         AutomationProperties.SetName(accentToggle, "Follow Windows accent color");
+        var accentHeader = new TextBlock { Text = "Accent color" };
+        var swatchButtons = new List<(AccentPreset Preset, Button Button)>();
+        var accentSwatches = new Grid { RowSpacing = 6, ColumnSpacing = 6 };
+        for (var column = 0; column < 4; column++)
+            accentSwatches.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        accentSwatches.RowDefinitions.Add(new RowDefinition());
+        accentSwatches.RowDefinitions.Add(new RowDefinition());
+        var presetIndex = 0;
+        foreach (var preset in AccentPalette.Presets)
+        {
+            var swatch = new Button
+            {
+                Height = 36,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, preset.Color.R, preset.Color.G, preset.Color.B))
+            };
+            ToolTipService.SetToolTip(swatch, $"Accent color: {preset.Name}");
+            AutomationProperties.SetName(swatch, $"Accent color: {preset.Name}");
+            Grid.SetRow(swatch, presetIndex / 4);
+            Grid.SetColumn(swatch, presetIndex % 4);
+            presetIndex++;
+            swatch.Click += (s, args) =>
+            {
+                if (_accentMode == AccentMode.Preset &&
+                    string.Equals(_accentPresetId, preset.Id, StringComparison.OrdinalIgnoreCase)) return;
+                _accentMode = AccentMode.Preset;
+                _accentPresetId = preset.Id;
+                ApplyAccentBrushes();
+                RefreshAccentControls();
+                _ = PersistSettingsAsync();
+            };
+            swatchButtons.Add((preset, swatch));
+            accentSwatches.Children.Add(swatch);
+        }
+        var customPreview = new Border
+        {
+            Width = 36,
+            Height = 36,
+            CornerRadius = new CornerRadius(8),
+            BorderBrush = ThemeBrush("MeridianBorderBrush"),
+            BorderThickness = new Thickness(1)
+        };
+        var customHexBox = new TextBox
+        {
+            PlaceholderText = "#RRGGBB",
+            MinWidth = 120,
+            Text = _accentCustomColor ?? string.Empty
+        };
+        AutomationProperties.SetName(customHexBox, "Custom accent color, hex value");
+        ToolTipService.SetToolTip(customHexBox, "Type a hex color such as #F04444");
+        var applyCustomButton = new Button { Content = "Use custom color" };
+        ToolTipService.SetToolTip(applyCustomButton, "Apply the hex color as the accent");
+        AutomationProperties.SetName(applyCustomButton, "Use custom color");
+        var customError = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("MeridianErrorBrush"),
+            Visibility = Visibility.Collapsed
+        };
+        var customPanel = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
+        customPanel.Children.Add(new TextBlock
+        {
+            Text = "Type a hex color such as #F04444. It applies everywhere immediately. In the light theme it is darkened automatically so text stays readable.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("MeridianTextSecondaryBrush")
+        });
+        var customRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        customRow.Children.Add(customPreview);
+        customRow.Children.Add(customHexBox);
+        customRow.Children.Add(applyCustomButton);
+        customPanel.Children.Add(customRow);
+        customPanel.Children.Add(customError);
+        var customRevealButton = new Button { Content = "Custom color…" };
+        ToolTipService.SetToolTip(customRevealButton, "Enter your own accent color as a hex value");
+        AutomationProperties.SetName(customRevealButton, "Custom color");
+        customRevealButton.Click += (s, args) =>
+            customPanel.Visibility = customPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+
+        void RefreshAccentControls()
+        {
+            foreach (var (preset, button) in swatchButtons)
+            {
+                var selected = _accentMode == AccentMode.Preset &&
+                    string.Equals(_accentPresetId, preset.Id, StringComparison.OrdinalIgnoreCase);
+                button.BorderBrush = selected ? ThemeBrush("MeridianTextPrimaryBrush") : ThemeBrush("MeridianBorderBrush");
+                button.BorderThickness = new Thickness(selected ? 3 : 1);
+            }
+            if (accentToggle.IsOn != (_accentMode == AccentMode.FollowWindows))
+                accentToggle.IsOn = _accentMode == AccentMode.FollowWindows;
+            customPreview.Background = AccentColor.TryParse(_accentCustomColor, out var custom)
+                ? new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, custom.R, custom.G, custom.B))
+                : ThemeBrush("MeridianBorderBrush");
+        }
+
+        applyCustomButton.Click += (s, args) =>
+        {
+            if (!AccentColor.TryParse(customHexBox.Text, out var custom))
+            {
+                customError.Text = "That is not a valid hex color. Use six hex digits, like #F04444.";
+                customError.Visibility = Visibility.Visible;
+                return;
+            }
+            customError.Visibility = Visibility.Collapsed;
+            _accentMode = AccentMode.Custom;
+            _accentCustomColor = custom.ToHex();
+            ApplyAccentBrushes();
+            RefreshAccentControls();
+            _ = PersistSettingsAsync();
+        };
+
         var settingsContent = new StackPanel { Spacing = 16, MinWidth = 340 };
         settingsContent.Children.Add(new TextBlock
         {
@@ -1977,7 +2099,12 @@ public sealed partial class MainWindow : Window
         });
         settingsContent.Children.Add(themeButtons);
         settingsContent.Children.Add(densityButtons);
+        settingsContent.Children.Add(accentHeader);
+        settingsContent.Children.Add(accentSwatches);
+        settingsContent.Children.Add(customRevealButton);
+        settingsContent.Children.Add(customPanel);
         settingsContent.Children.Add(accentToggle);
+        RefreshAccentControls();
 
         themeButtons.SelectionChanged += (s, args) =>
         {
@@ -2002,9 +2129,10 @@ public sealed partial class MainWindow : Window
         };
         accentToggle.Toggled += (s, args) =>
         {
-            if (accentToggle.IsOn == _followWindowsAccent) return;
-            _followWindowsAccent = accentToggle.IsOn;
+            if (accentToggle.IsOn == (_accentMode == AccentMode.FollowWindows)) return;
+            _accentMode = accentToggle.IsOn ? AccentMode.FollowWindows : AccentMode.Preset;
             ApplyAccentBrushes();
+            RefreshAccentControls();
             _ = PersistSettingsAsync();
         };
 

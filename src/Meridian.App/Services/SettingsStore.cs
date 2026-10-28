@@ -19,7 +19,7 @@ internal enum DensityPreference
 /// Persists user interface preferences locally, beside the workspace store.
 /// The file is stored in the user's local application data directory. A missing
 /// or unreadable file yields the defaults, which reproduce the pre-settings look:
-/// dark theme, comfortable density, brand accent, centered pane split.
+/// dark theme, comfortable density, the red accent preset, centered pane split.
 /// </summary>
 internal sealed class SettingsStore
 {
@@ -80,11 +80,19 @@ internal sealed class SettingsStore
 /// Theme and Density are stored as names so future values degrade to the
 /// defaults instead of breaking older files. PaneSplitFraction is the left
 /// pane's share of the work area width (0.5 = equal panes). OrganizeSection
-/// is "None", "Bookmarks", or "Shelf".
+/// is "None", "Bookmarks", or "Shelf". AccentMode is an AccentMode name
+/// ("Preset", "Custom", or "FollowWindows"); AccentPreset is a preset id
+/// from AccentPalette and AccentCustomColor a "#RRGGBB" hex value. Files
+/// written before the accent choice existed carry only FollowWindowsAccent,
+/// which AccentPalette.ParseMode still honours; the flag is kept in sync on
+/// save so an older build reading the file keeps the follow-Windows choice.
 /// </summary>
 internal sealed record SettingsSnapshot(
     string? Theme = null,
     string? Density = null,
     bool FollowWindowsAccent = false,
     double PaneSplitFraction = 0.5,
-    string? OrganizeSection = null);
+    string? OrganizeSection = null,
+    string? AccentMode = null,
+    string? AccentPreset = null,
+    string? AccentCustomColor = null);
