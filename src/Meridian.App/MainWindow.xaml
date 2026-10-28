@@ -90,7 +90,7 @@
       <AppBarSeparator />
       <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" ToolTipService.ToolTip="Cancel the copy in progress (Esc)" />
       <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" ToolTipService.ToolTip="Refresh both panes (F5)" />
-      <AppBarButton Icon="OpenFolder" Label="Open in Explorer" Click="OpenInExplorer_Click" ToolTipService.ToolTip="Open the active pane's folder in Explorer (Ctrl+Shift+E)" />
+      <AppBarButton Icon="OpenLocal" Label="Open in Explorer" Click="OpenInExplorer_Click" ToolTipService.ToolTip="Open the active pane's folder in Explorer (Ctrl+Shift+E)" />
     </CommandBar>
     <Grid Grid.Row="2" Margin="{StaticResource MeridianChromeMargin}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled"><StackPanel x:Name="WorkspaceTabsPanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" /></ScrollViewer>

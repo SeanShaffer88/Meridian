@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.1
+
+- Fix: the program failed to open (an invalid toolbar icon name in the main window). The toolbar now uses a valid icon, and a test checks every icon name in the program against the valid set.
+
 ## 0.2.0
 
 - New dark Fluent theme based on near-black layered surfaces with white text; the light theme is derived from the same design tokens.
