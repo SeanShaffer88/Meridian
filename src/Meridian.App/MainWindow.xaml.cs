@@ -41,6 +41,11 @@ public sealed partial class MainWindow : Window
     private double _splitDragStartFraction;
     private readonly DropShelf _dropShelf = new();
     private readonly RecentPathsStore _recentsStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "recents.json"));
+    private readonly FolderViewStore _folderViewStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "folder-views.json"));
+    private readonly FolderSizeCache _folderSizeCache = new();
+    private readonly ThumbnailCache _thumbnailCache = new();
+    private bool _folderViewsLoaded;
+    private bool _applyingViewState;
     private bool _sidebarVisible = true;
     private readonly List<(Button Button, string TargetPath)> _sidebarNavButtons = [];
     private readonly List<ContextCapsule> _capsules = [];
@@ -89,12 +94,14 @@ public sealed partial class MainWindow : Window
         Activated += MainWindow_Activated;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
-        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle);
-        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle);
+        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle, LeftDetailsViewToggle, LeftGridViewToggle, LeftTilesViewToggle, LeftGroup);
+        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle, RightDetailsViewToggle, RightGridViewToggle, RightTilesViewToggle, RightGroup);
         _activePane = _left;
         UpdateActivePaneVisuals();
         LeftItems.ItemsSource = _left.Items;
         RightItems.ItemsSource = _right.Items;
+        LeftItems.SizeChanged += (_, _) => ApplyAdaptiveColumns(_left);
+        RightItems.SizeChanged += (_, _) => ApplyAdaptiveColumns(_right);
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         if (string.IsNullOrWhiteSpace(documents) || !Directory.Exists(documents)) documents = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
@@ -155,6 +162,8 @@ public sealed partial class MainWindow : Window
         _activeWorkspaceTabIndex = Math.Clamp(saved?.ActiveTabIndex ?? 0, 0, _workspaceTabs.Count - 1);
         _nextWorkspaceTabNumber = _workspaceTabs.Count + 1;
         RefreshWorkspaceTabs();
+        await _folderViewStore.LoadAsync();
+        _folderViewsLoaded = true;
         await _recentsStore.LoadAsync();
         BuildSidebar();
 
@@ -429,6 +438,7 @@ public sealed partial class MainWindow : Window
     {
         if (string.Equals(requestedPath.Trim(), HomePath, StringComparison.OrdinalIgnoreCase))
             return await NavigateHomeAsync(pane, addHistory);
+        CancelFolderSizeMeasurement(pane);
         pane.ReadCancellation?.Cancel();
         pane.ReadCancellation?.Dispose();
         pane.ReadCancellation = new CancellationTokenSource();
@@ -462,6 +472,7 @@ public sealed partial class MainWindow : Window
             pane.CurrentPath = fullPath;
             pane.PathBox.Text = fullPath;
             UpdatePaneHeader(pane);
+            ApplyFolderViewState(pane);
             pane.AllItems = entries;
             ApplyFilter(pane);
             ApplyPaneMode(pane);
@@ -495,6 +506,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task<bool> NavigateHomeAsync(PaneState pane, bool addHistory = true)
     {
+        CancelFolderSizeMeasurement(pane);
         pane.ReadCancellation?.Cancel();
         pane.ReadCancellation?.Dispose();
         pane.ReadCancellation = new CancellationTokenSource();
@@ -558,6 +570,12 @@ public sealed partial class MainWindow : Window
         pane.ColumnsLayoutToggle.IsChecked = pane.Layout == PaneLayout.Columns;
         pane.StandardLayoutToggle.IsEnabled = !home;
         pane.ColumnsLayoutToggle.IsEnabled = !home;
+        var viewControlsEnabled = !home && !columns;
+        pane.DetailsViewToggle.IsEnabled = viewControlsEnabled;
+        pane.GridViewToggle.IsEnabled = viewControlsEnabled;
+        pane.TilesViewToggle.IsEnabled = viewControlsEnabled;
+        pane.GroupBox.IsEnabled = viewControlsEnabled;
+        ApplyViewMode(pane);
     }
 
     // ----- Miller columns -----
@@ -581,6 +599,7 @@ public sealed partial class MainWindow : Window
         if (pane.IsHome) { ApplyPaneMode(pane); return; }
         if (pane.Layout == layout) { ApplyPaneMode(pane); return; }
         pane.Layout = layout;
+        if (layout == PaneLayout.Columns) CancelFolderSizeMeasurement(pane);
         StoreCurrentWorkspaceTab();
         if (layout == PaneLayout.Columns)
         {
@@ -597,7 +616,316 @@ public sealed partial class MainWindow : Window
             // history entry for what is only a layout change.
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
         }
+        RecordFolderView(pane);
         await PersistWorkspaceAsync();
+    }
+
+    // ----- View modes (Details / Grid / Tiles), grouping, per-folder view memory -----
+
+    /// <summary>Applies the pane's view mode to its list: row template, item panel,
+    /// and the view switcher's checked states. Only the standard layout has view
+    /// modes; the columns layout is untouched by them.</summary>
+    private void ApplyViewMode(PaneState pane)
+    {
+        pane.DetailsViewToggle.IsChecked = pane.ViewMode == PaneViewMode.Details;
+        pane.GridViewToggle.IsChecked = pane.ViewMode == PaneViewMode.Grid;
+        pane.TilesViewToggle.IsChecked = pane.ViewMode == PaneViewMode.Tiles;
+        if (pane.Layout != PaneLayout.Standard || pane.IsHome) return;
+        switch (pane.ViewMode)
+        {
+            case PaneViewMode.Grid:
+                pane.List.ItemTemplate = (DataTemplate)RootGrid.Resources["GridItemTemplate"];
+                pane.List.ItemsPanel = (ItemsPanelTemplate)RootGrid.Resources["WrapItemsPanel"];
+                break;
+            case PaneViewMode.Tiles:
+                pane.List.ItemTemplate = (DataTemplate)RootGrid.Resources["TileItemTemplate"];
+                pane.List.ItemsPanel = (ItemsPanelTemplate)RootGrid.Resources["VerticalItemsPanel"];
+                break;
+            default:
+                pane.List.ItemTemplate = (DataTemplate)RootGrid.Resources[DetailsTemplateKey(pane)];
+                pane.List.ItemsPanel = (ItemsPanelTemplate)RootGrid.Resources["VerticalItemsPanel"];
+                break;
+        }
+    }
+
+    /// <summary>The Details row template matching the pane's visible column set —
+    /// the adaptive-column chain sets map one-to-one to templates.</summary>
+    private static string DetailsTemplateKey(PaneState pane)
+    {
+        var columns = pane.VisibleColumns;
+        return (columns.Contains(DetailsColumn.Size), columns.Contains(DetailsColumn.Age), columns.Contains(DetailsColumn.Modified)) switch
+        {
+            (true, true, true) => "DetailsAllItemTemplate",
+            (true, true, false) => "DetailsNoModifiedItemTemplate",
+            (true, false, false) => "DetailsSizeItemTemplate",
+            _ => "DetailsNameItemTemplate",
+        };
+    }
+
+    /// <summary>Binds the pane's list to its items — through the grouped view while
+    /// grouping is on, directly to the item collection otherwise. The list control
+    /// itself never changes, so selection, context menus, and every operation keep
+    /// working identically across view modes and grouping.</summary>
+    private void BindPaneList(PaneState pane)
+    {
+        if (pane.Layout == PaneLayout.Standard && !pane.IsHome && pane.Grouping != GroupMode.None)
+        {
+            if (!ReferenceEquals(pane.GroupSource.Source, pane.Groups))
+            {
+                pane.GroupSource.Source = pane.Groups;
+                pane.GroupSource.IsSourceGrouped = true;
+            }
+
+            if (!ReferenceEquals(pane.List.ItemsSource, pane.GroupSource.View))
+                pane.List.ItemsSource = pane.GroupSource.View;
+        }
+        else if (!ReferenceEquals(pane.List.ItemsSource, pane.Items))
+        {
+            pane.List.ItemsSource = pane.Items;
+        }
+    }
+
+    /// <summary>Forces the pane's list to rebuild its containers (density/theme refresh).</summary>
+    private void RefreshPaneList(PaneState pane)
+    {
+        if (pane.List.ItemsSource is null) return;
+        pane.List.ItemsSource = null;
+        BindPaneList(pane);
+    }
+
+    private void RebuildGroups(PaneState pane, IReadOnlyList<FileEntry> matches)
+    {
+        pane.Groups.Clear();
+        if (pane.Grouping == GroupMode.None) return;
+        foreach (var group in ItemGrouping.Group(matches, pane.Grouping, DateTime.UtcNow))
+            pane.Groups.Add(new PaneItemGroup(group.Title, group.Items));
+    }
+
+    /// <summary>Applies the adaptive Details columns for the pane's current width:
+    /// as the pane narrows, lower-priority columns hide (Name never does); widening
+    /// restores them. Only a template swap — the item model is untouched.</summary>
+    private void ApplyAdaptiveColumns(PaneState pane)
+    {
+        if (pane.List.ActualWidth <= 0) return;
+        var visible = AdaptiveColumns.VisibleForWidth(pane.List.ActualWidth);
+        if (visible.SequenceEqual(pane.VisibleColumns)) return;
+        pane.VisibleColumns = visible;
+        if (pane.Layout == PaneLayout.Standard && pane.ViewMode == PaneViewMode.Details) ApplyViewMode(pane);
+        RecordFolderView(pane);
+    }
+
+    private void CancelFolderSizeMeasurement(PaneState pane)
+    {
+        pane.FolderSizeCancellation?.Cancel();
+        pane.FolderSizeCancellation?.Dispose();
+        pane.FolderSizeCancellation = null;
+        pane.FolderSizeRunKey = null;
+    }
+
+    /// <summary>Starts (or keeps) the background folder-size measurement for the
+    /// pane's visible folders. Details and Tiles show folder sizes; Grid does not,
+    /// so it never pays for measuring. Cached results apply instantly; navigating
+    /// away cancels the run.</summary>
+    private void StartFolderSizeMeasurement(PaneState pane)
+    {
+        if (pane.Layout != PaneLayout.Standard || pane.IsHome || pane.ViewMode == PaneViewMode.Grid)
+        {
+            CancelFolderSizeMeasurement(pane);
+            return;
+        }
+
+        var folders = pane.Items.Where(item => item.IsDirectory).ToList();
+        if (folders.Count == 0)
+        {
+            CancelFolderSizeMeasurement(pane);
+            return;
+        }
+
+        var runKey = string.Join("\n", folders.Select(folder => $"{folder.FullPath}|{folder.ModifiedUtc.Ticks}"));
+        if (pane.FolderSizeCancellation is not null && string.Equals(pane.FolderSizeRunKey, runKey, StringComparison.Ordinal))
+            return; // the same folder set is already measured or being measured
+        CancelFolderSizeMeasurement(pane);
+        pane.FolderSizeCancellation = new CancellationTokenSource();
+        pane.FolderSizeRunKey = runKey;
+        _ = MeasureFolderSizesAsync(folders, pane.FolderSizeCancellation.Token);
+    }
+
+    private async Task MeasureFolderSizesAsync(List<FileEntry> folders, CancellationToken token)
+    {
+        foreach (var entry in folders)
+        {
+            if (token.IsCancellationRequested) return;
+            if (_folderSizeCache.TryGet(entry.FullPath, entry.ModifiedUtc, out var cached))
+            {
+                entry.FolderSizeLabel = DirectoryReader.FormatSize(cached.TotalBytes);
+                continue;
+            }
+
+            entry.FolderSizeLabel = "Measuring…";
+            try
+            {
+                var result = await FolderSizeCalculator.CalculateAsync(entry.FullPath, token);
+                _folderSizeCache.Store(entry.FullPath, entry.ModifiedUtc, result);
+                if (!token.IsCancellationRequested)
+                    entry.FolderSizeLabel = DirectoryReader.FormatSize(result.TotalBytes);
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                if (!token.IsCancellationRequested)
+                    entry.FolderSizeLabel = null; // fall back to the plain dash
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies the folder's remembered view state, if any, before the listing is
+    /// filtered, so layout, view mode, sort, grouping, and visible columns are all
+    /// in place for the first render. Precedence: the folder's remembered state
+    /// wins while the pane is in that folder; the workspace-tab snapshot keeps
+    /// recording whatever the panes currently show and still restores paths and
+    /// layouts when a tab is reopened — the folder state then refines the view
+    /// the moment the pane lands in the folder.
+    /// </summary>
+    private void ApplyFolderViewState(PaneState pane)
+    {
+        var state = _folderViewStore.Find(pane.CurrentPath);
+        if (state is null) return;
+        _applyingViewState = true;
+        try
+        {
+            pane.Layout = ParsePaneLayout(state.Layout);
+            if (Enum.TryParse<DirectorySortField>(state.SortField, out var sortField)) pane.SortField = sortField;
+            pane.Descending = state.Descending;
+            pane.ViewMode = ParseViewMode(state.ViewMode);
+            pane.Grouping = ParseGroupMode(state.Grouping);
+            if (state.VisibleColumns is { Length: > 0 })
+            {
+                var parsed = state.VisibleColumns
+                    .Select(name => Enum.TryParse<DetailsColumn>(name, out var column) ? column : (DetailsColumn?)null)
+                    .Where(column => column is not null)
+                    .Select(column => column!.Value)
+                    .Distinct()
+                    .ToArray();
+                if (parsed.Length > 0) pane.VisibleColumns = AdaptiveColumns.SnapToReachableSet(parsed);
+            }
+
+            var (sortBox, directionToggle) = SortControls(pane);
+            sortBox.SelectedIndex = (int)pane.SortField;
+            directionToggle.IsChecked = pane.Descending;
+            pane.GroupBox.SelectedIndex = (int)pane.Grouping;
+        }
+        finally
+        {
+            _applyingViewState = false;
+        }
+
+        ApplyViewMode(pane);
+    }
+
+    private (ComboBox Sort, ToggleButton Direction) SortControls(PaneState pane) =>
+        ReferenceEquals(pane, _left) ? (LeftSort, LeftSortDescending) : (RightSort, RightSortDescending);
+
+    private static PaneViewMode ParseViewMode(string? value) => value switch
+    {
+        nameof(PaneViewMode.Grid) => PaneViewMode.Grid,
+        nameof(PaneViewMode.Tiles) => PaneViewMode.Tiles,
+        _ => PaneViewMode.Details,
+    };
+
+    private static GroupMode ParseGroupMode(string? value) =>
+        Enum.TryParse<GroupMode>(value, out var mode) ? mode : GroupMode.None;
+
+    /// <summary>Remembers the pane's current view state for the folder it is in.
+    /// Skipped while a workspace is being restored, while a remembered state is
+    /// being applied, at Home, and before the store has loaded.</summary>
+    private void RecordFolderView(PaneState pane)
+    {
+        if (!_folderViewsLoaded || _restoringWorkspace || _switchingWorkspaceTab || _applyingViewState) return;
+        if (pane.IsHome || string.IsNullOrWhiteSpace(pane.CurrentPath)) return;
+        var state = new FolderViewState(
+            pane.Layout.ToString(),
+            pane.ViewMode.ToString(),
+            pane.SortField.ToString(),
+            pane.Descending,
+            pane.Grouping.ToString(),
+            pane.VisibleColumns.Select(column => column.ToString()).ToArray());
+        _ = _folderViewStore.RecordAsync(pane.CurrentPath, state);
+    }
+
+    private void LeftItems_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args) => HandleContainerContentChanging(_left, args);
+    private void RightItems_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args) => HandleContainerContentChanging(_right, args);
+
+    /// <summary>
+    /// Per-realized-row finishing for the view modes: tint the Age column by bucket
+    /// in Details (recent items in the secondary text tier, older in the tertiary),
+    /// and fill thumbnails asynchronously in Grid/Tiles. Runs again on container
+    /// recycle, so it always starts from the entry the container now shows; a
+    /// pending thumbnail is applied only if the image still belongs to that entry
+    /// (its Tag carries the path).
+    /// </summary>
+    private void HandleContainerContentChanging(PaneState pane, ContainerContentChangingEventArgs args)
+    {
+        if (args.Item is not FileEntry entry) return;
+        if (args.ItemContainer is not ListViewItem container) return;
+        if (container.ContentTemplateRoot is not FrameworkElement root) return;
+        if (pane.Layout != PaneLayout.Standard) return;
+        if (pane.ViewMode == PaneViewMode.Details)
+        {
+            if (FindTaggedElement(root, "AgeColumn") is TextBlock ageBlock)
+                ageBlock.Foreground = ThemeBrush(RelativeAge.IsRecent(entry.AgeBucket) ? "MeridianTextSecondaryBrush" : "MeridianTextTertiaryBrush");
+            return;
+        }
+
+        if (FindFirstImage(root) is not { } image) return;
+        image.Tag = entry.FullPath;
+        if (args.InRecyclingQueue)
+        {
+            image.Source = null;
+            return;
+        }
+
+        var sizeClass = pane.ViewMode == PaneViewMode.Grid ? ThumbnailSizeClass.Grid : ThumbnailSizeClass.Tile;
+        if (_thumbnailCache.TryGet(entry.FullPath, sizeClass, out var cached))
+        {
+            image.Source = cached;
+            return;
+        }
+
+        image.Source = null;
+        _ = LoadThumbnailIntoAsync(image, entry, sizeClass);
+    }
+
+    private async Task LoadThumbnailIntoAsync(Image image, FileEntry entry, ThumbnailSizeClass sizeClass)
+    {
+        var bitmap = await _thumbnailCache.LoadAsync(entry, sizeClass);
+        if (bitmap is not null && string.Equals(image.Tag as string, entry.FullPath, StringComparison.Ordinal))
+            image.Source = bitmap;
+    }
+
+    private static FrameworkElement? FindTaggedElement(FrameworkElement root, string tag)
+    {
+        if (string.Equals(root.Tag as string, tag, StringComparison.Ordinal)) return root;
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            if (VisualTreeHelper.GetChild(root, i) is FrameworkElement child && FindTaggedElement(child, tag) is { } found)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static Image? FindFirstImage(DependencyObject root)
+    {
+        if (root is Image image) return image;
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            if (FindFirstImage(VisualTreeHelper.GetChild(root, i)) is { } found) return found;
+        }
+
+        return null;
     }
 
     /// <summary>Keeps the columns view in step with a committed navigation: a
@@ -1403,6 +1731,10 @@ public sealed partial class MainWindow : Window
         foreach (var item in matches)
             pane.Items.Add(item);
 
+        RebuildGroups(pane, matches);
+        BindPaneList(pane);
+        StartFolderSizeMeasurement(pane);
+
         SetPaneStatus(pane, string.IsNullOrEmpty(query)
             ? $"{pane.AllItems.Count:N0} items"
             : $"{matches.Count:N0} of {pane.AllItems.Count:N0} items · filtered");
@@ -1418,7 +1750,43 @@ public sealed partial class MainWindow : Window
         if (pane is null || sort is null || direction is null) return;
         pane.SortField = (DirectorySortField)Math.Clamp(sort.SelectedIndex, 0, 3);
         pane.Descending = direction.IsChecked == true;
+        if (_applyingViewState) return; // control sync while a remembered view is being applied
         ApplyFilter(pane);
+        RecordFolderView(pane);
+    }
+
+    private void LeftGroup_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateGrouping(_left, LeftGroup);
+    private void RightGroup_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateGrouping(_right, RightGroup);
+
+    private void UpdateGrouping(PaneState pane, ComboBox groupBox)
+    {
+        if (_applyingViewState) return; // control sync while a remembered view is being applied
+        var mode = (GroupMode)Math.Clamp(groupBox.SelectedIndex, 0, 3);
+        if (pane.Grouping == mode) return;
+        pane.Grouping = mode;
+        ApplyFilter(pane);
+        RecordFolderView(pane);
+    }
+
+    private void LeftDetailsView_Click(object sender, RoutedEventArgs e) => SetViewMode(_left, PaneViewMode.Details);
+    private void LeftGridView_Click(object sender, RoutedEventArgs e) => SetViewMode(_left, PaneViewMode.Grid);
+    private void LeftTilesView_Click(object sender, RoutedEventArgs e) => SetViewMode(_left, PaneViewMode.Tiles);
+    private void RightDetailsView_Click(object sender, RoutedEventArgs e) => SetViewMode(_right, PaneViewMode.Details);
+    private void RightGridView_Click(object sender, RoutedEventArgs e) => SetViewMode(_right, PaneViewMode.Grid);
+    private void RightTilesView_Click(object sender, RoutedEventArgs e) => SetViewMode(_right, PaneViewMode.Tiles);
+
+    private void SetViewMode(PaneState pane, PaneViewMode mode)
+    {
+        if (pane.Layout != PaneLayout.Standard || pane.IsHome || pane.ViewMode == mode)
+        {
+            ApplyViewMode(pane); // keep the switcher honest when the click changed nothing
+            return;
+        }
+
+        pane.ViewMode = mode;
+        ApplyViewMode(pane);
+        StartFolderSizeMeasurement(pane);
+        RecordFolderView(pane);
     }
 
     private void LeftFilter_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter(_left);
@@ -2839,6 +3207,10 @@ public sealed partial class MainWindow : Window
         };
         ApplyAccentBrushes();
         UpdateActivePaneVisuals();
+        // Rebuild the item containers so per-row finishes that resolve theme
+        // brushes in code (the Age column tint) pick up the new theme.
+        RefreshPaneList(_left);
+        RefreshPaneList(_right);
     }
 
     private static bool IsSystemDarkTheme()
@@ -2903,8 +3275,8 @@ public sealed partial class MainWindow : Window
         Application.Current.Resources["MeridianListItemMargin"] = new Thickness(8, vertical, 8, vertical);
         // Reassigning the item sources forces both lists to rebuild their item
         // containers, so the template picks up the new margin immediately.
-        if (LeftItems.ItemsSource is not null) { LeftItems.ItemsSource = null; LeftItems.ItemsSource = _left.Items; }
-        if (RightItems.ItemsSource is not null) { RightItems.ItemsSource = null; RightItems.ItemsSource = _right.Items; }
+        RefreshPaneList(_left);
+        RefreshPaneList(_right);
         foreach (var pane in new[] { _left, _right })
             foreach (var column in pane.Columns)
                 if (column.List.ItemsSource is not null) { column.List.ItemsSource = null; column.List.ItemsSource = column.Items; }
@@ -4073,6 +4445,8 @@ public sealed partial class MainWindow : Window
 
     private enum PaneLayout { Standard, Columns }
 
+    private enum PaneViewMode { Details, Grid, Tiles }
+
     private static PaneLayout ParsePaneLayout(string? value) =>
         string.Equals(value, nameof(PaneLayout.Columns), StringComparison.OrdinalIgnoreCase)
             ? PaneLayout.Columns
@@ -4173,7 +4547,7 @@ public sealed partial class MainWindow : Window
         public PaneLayout RightLayout { get; set; } = rightLayout;
     }
 
-    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel, ScrollViewer columnsView, StackPanel columnsPanel, ToggleButton standardLayoutToggle, ToggleButton columnsLayoutToggle)
+    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel, ScrollViewer columnsView, StackPanel columnsPanel, ToggleButton standardLayoutToggle, ToggleButton columnsLayoutToggle, ToggleButton detailsViewToggle, ToggleButton gridViewToggle, ToggleButton tilesViewToggle, ComboBox groupBox)
     {
         public string Name { get; } = name;
         public TextBox PathBox { get; } = pathBox;
@@ -4201,6 +4575,34 @@ public sealed partial class MainWindow : Window
         public StackPanel ColumnsPanel { get; } = columnsPanel;
         public ToggleButton StandardLayoutToggle { get; } = standardLayoutToggle;
         public ToggleButton ColumnsLayoutToggle { get; } = columnsLayoutToggle;
+        public ToggleButton DetailsViewToggle { get; } = detailsViewToggle;
+        public ToggleButton GridViewToggle { get; } = gridViewToggle;
+        public ToggleButton TilesViewToggle { get; } = tilesViewToggle;
+        public ComboBox GroupBox { get; } = groupBox;
+
+        // ----- View mode state (standard layout only; the columns layout is unaffected) -----
+
+        /// <summary>Which view mode the standard layout renders: Details, Grid, or Tiles.</summary>
+        public PaneViewMode ViewMode { get; set; } = PaneViewMode.Details;
+
+        /// <summary>How the standard list is grouped; off by default.</summary>
+        public GroupMode Grouping { get; set; } = GroupMode.None;
+
+        /// <summary>The Details columns currently shown, narrowed by the pane's width.</summary>
+        public IReadOnlyList<DetailsColumn> VisibleColumns { get; set; } = AdaptiveColumns.VisibleForWidth(double.PositiveInfinity);
+
+        /// <summary>The groups the list shows while grouping is on; rebuilt on every filter pass.</summary>
+        public ObservableCollection<PaneItemGroup> Groups { get; } = [];
+
+        /// <summary>Grouped view over <see cref="Groups"/>; the list binds to it while grouping is on.</summary>
+        public Microsoft.UI.Xaml.Data.CollectionViewSource GroupSource { get; } = new();
+
+        /// <summary>Cancels the in-flight background folder-size measurement.</summary>
+        public CancellationTokenSource? FolderSizeCancellation { get; set; }
+
+        /// <summary>Identifies the folder set the current measurement run covers, so
+        /// a re-filter over the same folders does not restart it.</summary>
+        public string? FolderSizeRunKey { get; set; }
 
         /// <summary>Which layout the pane renders: the standard list or Miller columns.</summary>
         public PaneLayout Layout { get; set; } = PaneLayout.Standard;
