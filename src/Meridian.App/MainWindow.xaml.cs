@@ -584,7 +584,7 @@ public sealed partial class MainWindow : Window
             Content = row,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Windows.UI.Colors.Transparent),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             Padding = new Thickness(10, 6, 10, 6),
             Tag = targetPath
@@ -610,7 +610,7 @@ public sealed partial class MainWindow : Window
             var selected = string.Equals(target, current, StringComparison.OrdinalIgnoreCase);
             button.Background = selected
                 ? ThemeBrush("MeridianSelectionBackgroundBrush")
-                : new SolidColorBrush(Windows.UI.Colors.Transparent);
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         }
     }
 
@@ -791,7 +791,7 @@ public sealed partial class MainWindow : Window
             Content = row,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Windows.UI.Colors.Transparent),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             Padding = new Thickness(8, 4, 8, 4)
         };
