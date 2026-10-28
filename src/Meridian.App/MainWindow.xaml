@@ -5,6 +5,15 @@
     xmlns:models="using:Meridian.Models"
     Title="Meridian">
   <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+    <Grid.Resources>
+      <DataTemplate x:Key="ColumnItemTemplate" x:DataType="models:FileEntry">
+        <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" AutomationProperties.Name="{x:Bind Name}">
+          <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianTextSecondaryBrush}" />
+          <TextBlock Grid.Column="1" Text="{x:Bind Name}" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <FontIcon Grid.Column="2" Glyph="{x:Bind ChevronGlyph}" FontSize="12" Foreground="{ThemeResource MeridianTextTertiaryBrush}" VerticalAlignment="Center" />
+        </Grid>
+      </DataTemplate>
+    </Grid.Resources>
     <Grid.KeyboardAccelerators>
       <KeyboardAccelerator Key="F5" Invoked="RefreshShortcut_Invoked" />
       <KeyboardAccelerator Key="F6" Invoked="SwitchPaneShortcut_Invoked" />
@@ -20,6 +29,7 @@
       <KeyboardAccelerator Key="Enter" Modifiers="Menu" Invoked="PropertiesShortcut_Invoked" />
       <KeyboardAccelerator Key="F2" Invoked="RenameShortcut_Invoked" />
       <KeyboardAccelerator Key="D" Modifiers="Control,Shift" Invoked="DetailsStripShortcut_Invoked" />
+      <KeyboardAccelerator Key="V" Modifiers="Control,Shift" Invoked="LayoutShortcut_Invoked" />
       <KeyboardAccelerator Key="Escape" Invoked="CancelCopyShortcut_Invoked" />
     </Grid.KeyboardAccelerators>
     <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}" ColumnDefinitions="Auto,*" ColumnSpacing="8">
@@ -151,12 +161,20 @@
           <Button Click="LeftBack_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Back" AutomationProperties.Name="Back, left pane"><SymbolIcon Symbol="Back" /></Button><Button Grid.Column="1" Click="LeftForward_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Forward, left pane"><SymbolIcon Symbol="Forward" /></Button><Button Grid.Column="2" Click="LeftUp_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Up" AutomationProperties.Name="Up, left pane"><SymbolIcon Symbol="Up" /></Button>
           <TextBox x:Name="LeftPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="LeftPath_KeyDown" AutomationProperties.Name="Folder path, left pane" />
         </Grid>
-        <Grid x:Name="LeftFilterRow" Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+        <Grid x:Name="LeftFilterRow" Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
           <TextBox x:Name="LeftFilter" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" AutomationProperties.Name="Filter, left pane" />
           <ComboBox x:Name="LeftSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="LeftSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane" AutomationProperties.Name="Sort, left pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
           </ComboBox>
           <ToggleButton x:Name="LeftSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" AutomationProperties.Name="Descending sort, left pane" Checked="LeftSortDirection_Changed" Unchecked="LeftSortDirection_Changed" />
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
+            <ToggleButton x:Name="LeftStandardLayoutToggle" Padding="6,2" Click="LeftStandardLayout_Click" ToolTipService.ToolTip="Standard list layout (Ctrl+Shift+V switches the active pane)" AutomationProperties.Name="Standard layout, left pane">
+              <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="List" /><TextBlock Text="List" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
+            <ToggleButton x:Name="LeftColumnsLayoutToggle" Padding="6,2" Click="LeftColumnsLayout_Click" ToolTipService.ToolTip="Columns layout (Ctrl+Shift+V switches the active pane)" AutomationProperties.Name="Columns layout, left pane">
+              <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="ViewAll" /><TextBlock Text="Columns" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
+          </StackPanel>
         </Grid>
         <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" KeyDown="LeftItems_KeyDown" SelectionChanged="LeftItems_SelectionChanged" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, left pane">
           <ListView.ContextFlyout>
@@ -180,6 +198,9 @@
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
+        <ScrollViewer x:Name="LeftColumnsView" Grid.Row="3" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, left pane">
+          <StackPanel x:Name="LeftColumnsPanel" Orientation="Horizontal" />
+        </ScrollViewer>
         <ScrollViewer x:Name="RightHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, right pane">
           <StackPanel x:Name="RightHomePanel" Spacing="10" Padding="10" />
         </ScrollViewer>
@@ -208,12 +229,20 @@
           <Button Click="RightBack_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Back" AutomationProperties.Name="Back, right pane"><SymbolIcon Symbol="Back" /></Button><Button Grid.Column="1" Click="RightForward_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Forward, right pane"><SymbolIcon Symbol="Forward" /></Button><Button Grid.Column="2" Click="RightUp_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Up" AutomationProperties.Name="Up, right pane"><SymbolIcon Symbol="Up" /></Button>
           <TextBox x:Name="RightPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="RightPath_KeyDown" AutomationProperties.Name="Folder path, right pane" />
         </Grid>
-        <Grid x:Name="RightFilterRow" Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+        <Grid x:Name="RightFilterRow" Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
           <TextBox x:Name="RightFilter" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" AutomationProperties.Name="Filter, right pane" />
           <ComboBox x:Name="RightSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="RightSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane" AutomationProperties.Name="Sort, right pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
           </ComboBox>
           <ToggleButton x:Name="RightSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" AutomationProperties.Name="Descending sort, right pane" Checked="RightSortDirection_Changed" Unchecked="RightSortDirection_Changed" />
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
+            <ToggleButton x:Name="RightStandardLayoutToggle" Padding="6,2" Click="RightStandardLayout_Click" ToolTipService.ToolTip="Standard list layout (Ctrl+Shift+V switches the active pane)" AutomationProperties.Name="Standard layout, right pane">
+              <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="List" /><TextBlock Text="List" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
+            <ToggleButton x:Name="RightColumnsLayoutToggle" Padding="6,2" Click="RightColumnsLayout_Click" ToolTipService.ToolTip="Columns layout (Ctrl+Shift+V switches the active pane)" AutomationProperties.Name="Columns layout, right pane">
+              <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="ViewAll" /><TextBlock Text="Columns" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
+          </StackPanel>
         </Grid>
         <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" KeyDown="RightItems_KeyDown" SelectionChanged="RightItems_SelectionChanged" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, right pane">
           <ListView.ContextFlyout>
@@ -237,6 +266,9 @@
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
+        <ScrollViewer x:Name="RightColumnsView" Grid.Row="3" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, right pane">
+          <StackPanel x:Name="RightColumnsPanel" Orientation="Horizontal" />
+        </ScrollViewer>
         <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>

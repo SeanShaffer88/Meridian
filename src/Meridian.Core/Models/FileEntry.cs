@@ -11,4 +11,7 @@ public sealed class FileEntry
     public long SizeBytes { get; init; }
     public DateTime ModifiedUtc { get; init; }
     public string Glyph => IsDirectory ? "\uE8B7" : "\uE7C3";
+
+    /// <summary>Chevron shown beside folders in the Miller-columns view, where a folder opens into the next column.</summary>
+    public string ChevronGlyph => IsDirectory ? "\uE76C" : string.Empty;
 }

@@ -69,6 +69,14 @@ public sealed partial class MainWindow : Window
     private FileEntry? _quickPreviewEntry;
     private PreviewMediaLease? _quickPreviewLease;
     private CancellationTokenSource? _quickPreviewCancellation;
+    private const double DefaultColumnWidth = 280;
+    private const double MinimumColumnWidth = 180;
+    private const double MaximumColumnWidth = 480;
+    private const double PreviewColumnWidth = 320;
+    private double _columnWidth = DefaultColumnWidth;
+    private bool _columnSplitterDragging;
+    private double _columnDragStartX;
+    private double _columnDragStartWidth;
 
     public MainWindow()
     {
@@ -81,8 +89,8 @@ public sealed partial class MainWindow : Window
         Activated += MainWindow_Activated;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
-        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel);
-        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel);
+        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle);
+        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle);
         _activePane = _left;
         UpdateActivePaneVisuals();
         LeftItems.ItemsSource = _left.Items;
@@ -105,6 +113,9 @@ public sealed partial class MainWindow : Window
             _accentPresetId = settings.AccentPreset ?? AccentPalette.DefaultPresetId;
             _accentCustomColor = settings.AccentCustomColor;
             _paneSplitFraction = Math.Clamp(settings.PaneSplitFraction, 0.25, 0.75);
+            _columnWidth = settings.ColumnWidth is > 0
+                ? Math.Clamp(settings.ColumnWidth, MinimumColumnWidth, MaximumColumnWidth)
+                : DefaultColumnWidth;
             ApplyThemePreference();
             ApplyDensityPreference();
             ApplyPaneSplit();
@@ -136,7 +147,7 @@ public sealed partial class MainWindow : Window
             {
                 if (tab is null) continue;
                 var tabName = string.IsNullOrWhiteSpace(tab.Name) ? $"Workspace {_workspaceTabs.Count + 1}" : tab.Name;
-                _workspaceTabs.Add(new WorkspaceTab(tabName, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight));
+                _workspaceTabs.Add(new WorkspaceTab(tabName, tab.LeftPath ?? defaultLeft, tab.RightPath ?? defaultRight, ParsePaneLayout(tab.LeftLayout), ParsePaneLayout(tab.RightLayout)));
             }
         }
         if (_workspaceTabs.Count == 0)
@@ -152,6 +163,8 @@ public sealed partial class MainWindow : Window
         var rightPath = Directory.Exists(activeTab.RightPath) ? activeTab.RightPath : defaultRight;
         activeTab.LeftPath = leftPath;
         activeTab.RightPath = rightPath;
+        _left.Layout = activeTab.LeftLayout;
+        _right.Layout = activeTab.RightLayout;
 
         _restoringWorkspace = true;
         try
@@ -173,7 +186,7 @@ public sealed partial class MainWindow : Window
         try
         {
             StoreCurrentWorkspaceTab();
-            var tabs = _workspaceTabs.Select(tab => new WorkspaceTabSnapshot(tab.Name, tab.LeftPath, tab.RightPath)).ToArray();
+            var tabs = _workspaceTabs.Select(tab => new WorkspaceTabSnapshot(tab.Name, tab.LeftPath, tab.RightPath, tab.LeftLayout.ToString(), tab.RightLayout.ToString())).ToArray();
             await _workspaceStore.SaveAsync(new WorkspaceSnapshot(_left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(), tabs, _activeWorkspaceTabIndex));
             return true;
         }
@@ -199,7 +212,8 @@ public sealed partial class MainWindow : Window
                 _accentPresetId,
                 _accentCustomColor,
                 _detailsStripVisible,
-                _sidebarVisible));
+                _sidebarVisible,
+                _columnWidth));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -239,6 +253,8 @@ public sealed partial class MainWindow : Window
         var active = _workspaceTabs[_activeWorkspaceTabIndex];
         if (!string.IsNullOrWhiteSpace(_left.CurrentPath)) active.LeftPath = _left.CurrentPath;
         if (!string.IsNullOrWhiteSpace(_right.CurrentPath)) active.RightPath = _right.CurrentPath;
+        active.LeftLayout = _left.Layout;
+        active.RightLayout = _right.Layout;
     }
 
     private void RefreshWorkspaceTabs()
@@ -286,7 +302,7 @@ public sealed partial class MainWindow : Window
         StoreCurrentWorkspaceTab();
         var leftPath = string.IsNullOrWhiteSpace(_left.CurrentPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) : _left.CurrentPath;
         var rightPath = string.IsNullOrWhiteSpace(_right.CurrentPath) ? leftPath : _right.CurrentPath;
-        var tab = new WorkspaceTab(NextWorkspaceTabName(), leftPath, rightPath);
+        var tab = new WorkspaceTab(NextWorkspaceTabName(), leftPath, rightPath, _left.Layout, _right.Layout);
         _workspaceTabs.Add(tab);
         _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
         RefreshWorkspaceTabs();
@@ -337,6 +353,8 @@ public sealed partial class MainWindow : Window
         var rightPath = Directory.Exists(tab.RightPath) ? tab.RightPath : downloads;
         _left.List.SelectedItem = null;
         _right.List.SelectedItem = null;
+        _left.Layout = tab.LeftLayout;
+        _right.Layout = tab.RightLayout;
         _restoringWorkspace = true;
         try
         {
@@ -447,6 +465,8 @@ public sealed partial class MainWindow : Window
             pane.AllItems = entries;
             ApplyFilter(pane);
             ApplyPaneMode(pane);
+            if (pane.Layout == PaneLayout.Columns) SyncColumnsAfterNavigation(pane, fullPath);
+            else ClearColumns(pane);
             RefreshSidebarSelection();
             _ = _recentsStore.RecordAsync(fullPath, isDirectory: true);
             RefreshDetailsStrip();
@@ -490,6 +510,7 @@ public sealed partial class MainWindow : Window
         pane.Items.Clear();
         UpdatePaneHeader(pane);
         ApplyPaneMode(pane);
+        ClearColumns(pane);
         RenderHomeView(pane);
         RefreshSidebarSelection();
         SetPaneStatus(pane, "Home · pinned folders, drives and recent items");
@@ -523,13 +544,551 @@ public sealed partial class MainWindow : Window
     private void ApplySidebarVisibility() =>
         SidebarPanel.Visibility = _sidebarVisible ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Switches a pane between its file list and its Home view.</summary>
+    /// <summary>Switches a pane between its file list, its columns view and its Home view,
+    /// and keeps the layout switcher in step (disabled at Home, which has no folder root).</summary>
     private void ApplyPaneMode(PaneState pane)
     {
         var home = pane.IsHome;
+        var columns = !home && pane.Layout == PaneLayout.Columns;
         pane.HomeView.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
-        pane.List.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
+        pane.List.Visibility = !home && !columns ? Visibility.Visible : Visibility.Collapsed;
+        pane.ColumnsView.Visibility = columns ? Visibility.Visible : Visibility.Collapsed;
         pane.FilterRow.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
+        pane.StandardLayoutToggle.IsChecked = pane.Layout == PaneLayout.Standard;
+        pane.ColumnsLayoutToggle.IsChecked = pane.Layout == PaneLayout.Columns;
+        pane.StandardLayoutToggle.IsEnabled = !home;
+        pane.ColumnsLayoutToggle.IsEnabled = !home;
+    }
+
+    // ----- Miller columns -----
+
+    private async void LeftStandardLayout_Click(object sender, RoutedEventArgs e) => await SetPaneLayoutAsync(_left, PaneLayout.Standard);
+    private async void LeftColumnsLayout_Click(object sender, RoutedEventArgs e) => await SetPaneLayoutAsync(_left, PaneLayout.Columns);
+    private async void RightStandardLayout_Click(object sender, RoutedEventArgs e) => await SetPaneLayoutAsync(_right, PaneLayout.Standard);
+    private async void RightColumnsLayout_Click(object sender, RoutedEventArgs e) => await SetPaneLayoutAsync(_right, PaneLayout.Columns);
+
+    /// <summary>Ctrl+Shift+V toggles the active pane between the standard list and columns.</summary>
+    private async void LayoutShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await SetPaneLayoutAsync(_activePane, _activePane.Layout == PaneLayout.Columns ? PaneLayout.Standard : PaneLayout.Columns);
+    }
+
+    private async Task SetPaneLayoutAsync(PaneState pane, PaneLayout layout)
+    {
+        // Columns need a folder root; at Home the switcher is disabled and a
+        // toggle attempt simply leaves the pane exactly as it is.
+        if (pane.IsHome) { ApplyPaneMode(pane); return; }
+        if (pane.Layout == layout) { ApplyPaneMode(pane); return; }
+        pane.Layout = layout;
+        StoreCurrentWorkspaceTab();
+        if (layout == PaneLayout.Columns)
+        {
+            pane.Chain = new ColumnChain(pane.CurrentPath);
+            ApplyPaneMode(pane);
+            RebuildColumns(pane);
+        }
+        else
+        {
+            ClearColumns(pane);
+            ApplyPaneMode(pane);
+            // The standard list still shows the folder the cascade started
+            // from; reload it at the folder the cascade reached, without a
+            // history entry for what is only a layout change.
+            await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+        }
+        await PersistWorkspaceAsync();
+    }
+
+    /// <summary>Keeps the columns view in step with a committed navigation: a
+    /// refresh of the folder the cascade already ends in re-reads the chain in
+    /// place (selections that survive are kept); any other navigation
+    /// re-roots the cascade at the new folder.</summary>
+    private void SyncColumnsAfterNavigation(PaneState pane, string fullPath)
+    {
+        if (pane.Chain is { } chain && string.Equals(chain.CurrentFolderPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            RebuildColumns(pane);
+        else
+        {
+            pane.Chain = new ColumnChain(fullPath);
+            RebuildColumns(pane);
+        }
+    }
+
+    private void RebuildColumns(PaneState pane) => _ = RebuildColumnsAsync(pane);
+
+    private async Task RebuildColumnsAsync(PaneState pane)
+    {
+        if (pane.Chain is not { } chain) return;
+        pane.ColumnsCancellation?.Cancel();
+        pane.ColumnsCancellation?.Dispose();
+        pane.ColumnsCancellation = new CancellationTokenSource();
+        var token = pane.ColumnsCancellation.Token;
+        var generation = ++pane.ColumnsGeneration;
+        ClearColumnsVisual(pane);
+        pane.RebuildingColumns = true;
+        FileEntry? previewEntry = null;
+        try
+        {
+            for (var depth = 0; depth < chain.FolderColumnCount; depth++)
+            {
+                if (chain.FolderPathAtDepth(depth) is not { } folderPath) break;
+                var column = CreateColumn(pane, depth, folderPath);
+                pane.Columns.Add(column);
+                RefreshColumnsPanel(pane);
+                if (!await LoadColumnAsync(pane, column, token)) break;
+                if (token.IsCancellationRequested || generation != pane.ColumnsGeneration) return;
+                var selection = chain.SelectionAtDepth(depth);
+                if (selection is null) continue;
+                if (!column.AllItems.Any(item => string.Equals(item.FullPath, selection.Path, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // The item the chain points at was deleted or renamed
+                    // since the chain was built: drop it and everything
+                    // deeper, and let the pane follow the shorter cascade.
+                    chain.ClearFromDepth(depth);
+                    break;
+                }
+                if (!selection.IsDirectory)
+                    previewEntry = column.AllItems.FirstOrDefault(item => string.Equals(item.FullPath, selection.Path, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        finally
+        {
+            pane.RebuildingColumns = false;
+        }
+        if (token.IsCancellationRequested || generation != pane.ColumnsGeneration) return;
+        if (chain.ShowsPreviewColumn && previewEntry is not null)
+            await ShowPreviewColumnAsync(pane, previewEntry);
+        if (!string.Equals(pane.CurrentPath, chain.CurrentFolderPath, StringComparison.OrdinalIgnoreCase))
+        {
+            pane.CurrentPath = chain.CurrentFolderPath;
+            pane.PathBox.Text = pane.CurrentPath;
+            UpdatePaneHeader(pane);
+        }
+        pane.PendingRevealPath = null;
+        UpdateSelectionStatus(pane);
+    }
+
+    /// <summary>Reads one column's folder through the same directory-read path
+    /// the standard list uses. A read failure is shown inside the column (and
+    /// in the pane/global status) exactly the way the standard list surfaces
+    /// it — never a crash and never a silent blank.</summary>
+    private async Task<bool> LoadColumnAsync(PaneState pane, ColumnViewState column, CancellationToken token)
+    {
+        try
+        {
+            var entries = await Task.Run(() => DirectoryReader.Read(column.FolderPath, token), token);
+            if (token.IsCancellationRequested) return false;
+            column.AllItems = entries;
+            ApplyColumnFilter(pane, column);
+            return true;
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            if (!token.IsCancellationRequested)
+            {
+                column.ErrorBlock.Text = "Could not read this folder · " + ex.Message;
+                column.ErrorBlock.Visibility = Visibility.Visible;
+                column.List.Visibility = Visibility.Collapsed;
+                SetPaneStatus(pane, ex.Message);
+                SetStatus("Could not read folder · " + ex.Message, StatusSeverity.Error);
+            }
+            return false;
+        }
+    }
+
+    /// <summary>Re-filters one column from its full listing with the pane's
+    /// query and sort, then restores the chain's selection (or a pending
+    /// "show location" reveal) in it. Runs under the rebuilding guard so the
+    /// selection changes it makes are not mistaken for user cascades.</summary>
+    private void ApplyColumnFilter(PaneState pane, ColumnViewState column)
+    {
+        var wasRebuilding = pane.RebuildingColumns;
+        pane.RebuildingColumns = true;
+        try
+        {
+            var query = pane.FilterBox.Text.Trim();
+            var matches = DirectoryReader.Filter(column.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
+            column.Items.Clear();
+            foreach (var item in matches) column.Items.Add(item);
+            var selection = pane.Chain?.SelectionAtDepth(column.Depth);
+            if (selection is not null)
+            {
+                var match = column.Items.FirstOrDefault(item => string.Equals(item.FullPath, selection.Path, StringComparison.OrdinalIgnoreCase));
+                if (match is not null && !ReferenceEquals(column.List.SelectedItem, match))
+                    column.List.SelectedItem = match;
+            }
+            else if (pane.PendingRevealPath is { } reveal)
+            {
+                var revealMatch = column.Items.FirstOrDefault(item => string.Equals(item.FullPath, reveal, StringComparison.OrdinalIgnoreCase));
+                if (revealMatch is not null)
+                {
+                    column.List.SelectedItem = revealMatch;
+                    column.List.ScrollIntoView(revealMatch);
+                    pane.PendingRevealPath = null;
+                }
+            }
+        }
+        finally
+        {
+            pane.RebuildingColumns = wasRebuilding;
+        }
+    }
+
+    private ColumnViewState CreateColumn(PaneState pane, int depth, string folderPath)
+    {
+        var errorBlock = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Margin = new Thickness(10),
+            Visibility = Visibility.Collapsed,
+            Foreground = ThemeBrush("MeridianErrorBrush")
+        };
+        var list = new ListView
+        {
+            SelectionMode = ListViewSelectionMode.Single,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Margin = new Thickness(4, 0, 4, 0),
+            ItemTemplate = (DataTemplate)RootGrid.Resources["ColumnItemTemplate"]
+        };
+        var column = new ColumnViewState(folderPath, list, errorBlock) { Depth = depth };
+        list.ItemsSource = column.Items;
+        AutomationProperties.SetName(list, $"Column {depth + 1}, {pane.Name.ToLowerInvariant()} pane: {folderPath}");
+        ToolTipService.SetToolTip(list, folderPath);
+        list.SelectionChanged += (s, e) => _ = HandleColumnSelectionAsync(pane, column);
+        list.KeyDown += async (s, e) => await HandleColumnKeyDownAsync(pane, column, e);
+        list.DoubleTapped += (s, e) => _ = OpenSelectedAsync(pane);
+        list.PointerPressed += (s, e) => SetActivePane(pane);
+        list.ContextFlyout = BuildColumnContextFlyout(pane);
+        var grid = new Grid();
+        grid.Children.Add(list);
+        grid.Children.Add(errorBlock);
+        column.Root = new Border
+        {
+            Width = _columnWidth,
+            BorderBrush = ThemeBrush("MeridianBorderBrush"),
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Child = grid
+        };
+        return column;
+    }
+
+    /// <summary>Builds a column's context menu from the same item handlers the
+    /// standard lists' XAML menus use, with the same Opening-time enable/label
+    /// pass — one operations implementation for both layouts.</summary>
+    private MenuFlyout BuildColumnContextFlyout(PaneState pane)
+    {
+        var isLeftPane = ReferenceEquals(pane, _left);
+        var direction = isLeftPane ? "right" : "left";
+        var copyItem = new MenuFlyoutItem { Text = $"Copy to {direction} pane" };
+        var moveItem = new MenuFlyoutItem { Text = $"Move to {direction} pane" };
+        var renameItem = new MenuFlyoutItem { Text = "Rename" };
+        var propertiesItem = new MenuFlyoutItem { Text = "Properties" };
+        var shelfItem = new MenuFlyoutItem { Text = "Add to Drop Shelf" };
+        var deleteItem = new MenuFlyoutItem { Text = "Delete (Recycle Bin)" };
+        if (isLeftPane)
+        {
+            copyItem.Click += CopyLeftToRight_Click;
+            moveItem.Click += MoveLeftToRight_Click;
+            renameItem.Click += RenameFromLeft_Click;
+            propertiesItem.Click += PropertiesFromLeft_Click;
+            shelfItem.Click += AddToShelfFromLeft_Click;
+            deleteItem.Click += DeleteFromLeft_Click;
+        }
+        else
+        {
+            copyItem.Click += CopyRightToLeft_Click;
+            moveItem.Click += MoveRightToLeft_Click;
+            renameItem.Click += RenameFromRight_Click;
+            propertiesItem.Click += PropertiesFromRight_Click;
+            shelfItem.Click += AddToShelfFromRight_Click;
+            deleteItem.Click += DeleteFromRight_Click;
+        }
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(copyItem);
+        flyout.Items.Add(moveItem);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(renameItem);
+        flyout.Items.Add(propertiesItem);
+        flyout.Items.Add(shelfItem);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(deleteItem);
+        flyout.Opening += (s, e) => UpdateContextMenuItems(pane, isLeftPane, copyItem, moveItem, renameItem, propertiesItem, shelfItem, deleteItem);
+        return flyout;
+    }
+
+    /// <summary>The cascade: a column selection rewrites the chain at that
+    /// depth (deeper columns and the preview are discarded), then either loads
+    /// the selected folder as the next column or, for a file, shows the
+    /// preview column. The pane's current path always follows the deepest
+    /// selected folder; no per-step history is pushed.</summary>
+    private async Task HandleColumnSelectionAsync(PaneState pane, ColumnViewState column)
+    {
+        if (pane.RebuildingColumns || pane.Chain is not { } chain) return;
+        SetActivePane(pane);
+        pane.PendingRevealPath = null;
+        var generation = ++pane.ColumnsGeneration;
+        var selected = column.List.SelectedItem as FileEntry;
+        if (selected is null)
+        {
+            chain.ClearFromDepth(column.Depth);
+            TruncateColumns(pane, column.Depth);
+        }
+        else
+        {
+            chain.Select(column.Depth, selected.FullPath, selected.IsDirectory);
+            TruncateColumns(pane, column.Depth);
+            if (selected.IsDirectory)
+            {
+                var next = CreateColumn(pane, column.Depth + 1, selected.FullPath);
+                pane.Columns.Add(next);
+                RefreshColumnsPanel(pane);
+                ScrollColumnsToEnd(pane);
+                next.ReadCancellation = new CancellationTokenSource();
+                await LoadColumnAsync(pane, next, next.ReadCancellation.Token);
+                if (generation != pane.ColumnsGeneration) return;
+            }
+            else
+            {
+                await ShowPreviewColumnAsync(pane, selected);
+                if (generation != pane.ColumnsGeneration) return;
+            }
+        }
+        pane.CurrentPath = chain.CurrentFolderPath;
+        pane.PathBox.Text = pane.CurrentPath;
+        UpdatePaneHeader(pane);
+        RefreshSidebarSelection();
+        UpdateSelectionStatus(pane);
+        if (ReferenceEquals(_activePane, pane)) RefreshDetailsStrip();
+        _ = _recentsStore.RecordAsync(chain.CurrentFolderPath, isDirectory: true);
+        if (!_restoringWorkspace) await PersistWorkspaceAsync();
+    }
+
+    /// <summary>Column keyboard model: Up/Down stay native to the list;
+    /// Left/Right move focus across columns (Right enters the selected
+    /// folder's column, whose contents the cascade already loaded); Enter,
+    /// Delete, F2 and Space run the same operations as the standard list.</summary>
+    private async Task HandleColumnKeyDownAsync(PaneState pane, ColumnViewState column, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case VirtualKey.Left:
+                if (column.Depth > 0 && column.Depth <= pane.Columns.Count)
+                {
+                    e.Handled = true;
+                    var previous = pane.Columns[column.Depth - 1];
+                    previous.List.Focus(FocusState.Keyboard);
+                    if (previous.List.SelectedItem is FileEntry entry) previous.List.ScrollIntoView(entry);
+                }
+                break;
+            case VirtualKey.Right:
+                if (column.List.SelectedItem is FileEntry { IsDirectory: true } && column.Depth + 1 < pane.Columns.Count)
+                {
+                    e.Handled = true;
+                    pane.Columns[column.Depth + 1].List.Focus(FocusState.Keyboard);
+                }
+                break;
+            case VirtualKey.Enter:
+                e.Handled = true;
+                await OpenSelectedAsync(pane);
+                break;
+            case VirtualKey.Delete:
+                e.Handled = true;
+                await DeleteSelectedAsync(pane);
+                break;
+            case VirtualKey.F2:
+                e.Handled = true;
+                if (pane.SelectionList.SelectedItems.Count == 1) await RenameSelectedAsync(pane);
+                else if (pane.SelectionList.SelectedItems.Count > 1) SetStatus("Select a single item to rename.", StatusSeverity.Warning);
+                break;
+            case VirtualKey.Space:
+            {
+                // Same rule as the standard list: plain Space (no modifiers)
+                // opens the quick preview; Ctrl+Space selection toggling is
+                // left to the list.
+                var ctrlDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+                var shiftDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+                var altDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+                if (!ctrlDown && !shiftDown && !altDown)
+                {
+                    e.Handled = true;
+                    await OpenQuickPreviewAsync(pane);
+                }
+                break;
+            }
+        }
+    }
+
+    /// <summary>Shows the preview column for a selected file, rendered by the
+    /// same preview engine the Preview dialog and quick preview use, with the
+    /// details data the inspector shows one pane over. One previewer, three
+    /// surfaces.</summary>
+    private async Task ShowPreviewColumnAsync(PaneState pane, FileEntry entry)
+    {
+        HidePreviewColumn(pane, refreshPanel: false);
+        pane.PreviewCancellation = new CancellationTokenSource();
+        pane.PreviewLease = new PreviewMediaLease();
+        var panel = new StackPanel { Spacing = 8, Padding = new Thickness(10) };
+        var heading = new TextBlock
+        {
+            Text = entry.Name,
+            FontSize = 14,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("MeridianTextPrimaryBrush")
+        };
+        ToolTipService.SetToolTip(heading, entry.FullPath);
+        panel.Children.Add(heading);
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = panel
+        };
+        pane.PreviewRoot = new Border { Width = PreviewColumnWidth, Child = scroll };
+        RefreshColumnsPanel(pane);
+        ScrollColumnsToEnd(pane);
+        try
+        {
+            await PopulatePreviewPanelAsync(entry, panel, pane.PreviewLease);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+            System.Runtime.InteropServices.COMException or System.Security.SecurityException)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Preview unavailable · " + ex.Message,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ThemeBrush("MeridianErrorBrush")
+            });
+            SetStatus("Preview unavailable · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    private void HidePreviewColumn(PaneState pane, bool refreshPanel = true)
+    {
+        pane.PreviewCancellation?.Cancel();
+        pane.PreviewCancellation?.Dispose();
+        pane.PreviewCancellation = null;
+        pane.PreviewLease?.Dispose();
+        pane.PreviewLease = null;
+        if (pane.PreviewRoot is not null)
+        {
+            pane.PreviewRoot = null;
+            if (refreshPanel) RefreshColumnsPanel(pane);
+        }
+    }
+
+    /// <summary>Drops every column deeper than <paramref name="depth"/> plus
+    /// the preview column, cancelling any read still in flight for them.</summary>
+    private void TruncateColumns(PaneState pane, int depth)
+    {
+        HidePreviewColumn(pane, refreshPanel: false);
+        for (var i = pane.Columns.Count - 1; i >= 0; i--)
+        {
+            if (pane.Columns[i].Depth <= depth) continue;
+            pane.Columns[i].ReadCancellation?.Cancel();
+            pane.Columns[i].ReadCancellation?.Dispose();
+            pane.Columns.RemoveAt(i);
+        }
+        RefreshColumnsPanel(pane);
+    }
+
+    private void ClearColumnsVisual(PaneState pane)
+    {
+        foreach (var column in pane.Columns)
+        {
+            column.ReadCancellation?.Cancel();
+            column.ReadCancellation?.Dispose();
+        }
+        pane.Columns.Clear();
+        HidePreviewColumn(pane, refreshPanel: false);
+        pane.ColumnsPanel.Children.Clear();
+    }
+
+    private void ClearColumns(PaneState pane)
+    {
+        pane.ColumnsCancellation?.Cancel();
+        pane.ColumnsCancellation?.Dispose();
+        pane.ColumnsCancellation = null;
+        pane.Chain = null;
+        pane.PendingRevealPath = null;
+        ClearColumnsVisual(pane);
+    }
+
+    /// <summary>Rebuilds the columns panel's children from the column states:
+    /// a resize splitter between each pair of folder columns, then the
+    /// preview column (unsplittered, fixed width) when one is showing.</summary>
+    private void RefreshColumnsPanel(PaneState pane)
+    {
+        pane.ColumnsPanel.Children.Clear();
+        for (var i = 0; i < pane.Columns.Count; i++)
+        {
+            if (i > 0) pane.ColumnsPanel.Children.Add(CreateColumnSplitter());
+            if (pane.Columns[i].Root is { } root) pane.ColumnsPanel.Children.Add(root);
+        }
+        if (pane.PreviewRoot is { } preview) pane.ColumnsPanel.Children.Add(preview);
+    }
+
+    private void ScrollColumnsToEnd(PaneState pane)
+    {
+        pane.ColumnsPanel.UpdateLayout();
+        pane.ColumnsView.ChangeView(pane.ColumnsView.ScrollableWidth, null, null);
+    }
+
+    private Border CreateColumnSplitter()
+    {
+        var splitter = new Border
+        {
+            Width = 6,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+        };
+        ToolTipService.SetToolTip(splitter, "Drag to resize the columns");
+        AutomationProperties.SetName(splitter, "Resize columns");
+        splitter.PointerPressed += ColumnSplitter_PointerPressed;
+        splitter.PointerMoved += ColumnSplitter_PointerMoved;
+        splitter.PointerReleased += ColumnSplitter_PointerReleased;
+        splitter.PointerCaptureLost += ColumnSplitter_PointerCaptureLost;
+        return splitter;
+    }
+
+    private void ColumnSplitter_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _columnSplitterDragging = true;
+        _columnDragStartWidth = _columnWidth;
+        _columnDragStartX = e.GetCurrentPoint(RootGrid).Position.X;
+        (sender as UIElement)?.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void ColumnSplitter_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_columnSplitterDragging) return;
+        var x = e.GetCurrentPoint(RootGrid).Position.X;
+        SetColumnWidth(_columnDragStartWidth + (x - _columnDragStartX));
+    }
+
+    private void ColumnSplitter_PointerReleased(object sender, PointerRoutedEventArgs e) => EndColumnSplitterDrag();
+
+    private void ColumnSplitter_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndColumnSplitterDrag();
+
+    private void EndColumnSplitterDrag()
+    {
+        if (!_columnSplitterDragging) return;
+        _columnSplitterDragging = false;
+        _ = PersistSettingsAsync();
+    }
+
+    /// <summary>Applies the shared column width to every live column in both
+    /// panes; the value is clamped here and persisted when the drag ends.</summary>
+    private void SetColumnWidth(double width)
+    {
+        _columnWidth = Math.Clamp(width, MinimumColumnWidth, MaximumColumnWidth);
+        foreach (var pane in new[] { _left, _right })
+            foreach (var column in pane.Columns)
+                if (column.Root is { } root) root.Width = _columnWidth;
     }
 
     private void BuildSidebar()
@@ -826,6 +1385,18 @@ public sealed partial class MainWindow : Window
     {
         if (pane.IsHome) return;
         var query = pane.FilterBox.Text.Trim();
+        if (pane.Layout == PaneLayout.Columns)
+        {
+            // The standard items mirror the root folder's listing; every
+            // visible column re-filters from its own full listing with the
+            // same query and sort as the standard list.
+            pane.Items.Clear();
+            foreach (var item in DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false))
+                pane.Items.Add(item);
+            foreach (var column in pane.Columns) ApplyColumnFilter(pane, column);
+            UpdateSelectionStatus(pane);
+            return;
+        }
         var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
 
         pane.Items.Clear();
@@ -887,7 +1458,7 @@ public sealed partial class MainWindow : Window
     private async void InspectZip_Click(object sender, RoutedEventArgs e)
     {
         if (_zipInspectionOpen || _zipCreationBusy || _zipExtractionBusy || _previewDialogOpen) return;
-        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
+        if (_activePane.SelectionList.SelectedItem is not FileEntry selected || selected.IsDirectory ||
             Meridian.Core.Archives.ArchiveCapabilities.ForPath(selected.FullPath)?.CanList != true)
         {
             SetStatus("Select a supported archive to inspect.", StatusSeverity.Warning);
@@ -932,7 +1503,7 @@ public sealed partial class MainWindow : Window
     private async void ExtractZip_Click(object sender, RoutedEventArgs e)
     {
         if (_zipExtractionBusy || _zipCreationBusy || _zipInspectionOpen || _previewDialogOpen) return;
-        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory ||
+        if (_activePane.SelectionList.SelectedItem is not FileEntry selected || selected.IsDirectory ||
             Meridian.Core.Archives.ArchiveCapabilities.ForPath(selected.FullPath)?.CanExtract != true)
         {
             SetStatus("Select a supported archive to extract.", StatusSeverity.Warning);
@@ -1004,12 +1575,12 @@ public sealed partial class MainWindow : Window
     private async void CreateZip_Click(object sender, RoutedEventArgs e)
     {
         if (_zipCreationBusy || _zipExtractionBusy || _zipInspectionOpen || _previewDialogOpen) return;
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        if (_activePane.SelectionList.SelectedItem is not FileEntry selected)
         {
             SetStatus("Select files or folders to archive.", StatusSeverity.Warning);
             return;
         }
-        var sources = _activePane.List.SelectedItems.OfType<FileEntry>().ToArray();
+        var sources = _activePane.SelectionList.SelectedItems.OfType<FileEntry>().ToArray();
         if (sources.Length == 0)
         {
             SetStatus("Select at least one file or folder to archive.", StatusSeverity.Warning);
@@ -1138,7 +1709,7 @@ public sealed partial class MainWindow : Window
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
     {
         if (_previewDialogOpen) return;
-        if (_activePane.List.SelectedItem is not FileEntry selected || selected.IsDirectory)
+        if (_activePane.SelectionList.SelectedItem is not FileEntry selected || selected.IsDirectory)
         {
             SetStatus("Select a file to preview.", StatusSeverity.Warning);
             return;
@@ -1271,8 +1842,14 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenSelectedAsync(PaneState pane)
     {
-        if (pane.List.SelectedItem is not FileEntry selected) return;
-        if (selected.IsDirectory) { await NavigateAsync(pane, selected.FullPath); return; }
+        if (pane.SelectionList.SelectedItem is not FileEntry selected) return;
+        if (selected.IsDirectory)
+        {
+            // In the columns layout a selected folder is already cascaded into
+            // its own column; there is nothing further to open.
+            if (pane.Layout == PaneLayout.Columns) return;
+            await NavigateAsync(pane, selected.FullPath); return;
+        }
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = selected.FullPath, UseShellExecute = true });
@@ -1527,7 +2104,7 @@ public sealed partial class MainWindow : Window
 
     private async Task RenameSelectedAsync(PaneState pane)
     {
-        if (pane.List.SelectedItem is not FileEntry selected)
+        if (pane.SelectionList.SelectedItem is not FileEntry selected)
         {
             SetStatus("Select a file or folder to rename.", StatusSeverity.Warning);
             return;
@@ -1575,7 +2152,7 @@ public sealed partial class MainWindow : Window
 
     private async Task PropertiesSelectedAsync(PaneState pane)
     {
-        if (pane.List.SelectedItem is not FileEntry selected)
+        if (pane.SelectionList.SelectedItem is not FileEntry selected)
         {
             SetStatus("Select a file or folder to view its properties.", StatusSeverity.Warning);
             return;
@@ -2110,10 +2687,15 @@ public sealed partial class MainWindow : Window
             SetStatus("The selected item's parent folder is unavailable.", StatusSeverity.Warning);
             return;
         }
+        _activePane.PendingRevealPath = selected;
         await NavigateAsync(_activePane, parent);
-        var match = _activePane.Items.FirstOrDefault(item =>
-            string.Equals(item.FullPath, selected, StringComparison.OrdinalIgnoreCase));
-        if (match is not null) _activePane.List.SelectedItem = match;
+        if (_activePane.Layout == PaneLayout.Standard)
+        {
+            var match = _activePane.Items.FirstOrDefault(item =>
+                string.Equals(item.FullPath, selected, StringComparison.OrdinalIgnoreCase));
+            if (match is not null) _activePane.List.SelectedItem = match;
+            _activePane.PendingRevealPath = null;
+        }
         SetStatus($"Showing Drop Shelf item · {Path.GetFileName(selected)}");
     }
 
@@ -2323,6 +2905,9 @@ public sealed partial class MainWindow : Window
         // containers, so the template picks up the new margin immediately.
         if (LeftItems.ItemsSource is not null) { LeftItems.ItemsSource = null; LeftItems.ItemsSource = _left.Items; }
         if (RightItems.ItemsSource is not null) { RightItems.ItemsSource = null; RightItems.ItemsSource = _right.Items; }
+        foreach (var pane in new[] { _left, _right })
+            foreach (var column in pane.Columns)
+                if (column.List.ItemsSource is not null) { column.List.ItemsSource = null; column.List.ItemsSource = column.Items; }
     }
 
     private void ApplyPaneSplit()
@@ -2657,7 +3242,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static List<FileEntry> GetSelectedEntries(PaneState pane) =>
-        pane.List.SelectedItems.OfType<FileEntry>().ToList();
+        pane.SelectionList.SelectedItems.OfType<FileEntry>().ToList();
 
     private void LeftItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -2692,14 +3277,20 @@ public sealed partial class MainWindow : Window
                 : $"{selected.Count:N0} selected");
             return;
         }
+        // In the columns layout the counts describe the deepest column (the
+        // folder the cascade currently ends in); elsewhere they describe the
+        // pane's own listing.
+        var allItems = pane.Layout == PaneLayout.Columns && pane.Columns.Count > 0
+            ? pane.Columns[^1].AllItems
+            : pane.AllItems;
         var query = pane.FilterBox.Text.Trim();
         if (string.IsNullOrEmpty(query))
         {
-            SetPaneStatus(pane, $"{pane.AllItems.Count:N0} items");
+            SetPaneStatus(pane, $"{allItems.Count:N0} items");
             return;
         }
-        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
-        SetPaneStatus(pane, $"{matches.Count:N0} of {pane.AllItems.Count:N0} items · filtered");
+        var matches = DirectoryReader.Filter(allItems, query, pane.SortField, pane.Descending, includeFullPath: false);
+        SetPaneStatus(pane, $"{matches.Count:N0} of {allItems.Count:N0} items · filtered");
     }
 
     private async void LeftItems_KeyDown(object sender, KeyRoutedEventArgs e) => await HandleListKeyDownAsync(_left, e);
@@ -2737,8 +3328,8 @@ public sealed partial class MainWindow : Window
                 break;
             case VirtualKey.F2:
                 e.Handled = true;
-                if (pane.List.SelectedItems.Count == 1) await RenameSelectedAsync(pane);
-                else if (pane.List.SelectedItems.Count > 1) SetStatus("Select a single item to rename.", StatusSeverity.Warning);
+                if (pane.SelectionList.SelectedItems.Count == 1) await RenameSelectedAsync(pane);
+                else if (pane.SelectionList.SelectedItems.Count > 1) SetStatus("Select a single item to rename.", StatusSeverity.Warning);
                 break;
             case VirtualKey.Enter:
                 e.Handled = true;
@@ -2752,14 +3343,18 @@ public sealed partial class MainWindow : Window
 
     private void UpdateContextMenu(PaneState pane, bool isLeftPane)
     {
-        var copyItem = isLeftPane ? LeftCopyMenuItem : RightCopyMenuItem;
-        var moveItem = isLeftPane ? LeftMoveMenuItem : RightMoveMenuItem;
-        var renameItem = isLeftPane ? LeftRenameMenuItem : RightRenameMenuItem;
-        var propertiesItem = isLeftPane ? LeftPropertiesMenuItem : RightPropertiesMenuItem;
-        var shelfItem = isLeftPane ? LeftShelfMenuItem : RightShelfMenuItem;
-        var deleteItem = isLeftPane ? LeftDeleteMenuItem : RightDeleteMenuItem;
+        if (isLeftPane)
+            UpdateContextMenuItems(pane, isLeftPane, LeftCopyMenuItem, LeftMoveMenuItem, LeftRenameMenuItem, LeftPropertiesMenuItem, LeftShelfMenuItem, LeftDeleteMenuItem);
+        else
+            UpdateContextMenuItems(pane, isLeftPane, RightCopyMenuItem, RightMoveMenuItem, RightRenameMenuItem, RightPropertiesMenuItem, RightShelfMenuItem, RightDeleteMenuItem);
+    }
+
+    /// <summary>Shared by the standard lists' XAML menus and the code-built column
+    /// menus, so both layouts enable and label the same operations identically.</summary>
+    private void UpdateContextMenuItems(PaneState pane, bool isLeftPane, MenuFlyoutItem copyItem, MenuFlyoutItem moveItem, MenuFlyoutItem renameItem, MenuFlyoutItem propertiesItem, MenuFlyoutItem shelfItem, MenuFlyoutItem deleteItem)
+    {
         var other = isLeftPane ? _right : _left;
-        var count = pane.List.SelectedItems.Count;
+        var count = pane.SelectionList.SelectedItems.Count;
         var hasDestination = !string.IsNullOrWhiteSpace(other.CurrentPath) && !other.IsHome;
         var direction = isLeftPane ? "right" : "left";
         copyItem.IsEnabled = count > 0 && hasDestination && _copyCancellation is null;
@@ -3348,7 +3943,7 @@ public sealed partial class MainWindow : Window
     private async Task OpenQuickPreviewAsync(PaneState pane)
     {
         if (_quickPreviewPane is not null) return;
-        if (pane.List.SelectedItem is not FileEntry entry)
+        if (pane.SelectionList.SelectedItem is not FileEntry entry)
         {
             SetStatus("Select an item to preview.", StatusSeverity.Warning);
             return;
@@ -3372,9 +3967,9 @@ public sealed partial class MainWindow : Window
         QuickPreviewPanel.Children.Clear();
         QuickPreviewTitle.Text = entry.Name;
         ToolTipService.SetToolTip(QuickPreviewTitle, entry.FullPath);
-        var index = pane.Items.IndexOf(entry);
-        QuickPreviewPosition.Text = pane.Items.Count > 0 && index >= 0
-            ? $"Item {index + 1:N0} of {pane.Items.Count:N0} · {pane.CurrentPath}"
+        var index = pane.SelectionItems.IndexOf(entry);
+        QuickPreviewPosition.Text = pane.SelectionItems.Count > 0 && index >= 0
+            ? $"Item {index + 1:N0} of {pane.SelectionItems.Count:N0} · {pane.CurrentPath}"
             : pane.CurrentPath;
         try
         {
@@ -3428,14 +4023,14 @@ public sealed partial class MainWindow : Window
     private async Task StepQuickPreviewAsync(int delta)
     {
         if (_quickPreviewPane is not { } pane) return;
-        if (pane.Items.Count == 0) return;
-        var current = pane.List.SelectedItem as FileEntry;
-        var index = current is null ? -1 : pane.Items.IndexOf(current);
-        var next = Math.Clamp(index + delta, 0, pane.Items.Count - 1);
+        if (pane.SelectionItems.Count == 0) return;
+        var current = pane.SelectionList.SelectedItem as FileEntry;
+        var index = current is null ? -1 : pane.SelectionItems.IndexOf(current);
+        var next = Math.Clamp(index + delta, 0, pane.SelectionItems.Count - 1);
         if (next == index) return;
-        var entry = pane.Items[next];
-        pane.List.SelectedIndex = next;
-        pane.List.ScrollIntoView(entry);
+        var entry = pane.SelectionItems[next];
+        pane.SelectionList.SelectedIndex = next;
+        pane.SelectionList.ScrollIntoView(entry);
         await ShowQuickPreviewItemAsync(pane, entry);
     }
 
@@ -3448,7 +4043,7 @@ public sealed partial class MainWindow : Window
         _quickPreviewPane = null;
         _quickPreviewEntry = null;
         QuickPreviewOverlay.Visibility = Visibility.Collapsed;
-        pane.List.Focus(FocusState.Programmatic);
+        pane.SelectionList.Focus(FocusState.Programmatic);
     }
 
     private async void QuickPreviewOverlay_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -3475,6 +4070,13 @@ public sealed partial class MainWindow : Window
 
     private void QuickPreviewCloseButton_Click(object sender, RoutedEventArgs e) => CloseQuickPreview();
     private enum OrganizeSection { None, Bookmarks, Shelf }
+
+    private enum PaneLayout { Standard, Columns }
+
+    private static PaneLayout ParsePaneLayout(string? value) =>
+        string.Equals(value, nameof(PaneLayout.Columns), StringComparison.OrdinalIgnoreCase)
+            ? PaneLayout.Columns
+            : PaneLayout.Standard;
 
     private enum StatusSeverity { Info, Success, Warning, Error }
 
@@ -3562,14 +4164,16 @@ public sealed partial class MainWindow : Window
         finally { _timeVaultBusy = false; }
     }
 
-    private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
+    private sealed class WorkspaceTab(string name, string leftPath, string rightPath, PaneLayout leftLayout = PaneLayout.Standard, PaneLayout rightLayout = PaneLayout.Standard)
     {
         public string Name { get; } = name;
         public string LeftPath { get; set; } = leftPath;
         public string RightPath { get; set; } = rightPath;
+        public PaneLayout LeftLayout { get; set; } = leftLayout;
+        public PaneLayout RightLayout { get; set; } = rightLayout;
     }
 
-    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel)
+    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel, ScrollViewer columnsView, StackPanel columnsPanel, ToggleButton standardLayoutToggle, ToggleButton columnsLayoutToggle)
     {
         public string Name { get; } = name;
         public TextBox PathBox { get; } = pathBox;
@@ -3590,5 +4194,76 @@ public sealed partial class MainWindow : Window
 
         /// <summary>True while the pane shows the Home page instead of a folder.</summary>
         public bool IsHome => string.Equals(CurrentPath, HomePath, StringComparison.Ordinal);
+
+        // ----- Miller columns state (unused while Layout is Standard) -----
+
+        public ScrollViewer ColumnsView { get; } = columnsView;
+        public StackPanel ColumnsPanel { get; } = columnsPanel;
+        public ToggleButton StandardLayoutToggle { get; } = standardLayoutToggle;
+        public ToggleButton ColumnsLayoutToggle { get; } = columnsLayoutToggle;
+
+        /// <summary>Which layout the pane renders: the standard list or Miller columns.</summary>
+        public PaneLayout Layout { get; set; } = PaneLayout.Standard;
+
+        /// <summary>The column chain the columns view renders; null outside the columns layout.</summary>
+        public ColumnChain? Chain { get; set; }
+
+        /// <summary>The live columns, in depth order (index == depth).</summary>
+        public List<ColumnViewState> Columns { get; } = [];
+
+        /// <summary>True while columns are being rebuilt or re-filtered, so the
+        /// selection changes that work causes are not mistaken for user cascades.</summary>
+        public bool RebuildingColumns { get; set; }
+
+        /// <summary>Bumped whenever columns are rebuilt or a cascade starts, so a
+        /// stale asynchronous column load can tell it has been superseded.</summary>
+        public int ColumnsGeneration { get; set; }
+
+        public CancellationTokenSource? ColumnsCancellation { get; set; }
+        public Border? PreviewRoot { get; set; }
+        public PreviewMediaLease? PreviewLease { get; set; }
+        public CancellationTokenSource? PreviewCancellation { get; set; }
+
+        /// <summary>An item path a "show location" reveal wants selected in
+        /// whichever column lists it, once that column has loaded.</summary>
+        public string? PendingRevealPath { get; set; }
+
+        /// <summary>The column that owns the pane's selection in the columns
+        /// layout: the deepest column with a selection, falling back to the
+        /// deepest column (whose empty selection simply reads as no selection).</summary>
+        public ColumnViewState? SelectionColumn
+        {
+            get
+            {
+                for (var i = Columns.Count - 1; i >= 0; i--)
+                    if (Columns[i].List.SelectedItem is not null) return Columns[i];
+                return Columns.Count > 0 ? Columns[^1] : null;
+            }
+        }
+
+        /// <summary>The list operations should read the selection from: the
+        /// standard list, or the selection-owning column in the columns layout.
+        /// Every operation handler goes through here, so both layouts share one
+        /// implementation of copy/move/delete/rename/properties/preview.</summary>
+        public ListView SelectionList => Layout == PaneLayout.Columns && SelectionColumn is { } column ? column.List : List;
+
+        /// <summary>The item collection matching <see cref="SelectionList"/>,
+        /// used by the quick preview for position and stepping.</summary>
+        public ObservableCollection<FileEntry> SelectionItems => Layout == PaneLayout.Columns && SelectionColumn is { } column ? column.Items : Items;
+    }
+
+    /// <summary>One live Miller column: the folder it lists, its list control,
+    /// and its own read state, kept apart from the pure <see cref="ColumnChain"/>
+    /// model so the model stays UI-free.</summary>
+    private sealed class ColumnViewState(string folderPath, ListView list, TextBlock errorBlock)
+    {
+        public string FolderPath { get; } = folderPath;
+        public ListView List { get; } = list;
+        public TextBlock ErrorBlock { get; } = errorBlock;
+        public int Depth { get; set; }
+        public Border? Root { get; set; }
+        public ObservableCollection<FileEntry> Items { get; } = [];
+        public IReadOnlyList<FileEntry> AllItems { get; set; } = Array.Empty<FileEntry>();
+        public CancellationTokenSource? ReadCancellation { get; set; }
     }
 }

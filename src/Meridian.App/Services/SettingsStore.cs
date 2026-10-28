@@ -89,7 +89,9 @@ internal sealed class SettingsStore
 /// DetailsStripVisible records whether the details inspector beside the panes is
 /// shown; files written before it existed read as hidden. SidebarVisible records
 /// whether the navigation sidebar is shown; it defaults to true here so files
-/// written before the sidebar existed read as shown.
+/// written before the sidebar existed read as shown. ColumnWidth is the shared
+/// Miller-column width in device-independent units; files written before it
+/// existed read as 0, which the window treats as "use the default width".
 /// </summary>
 internal sealed record SettingsSnapshot(
     string? Theme = null,
@@ -101,4 +103,5 @@ internal sealed record SettingsSnapshot(
     string? AccentPreset = null,
     string? AccentCustomColor = null,
     bool DetailsStripVisible = false,
-    bool SidebarVisible = true);
+    bool SidebarVisible = true,
+    double ColumnWidth = 0);

@@ -5,6 +5,10 @@ namespace Meridian.Services;
 /// <summary>
 /// Persists pane paths, bookmark labels/paths, paired tab names/paths and the active tab index.
 /// State is stored in the user's local application data directory; the in-memory shelf is excluded.
+/// A tab also carries each pane's layout name ("Standard" or "Columns"); layout
+/// names are deliberately not validated — an unrecognised name (written by a
+/// newer build) reads as Standard in the window instead of invalidating the
+/// whole workspace file.
 /// </summary>
 internal sealed class WorkspaceStore
 {
@@ -97,6 +101,6 @@ internal sealed class WorkspaceStore
 
 internal sealed record WorkspaceSnapshot(string? LeftPath, string? RightPath, BookmarkSnapshot[]? Bookmarks = null, WorkspaceTabSnapshot[]? Tabs = null, int ActiveTabIndex = 0);
 
-internal sealed record WorkspaceTabSnapshot(string Name, string? LeftPath, string? RightPath);
+internal sealed record WorkspaceTabSnapshot(string Name, string? LeftPath, string? RightPath, string? LeftLayout = null, string? RightLayout = null);
 
 internal sealed record BookmarkSnapshot(string Name, string Path);
