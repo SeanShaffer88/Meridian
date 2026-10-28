@@ -72,15 +72,16 @@ public sealed record AccentPreset(string Id, string Name, AccentColor Color);
 public static class AccentPalette
 {
     /// <summary>The light theme's panel surface; light variants are derived against it.</summary>
-    public static AccentColor LightPanelReference { get; } = new(0xE4, 0xE4, 0xE4);
+    public static AccentColor LightPanelReference { get; } = new(0xC7, 0xC4, 0xBF);
 
-    public const string DefaultPresetId = "Red";
+    public const string DefaultPresetId = "Sky";
 
-    /// <summary>The brand accent: the red preset, also the fallback for every invalid choice.</summary>
-    public static AccentColor DefaultColor { get; } = new(0xF0, 0x44, 0x44);
+    /// <summary>The shipped default accent: the sky-blue preset, also the fallback for every invalid choice.</summary>
+    public static AccentColor DefaultColor { get; } = new(0x4C, 0xC2, 0xFF);
 
     public static IReadOnlyList<AccentPreset> Presets { get; } =
     [
+        new("Sky", "Sky", new AccentColor(0x4C, 0xC2, 0xFF)),
         new("Red", "Red", new AccentColor(0xF0, 0x44, 0x44)),
         new("Orange", "Orange", new AccentColor(0xF0, 0x7D, 0x2B)),
         new("Amber", "Amber", new AccentColor(0xF5, 0xB8, 0x3D)),
@@ -119,7 +120,7 @@ public static class AccentPalette
     /// accent wins in FollowWindows mode (used as-is in both themes, matching
     /// how Windows itself presents it); a valid custom colour beats the
     /// preset fallback; an unknown preset or unreadable custom value falls
-    /// back to the brand red. In the light theme, preset and custom colours
+    /// back to the default sky blue. In the light theme, preset and custom colours
     /// are replaced by their derived light variant.
     /// </summary>
     public static AccentColor Resolve(AccentMode mode, string? presetId, string? customHex, bool lightTheme, AccentColor? windowsAccent)

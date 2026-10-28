@@ -5,15 +5,50 @@ namespace Meridian.Core.Tests;
 public sealed class AccentPaletteTests
 {
     [Fact]
-    public void Presets_AreTheDocumentedRow_WithRedDefaultFirst()
+    public void Presets_AreTheDocumentedRow_WithSkyDefaultFirst()
     {
-        Assert.Equal(8, AccentPalette.Presets.Count);
+        Assert.Equal(9, AccentPalette.Presets.Count);
         Assert.Equal(AccentPalette.Presets.Count, AccentPalette.Presets.Select(preset => preset.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         var first = AccentPalette.Presets[0];
         Assert.Equal(AccentPalette.DefaultPresetId, first.Id);
-        Assert.Equal("Red", first.Name);
-        Assert.Equal(new AccentColor(0xF0, 0x44, 0x44), first.Color);
+        Assert.Equal("Sky", first.Name);
+        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF), first.Color);
         Assert.Equal(first.Color, AccentPalette.DefaultColor);
+        // The previous default stays available as an ordinary preset, so a
+        // saved "Red" choice keeps meaning exactly what it meant before.
+        var red = AccentPalette.FindPreset("Red");
+        Assert.NotNull(red);
+        Assert.Equal(new AccentColor(0xF0, 0x44, 0x44), red.Color);
+        // The older blue preset also keeps its colour; the new sky blue is a
+        // separate preset, not a redefinition of a saved choice.
+        var blue = AccentPalette.FindPreset("Blue");
+        Assert.NotNull(blue);
+        Assert.Equal(new AccentColor(0x3D, 0x9B, 0xE9), blue.Color);
+    }
+
+    [Fact]
+    public void Resolve_NoSavedChoice_UsesTheSkyDefault()
+    {
+        // A user who never picked an accent (no preset id stored) gets the
+        // shipped sky-blue default in the dark theme and its derived variant
+        // in the light theme.
+        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF),
+            AccentPalette.Resolve(AccentMode.Preset, null, null, lightTheme: false, windowsAccent: null));
+        Assert.Equal(AccentPalette.DeriveLightVariant(new AccentColor(0x4C, 0xC2, 0xFF)),
+            AccentPalette.Resolve(AccentMode.Preset, null, null, lightTheme: true, windowsAccent: null));
+    }
+
+    [Fact]
+    public void Resolve_SavedChoices_AreUnchangedByTheNewDefault()
+    {
+        // Saved preset choices resolve exactly as before the default changed.
+        Assert.Equal(new AccentColor(0xF0, 0x44, 0x44),
+            AccentPalette.Resolve(AccentMode.Preset, "Red", null, lightTheme: false, windowsAccent: null));
+        Assert.Equal(new AccentColor(0x3D, 0x9B, 0xE9),
+            AccentPalette.Resolve(AccentMode.Preset, "Blue", null, lightTheme: false, windowsAccent: null));
+        // A saved custom colour still beats every preset.
+        Assert.Equal(new AccentColor(0x11, 0x22, 0x33),
+            AccentPalette.Resolve(AccentMode.Custom, "Sky", "#112233", lightTheme: false, windowsAccent: null));
     }
 
     [Fact]
@@ -80,7 +115,7 @@ public sealed class AccentPaletteTests
     }
 
     [Fact]
-    public void Resolve_UnknownPreset_FallsBackToBrandRed()
+    public void Resolve_UnknownPreset_FallsBackToTheDefault()
     {
         Assert.Equal(AccentPalette.DefaultColor,
             AccentPalette.Resolve(AccentMode.Preset, "NoSuchPreset", null, lightTheme: false, windowsAccent: null));
@@ -89,7 +124,7 @@ public sealed class AccentPaletteTests
     }
 
     [Fact]
-    public void Resolve_Custom_BeatsPreset_AndInvalidCustomFallsBackToBrandRed()
+    public void Resolve_Custom_BeatsPreset_AndInvalidCustomFallsBackToTheDefault()
     {
         var resolved = AccentPalette.Resolve(AccentMode.Custom, "Blue", "#112233", lightTheme: false, windowsAccent: null);
         Assert.Equal(new AccentColor(0x11, 0x22, 0x33), resolved);
@@ -117,11 +152,11 @@ public sealed class AccentPaletteTests
     }
 
     [Fact]
-    public void DeriveLightVariant_BrandRed_MatchesTheLightThemeDictionaryValue()
+    public void DeriveLightVariant_DefaultSky_MatchesTheLightThemeDictionaryValue()
     {
         // App.xaml's Light dictionary carries this same derived value; the two
         // must not drift apart.
-        Assert.Equal(new AccentColor(0xBF, 0x0F, 0x0F), AccentPalette.DeriveLightVariant(AccentPalette.DefaultColor));
+        Assert.Equal(new AccentColor(0x00, 0x4D, 0x75), AccentPalette.DeriveLightVariant(AccentPalette.DefaultColor));
     }
 
     [Fact]

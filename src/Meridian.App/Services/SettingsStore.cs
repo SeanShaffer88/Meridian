@@ -19,7 +19,7 @@ internal enum DensityPreference
 /// Persists user interface preferences locally, beside the workspace store.
 /// The file is stored in the user's local application data directory. A missing
 /// or unreadable file yields the defaults, which reproduce the pre-settings look:
-/// dark theme, comfortable density, the red accent preset, centered pane split.
+/// dark theme, comfortable density, the sky-blue accent preset, centered pane split.
 /// </summary>
 internal sealed class SettingsStore
 {
@@ -86,8 +86,10 @@ internal sealed class SettingsStore
 /// written before the accent choice existed carry only FollowWindowsAccent,
 /// which AccentPalette.ParseMode still honours; the flag is kept in sync on
 /// save so an older build reading the file keeps the follow-Windows choice.
-/// DetailsStripVisible records whether the details strip under the panes is
-/// shown; files written before it existed read as hidden.
+/// DetailsStripVisible records whether the details inspector beside the panes is
+/// shown; files written before it existed read as hidden. SidebarVisible records
+/// whether the navigation sidebar is shown; it defaults to true here so files
+/// written before the sidebar existed read as shown.
 /// </summary>
 internal sealed record SettingsSnapshot(
     string? Theme = null,
@@ -98,4 +100,5 @@ internal sealed record SettingsSnapshot(
     string? AccentMode = null,
     string? AccentPreset = null,
     string? AccentCustomColor = null,
-    bool DetailsStripVisible = false);
+    bool DetailsStripVisible = false,
+    bool SidebarVisible = true);

@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:Meridian.Models"
     Title="Meridian">
-  <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+  <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
     <Grid.KeyboardAccelerators>
       <KeyboardAccelerator Key="F5" Invoked="RefreshShortcut_Invoked" />
       <KeyboardAccelerator Key="F6" Invoked="SwitchPaneShortcut_Invoked" />
@@ -22,8 +22,9 @@
       <KeyboardAccelerator Key="D" Modifiers="Control,Shift" Invoked="DetailsStripShortcut_Invoked" />
       <KeyboardAccelerator Key="Escape" Invoked="CancelCopyShortcut_Invoked" />
     </Grid.KeyboardAccelerators>
-    <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}">
-      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+    <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+      <Button Width="36" Height="36" Padding="0" VerticalAlignment="Center" Click="SidebarToggle_Click" ToolTipService.ToolTip="Show or hide the navigation sidebar" AutomationProperties.Name="Toggle navigation sidebar"><SymbolIcon Symbol="GlobalNavigationButton" /></Button>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <Border Width="32" Height="32" CornerRadius="{StaticResource MeridianCardCornerRadius}" Background="{ThemeResource MeridianAccentBrush}">
           <FontIcon Glyph="&#xE8A5;" FontSize="18" Foreground="{ThemeResource MeridianOnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
@@ -78,7 +79,7 @@
             <MenuFlyoutItem Text="Save Capsule" Click="SaveCapsule_Click" ToolTipService.ToolTip="Save current shelf path references locally; file contents are not copied" />
             <MenuFlyoutItem Text="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review locally saved task references, including unavailable paths" />
             <MenuFlyoutSeparator />
-            <ToggleMenuFlyoutItem x:Name="DetailsStripMenuItem" Text="Details strip" Click="DetailsStripMenuItem_Click" ToolTipService.ToolTip="Show or hide the details strip under the panes (Ctrl+Shift+D)" />
+            <ToggleMenuFlyoutItem x:Name="DetailsStripMenuItem" Text="Details panel" Click="DetailsStripMenuItem_Click" ToolTipService.ToolTip="Show or hide the details panel beside the panes (Ctrl+Shift+D)" />
             <MenuFlyoutSeparator />
             <MenuFlyoutItem Text="Settings" Click="Settings_Click" ToolTipService.ToolTip="Theme, density, and accent color preferences">
               <MenuFlyoutItem.Icon><SymbolIcon Symbol="Setting" /></MenuFlyoutItem.Icon>
@@ -120,7 +121,19 @@
         <ComboBox x:Name="ShelfItemsBox" Grid.Column="8" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" AutomationProperties.Name="Drop Shelf items" />
       </Grid>
     </Grid>
-    <Grid x:Name="WorkAreaGrid" Grid.Row="4" Margin="{StaticResource MeridianWorkAreaMargin}" ColumnSpacing="10">
+    <Grid Grid.Row="4" ColumnDefinitions="Auto,*,Auto">
+      <Grid x:Name="SidebarPanel" Grid.Column="0" Width="212" Background="{ThemeResource MeridianPanelBrush}" BorderBrush="{ThemeResource MeridianBorderBrush}" BorderThickness="0,0,1,0" RowDefinitions="*,Auto">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="SidebarContent" Spacing="2" Padding="8" />
+        </ScrollViewer>
+        <Button Grid.Row="1" Margin="8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="Settings_Click" ToolTipService.ToolTip="Theme, density, and accent color preferences" AutomationProperties.Name="Settings">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <SymbolIcon Symbol="Setting" />
+            <TextBlock Text="Settings" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </Grid>
+      <Grid x:Name="WorkAreaGrid" Grid.Column="1" Margin="{StaticResource MeridianWorkAreaMargin}" ColumnSpacing="10">
       <Grid.ColumnDefinitions>
         <ColumnDefinition x:Name="LeftPaneColumn" Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -138,7 +151,7 @@
           <Button Click="LeftBack_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Back" AutomationProperties.Name="Back, left pane"><SymbolIcon Symbol="Back" /></Button><Button Grid.Column="1" Click="LeftForward_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Forward, left pane"><SymbolIcon Symbol="Forward" /></Button><Button Grid.Column="2" Click="LeftUp_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Up" AutomationProperties.Name="Up, left pane"><SymbolIcon Symbol="Up" /></Button>
           <TextBox x:Name="LeftPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="LeftPath_KeyDown" AutomationProperties.Name="Folder path, left pane" />
         </Grid>
-        <Grid Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+        <Grid x:Name="LeftFilterRow" Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
           <TextBox x:Name="LeftFilter" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" AutomationProperties.Name="Filter, left pane" />
           <ComboBox x:Name="LeftSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="LeftSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane" AutomationProperties.Name="Sort, left pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
@@ -167,6 +180,12 @@
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
+        <ScrollViewer x:Name="RightHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, right pane">
+          <StackPanel x:Name="RightHomePanel" Spacing="10" Padding="10" />
+        </ScrollViewer>
+        <ScrollViewer x:Name="LeftHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, left pane">
+          <StackPanel x:Name="LeftHomePanel" Spacing="10" Padding="10" />
+        </ScrollViewer>
         <TextBlock x:Name="LeftStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
       <Grid Grid.Column="1" Width="36" VerticalAlignment="Center" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
@@ -189,7 +208,7 @@
           <Button Click="RightBack_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Back" AutomationProperties.Name="Back, right pane"><SymbolIcon Symbol="Back" /></Button><Button Grid.Column="1" Click="RightForward_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Forward, right pane"><SymbolIcon Symbol="Forward" /></Button><Button Grid.Column="2" Click="RightUp_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Up" AutomationProperties.Name="Up, right pane"><SymbolIcon Symbol="Up" /></Button>
           <TextBox x:Name="RightPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="RightPath_KeyDown" AutomationProperties.Name="Folder path, right pane" />
         </Grid>
-        <Grid Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+        <Grid x:Name="RightFilterRow" Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
           <TextBox x:Name="RightFilter" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" AutomationProperties.Name="Filter, right pane" />
           <ComboBox x:Name="RightSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="RightSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane" AutomationProperties.Name="Sort, right pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
@@ -221,42 +240,62 @@
         <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>
-    <Grid x:Name="DetailsStrip" Grid.Row="5" Margin="{StaticResource MeridianChromeMargin}" Background="{ThemeResource MeridianPanelBrush}" BorderBrush="{ThemeResource MeridianBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource MeridianCardCornerRadius}" Visibility="Collapsed">
-      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="216">
-        <Grid Padding="10" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16">
-          <Grid Width="96" Height="96" VerticalAlignment="Top">
-            <FontIcon x:Name="DetailsThumbnailGlyph" Glyph="&#xE946;" FontSize="40" Foreground="{ThemeResource MeridianTextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            <Image x:Name="DetailsThumbnail" Width="96" Height="96" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="Preview of the selected item" />
-          </Grid>
-          <StackPanel Grid.Column="1" Spacing="3">
-            <TextBlock x:Name="DetailsName" Text="Details" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
-            <TextBlock x:Name="DetailsTypeText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" />
-            <TextBlock x:Name="DetailsSizeText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" />
-            <TextBlock x:Name="DetailsDatesText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" />
+      <Grid x:Name="DetailsStrip" Grid.Column="2" Width="324" Background="{ThemeResource MeridianPanelBrush}" BorderBrush="{ThemeResource MeridianBorderBrush}" BorderThickness="1,0,0,0" Visibility="Collapsed">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Padding="12" Spacing="10">
+            <Grid Width="96" Height="96" HorizontalAlignment="Center">
+              <FontIcon x:Name="DetailsThumbnailGlyph" Glyph="&#xE946;" FontSize="40" Foreground="{ThemeResource MeridianTextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Image x:Name="DetailsThumbnail" Width="96" Height="96" Stretch="Uniform" Visibility="Collapsed" AutomationProperties.Name="Preview of the selected item" />
+            </Grid>
+            <TextBlock x:Name="DetailsHintText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
+            <Grid ColumnDefinitions="92,*" ColumnSpacing="8" RowSpacing="6" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+              <TextBlock Text="File name" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsName" Grid.Column="1" Text="Details" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="1" Text="Opens in" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsOpensInText" Grid.Row="1" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="2" Text="File type" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsTypeText" Grid.Row="2" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="3" Text="File size" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsSizeText" Grid.Row="3" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="4" Text="Dimensions" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsDimensionsText" Grid.Row="4" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="5" Text="Created" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsCreatedText" Grid.Row="5" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="6" Text="Modified" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsModifiedText" Grid.Row="6" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="7" Text="Accessed" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsAccessedText" Grid.Row="7" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="8" Text="Location" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+              <TextBlock x:Name="DetailsLocationText" Grid.Row="8" Grid.Column="1" FontSize="12" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+            </Grid>
             <TextBlock x:Name="DetailsExifText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
+            <Expander Header="Security" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" ToolTipService.ToolTip="Who can open this item; permission changes are made in Windows">
+              <StackPanel Spacing="6">
+                <TextBlock Text="Visibility, permissions" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+                <TextBlock x:Name="DetailsAccessText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                <Button x:Name="DetailsSecurityButton" Content="Open Windows security settings…" HorizontalAlignment="Left" Click="DetailsSecurityButton_Click" AutomationProperties.Name="Open Windows security settings" ToolTipService.ToolTip="Open this item's Windows Properties dialog. Permissions are changed on its Security tab; Meridian only shows them" />
+              </StackPanel>
+            </Expander>
+            <Expander Header="Advanced" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" ToolTipService.ToolTip="Details stored inside the file: title, comment, keywords, rating">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Previous versions, tags" FontSize="11" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
+                <TextBlock Text="Title" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
+                <TextBox x:Name="DetailsTitleBox" AutomationProperties.Name="Title" ToolTipService.ToolTip="The title stored inside the file" />
+                <TextBlock Text="Comment" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
+                <TextBox x:Name="DetailsCommentBox" AutomationProperties.Name="Comment" ToolTipService.ToolTip="A comment stored inside the file" />
+                <TextBlock Text="Keywords (tags)" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
+                <TextBox x:Name="DetailsKeywordsBox" AutomationProperties.Name="Keywords" ToolTipService.ToolTip="Separate tags with semicolons, like beach; sunset" />
+                <TextBlock Text="Rating" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
+                <RatingControl x:Name="DetailsRating" MaxRating="5" HorizontalAlignment="Left" AutomationProperties.Name="Rating" ToolTipService.ToolTip="The star rating stored inside the file" />
+                <TextBlock x:Name="DetailsEditReason" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
+                <Button x:Name="DetailsReviewButton" Content="Review changes…" HorizontalAlignment="Left" Click="DetailsReviewButton_Click" AutomationProperties.Name="Review detail changes" ToolTipService.ToolTip="See exactly what will change, then confirm before anything is saved" />
+              </StackPanel>
+            </Expander>
           </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="4" Width="300">
-            <TextBlock Text="DETAILS" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
-            <TextBlock Text="Title" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
-            <TextBox x:Name="DetailsTitleBox" AutomationProperties.Name="Title" ToolTipService.ToolTip="The title stored inside the file" />
-            <TextBlock Text="Comment" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
-            <TextBox x:Name="DetailsCommentBox" AutomationProperties.Name="Comment" ToolTipService.ToolTip="A comment stored inside the file" />
-            <TextBlock Text="Keywords (tags)" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
-            <TextBox x:Name="DetailsKeywordsBox" AutomationProperties.Name="Keywords" ToolTipService.ToolTip="Separate tags with semicolons, like beach; sunset" />
-            <TextBlock Text="Rating" FontSize="11" Foreground="{ThemeResource MeridianDialogLabelBrush}" />
-            <RatingControl x:Name="DetailsRating" MaxRating="5" HorizontalAlignment="Left" AutomationProperties.Name="Rating" ToolTipService.ToolTip="The star rating stored inside the file" />
-            <TextBlock x:Name="DetailsEditReason" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
-            <Button x:Name="DetailsReviewButton" Content="Review changes…" HorizontalAlignment="Left" Click="DetailsReviewButton_Click" AutomationProperties.Name="Review detail changes" ToolTipService.ToolTip="See exactly what will change, then confirm before anything is saved" />
-          </StackPanel>
-          <StackPanel Grid.Column="3" Spacing="4" Width="300">
-            <TextBlock Text="WHO CAN OPEN THIS" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" />
-            <TextBlock x:Name="DetailsAccessText" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-            <Button x:Name="DetailsSecurityButton" Content="Open Windows security settings…" HorizontalAlignment="Left" Click="DetailsSecurityButton_Click" AutomationProperties.Name="Open Windows security settings" ToolTipService.ToolTip="Open this item's Windows Properties dialog. Permissions are changed on its Security tab; Meridian only shows them" />
-          </StackPanel>
-        </Grid>
-      </ScrollViewer>
+        </ScrollViewer>
+      </Grid>
     </Grid>
-    <Grid Grid.Row="6" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*,Auto,Auto" Background="{ThemeResource MeridianPanelBrush}">
+    <Grid Grid.Row="5" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*,Auto,Auto" Background="{ThemeResource MeridianPanelBrush}">
       <FontIcon x:Name="StatusIcon" Glyph="&#xE946;" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" AutomationProperties.Name="Status: information" />
       <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" ToolTipService.ToolTip="Meridian · Preview build — early development" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
       <StackPanel x:Name="OperationProgressPanel" Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
@@ -267,7 +306,7 @@
         <SymbolIcon Symbol="Cancel" />
       </Button>
     </Grid>
-    <Grid x:Name="QuickPreviewOverlay" Grid.Row="0" Grid.RowSpan="7" Visibility="Collapsed" IsTabStop="True" KeyDown="QuickPreviewOverlay_KeyDown">
+    <Grid x:Name="QuickPreviewOverlay" Grid.Row="0" Grid.RowSpan="6" Visibility="Collapsed" IsTabStop="True" KeyDown="QuickPreviewOverlay_KeyDown">
       <Border Background="{ThemeResource MeridianSurfaceBrush}" Opacity="0.88" />
       <Border MaxWidth="920" MaxHeight="660" Margin="40" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource MeridianPanelBrush}" BorderBrush="{ThemeResource MeridianBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource MeridianCardCornerRadius}">
         <Grid RowDefinitions="Auto,*,Auto" Padding="16" RowSpacing="10">

@@ -14,6 +14,14 @@ namespace Meridian;
 
 public sealed partial class MainWindow : Window
 {
+    /// <summary>
+    /// The sentinel a pane's CurrentPath holds while it shows the Home page.
+    /// Not a filesystem path: navigation routes it to the Home view, the
+    /// workspace store's directory checks reject it (so a pane left at Home
+    /// reopens on the default folder), and it is never recorded as a recent.
+    /// </summary>
+    private const string HomePath = "meridian://home";
+
     private readonly PaneState _left;
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
@@ -32,6 +40,9 @@ public sealed partial class MainWindow : Window
     private double _splitDragStartX;
     private double _splitDragStartFraction;
     private readonly DropShelf _dropShelf = new();
+    private readonly RecentPathsStore _recentsStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "recents.json"));
+    private bool _sidebarVisible = true;
+    private readonly List<(Button Button, string TargetPath)> _sidebarNavButtons = [];
     private readonly List<ContextCapsule> _capsules = [];
     private readonly ContextCapsuleStore _capsuleStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "capsules.json"));
     private bool _capsuleStorageUnavailable;
@@ -67,10 +78,11 @@ public sealed partial class MainWindow : Window
         _appWindow.Changed += AppWindow_Changed;
         if (Content is FrameworkElement rootElement) rootElement.Loaded += RootElement_Loaded;
         _uiSettings.ColorValuesChanged += UiSettings_ColorValuesChanged;
+        Activated += MainWindow_Activated;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
-        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus);
-        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus);
+        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel);
+        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel);
         _activePane = _left;
         UpdateActivePaneVisuals();
         LeftItems.ItemsSource = _left.Items;
@@ -99,6 +111,8 @@ public sealed partial class MainWindow : Window
             SetOrganizeSection(ParseOrganizeSection(settings.OrganizeSection));
             _detailsStripVisible = settings.DetailsStripVisible;
             ApplyDetailsStripVisibility();
+            _sidebarVisible = settings.SidebarVisible;
+            ApplySidebarVisibility();
         }
         try
         {
@@ -130,6 +144,8 @@ public sealed partial class MainWindow : Window
         _activeWorkspaceTabIndex = Math.Clamp(saved?.ActiveTabIndex ?? 0, 0, _workspaceTabs.Count - 1);
         _nextWorkspaceTabNumber = _workspaceTabs.Count + 1;
         RefreshWorkspaceTabs();
+        await _recentsStore.LoadAsync();
+        BuildSidebar();
 
         var activeTab = _workspaceTabs[_activeWorkspaceTabIndex];
         var leftPath = Directory.Exists(activeTab.LeftPath) ? activeTab.LeftPath : defaultLeft;
@@ -182,7 +198,8 @@ public sealed partial class MainWindow : Window
                 _accentMode.ToString(),
                 _accentPresetId,
                 _accentCustomColor,
-                _detailsStripVisible));
+                _detailsStripVisible,
+                _sidebarVisible));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -346,6 +363,11 @@ public sealed partial class MainWindow : Window
         }
         var path = _activePane.CurrentPath;
         if (string.IsNullOrWhiteSpace(path)) return;
+        if (_activePane.IsHome)
+        {
+            SetStatus("Home is already pinned at the top of the sidebar.", StatusSeverity.Warning);
+            return;
+        }
         if (_bookmarks.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)))
         {
             SetStatus("That location is already bookmarked.", StatusSeverity.Warning);
@@ -356,6 +378,7 @@ public sealed partial class MainWindow : Window
         var name = Path.GetFileName(trimmed);
         if (string.IsNullOrWhiteSpace(name)) name = path;
         _bookmarks.Add(new BookmarkSnapshot(name, path));
+        BuildSidebar();
         await PersistWorkspaceAsync();
         SetStatus($"Bookmarked · {name}", StatusSeverity.Success);
     }
@@ -371,6 +394,7 @@ public sealed partial class MainWindow : Window
         }
 
         _bookmarks.Remove(selected);
+        BuildSidebar();
         BookmarksBox.SelectedItem = null;
         await PersistWorkspaceAsync();
         SetStatus($"Removed bookmark · {selected.Name}", StatusSeverity.Success);
@@ -385,6 +409,8 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
     {
+        if (string.Equals(requestedPath.Trim(), HomePath, StringComparison.OrdinalIgnoreCase))
+            return await NavigateHomeAsync(pane, addHistory);
         pane.ReadCancellation?.Cancel();
         pane.ReadCancellation?.Dispose();
         pane.ReadCancellation = new CancellationTokenSource();
@@ -420,6 +446,9 @@ public sealed partial class MainWindow : Window
             UpdatePaneHeader(pane);
             pane.AllItems = entries;
             ApplyFilter(pane);
+            ApplyPaneMode(pane);
+            RefreshSidebarSelection();
+            _ = _recentsStore.RecordAsync(fullPath, isDirectory: true);
             RefreshDetailsStrip();
             SetStatus("Ready · Local-only · No telemetry");
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
@@ -438,8 +467,364 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Shows the Home page in a pane. Mirrors NavigateAsync's commit steps
+    /// (history push, header, status, persistence) with the Home view in
+    /// place of a directory read; the sentinel path is never recorded as a
+    /// recent and never reaches the filesystem APIs.
+    /// </summary>
+    private async Task<bool> NavigateHomeAsync(PaneState pane, bool addHistory = true)
+    {
+        pane.ReadCancellation?.Cancel();
+        pane.ReadCancellation?.Dispose();
+        pane.ReadCancellation = new CancellationTokenSource();
+        if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) &&
+            !string.Equals(pane.CurrentPath, HomePath, StringComparison.OrdinalIgnoreCase))
+        {
+            pane.BackHistory.Push(pane.CurrentPath);
+            pane.ForwardHistory.Clear();
+        }
+        pane.CurrentPath = HomePath;
+        pane.PathBox.Text = "Home";
+        pane.AllItems = Array.Empty<FileEntry>();
+        pane.Items.Clear();
+        UpdatePaneHeader(pane);
+        ApplyPaneMode(pane);
+        RenderHomeView(pane);
+        RefreshSidebarSelection();
+        SetPaneStatus(pane, "Home · pinned folders, drives and recent items");
+        RefreshDetailsStrip();
+        SetStatus("Ready · Local-only · No telemetry");
+        if (!_restoringWorkspace) await PersistWorkspaceAsync();
+        return true;
+    }
+
+    // ----- Sidebar and Home -----
+
+    private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated) return;
+        // Drives can appear or disappear while Meridian sits in the background
+        // (USB storage, mapped drives). There is no device-change listener, so
+        // the drive lists are rebuilt when the window comes back to the front,
+        // and a visible Home page re-renders with fresh free-space figures.
+        BuildSidebar();
+        if (_left.IsHome) RenderHomeView(_left);
+        if (_right.IsHome) RenderHomeView(_right);
+    }
+
+    private void SidebarToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _sidebarVisible = !_sidebarVisible;
+        ApplySidebarVisibility();
+        _ = PersistSettingsAsync();
+    }
+
+    private void ApplySidebarVisibility() =>
+        SidebarPanel.Visibility = _sidebarVisible ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Switches a pane between its file list and its Home view.</summary>
+    private void ApplyPaneMode(PaneState pane)
+    {
+        var home = pane.IsHome;
+        pane.HomeView.Visibility = home ? Visibility.Visible : Visibility.Collapsed;
+        pane.List.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
+        pane.FilterRow.Visibility = home ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void BuildSidebar()
+    {
+        SidebarContent.Children.Clear();
+        _sidebarNavButtons.Clear();
+        AddSidebarSection("FAVORITES");
+        AddSidebarItem(Symbol.Home, "Home", HomePath, "Show the Home page in the active pane");
+        foreach (var bookmark in _bookmarks)
+            AddSidebarItem(Symbol.Folder, bookmark.Name, bookmark.Path, $"Open {bookmark.Path} in the active pane");
+        AddSidebarSection("THIS PC");
+        AddSidebarItem(Symbol.Folder, "Desktop", KnownFolderPath(Environment.SpecialFolder.Desktop), "Open the Desktop folder in the active pane");
+        AddSidebarItem(Symbol.Document, "Documents", KnownFolderPath(Environment.SpecialFolder.MyDocuments), "Open the Documents folder in the active pane");
+        AddSidebarItem(Symbol.Download, "Downloads", DownloadsFolderPath(), "Open the Downloads folder in the active pane");
+        AddSidebarItem(Symbol.Audio, "Music", KnownFolderPath(Environment.SpecialFolder.MyMusic), "Open the Music folder in the active pane");
+        AddSidebarItem(Symbol.Pictures, "Pictures", KnownFolderPath(Environment.SpecialFolder.MyPictures), "Open the Pictures folder in the active pane");
+        AddSidebarItem(Symbol.Video, "Videos", KnownFolderPath(Environment.SpecialFolder.MyVideos), "Open the Videos folder in the active pane");
+        AddSidebarSection("DRIVES");
+        foreach (var drive in EnumerateDrives())
+            AddSidebarItem(Symbol.MapDrive, drive.Label, drive.RootPath, drive.ToolTip);
+        RefreshSidebarSelection();
+    }
+
+    private static string KnownFolderPath(Environment.SpecialFolder folder)
+    {
+        var path = Environment.GetFolderPath(folder);
+        return string.IsNullOrWhiteSpace(path) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : path;
+    }
+
+    private static string DownloadsFolderPath()
+    {
+        var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        return Directory.Exists(downloads) ? downloads : KnownFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
+
+    private void AddSidebarSection(string title) => SidebarContent.Children.Add(new TextBlock
+    {
+        Text = title,
+        FontSize = 11,
+        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        Foreground = ThemeBrush("MeridianTextTertiaryBrush"),
+        Margin = new Thickness(10, 10, 0, 4)
+    });
+
+    private void AddSidebarItem(Symbol glyph, string label, string targetPath, string toolTip)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        row.Children.Add(new SymbolIcon { Symbol = glyph, Width = 16, Height = 16 });
+        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+        var button = new Button
+        {
+            Content = row,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(10, 6, 10, 6),
+            Tag = targetPath
+        };
+        ToolTipService.SetToolTip(button, toolTip);
+        AutomationProperties.SetName(button, label);
+        button.Click += SidebarItem_Click;
+        SidebarContent.Children.Add(button);
+        _sidebarNavButtons.Add((button, targetPath));
+    }
+
+    private async void SidebarItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string target } || string.IsNullOrWhiteSpace(target)) return;
+        await NavigateAsync(_activePane, target);
+    }
+
+    private void RefreshSidebarSelection()
+    {
+        var current = _activePane.CurrentPath;
+        foreach (var (button, target) in _sidebarNavButtons)
+        {
+            var selected = string.Equals(target, current, StringComparison.OrdinalIgnoreCase);
+            button.Background = selected
+                ? ThemeBrush("MeridianSelectionBackgroundBrush")
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        }
+    }
+
+    private sealed record DriveEntry(string RootPath, string Label, string ToolTip, long TotalBytes, long FreeBytes, bool IsReady);
+
+    /// <summary>
+    /// One pass over the machine's drives for the sidebar and the Home page.
+    /// A drive that will not answer (empty card reader, spun-down or
+    /// disconnected storage) is listed as not ready with zero sizes instead
+    /// of failing the whole list.
+    /// </summary>
+    private static List<DriveEntry> EnumerateDrives()
+    {
+        var drives = new List<DriveEntry>();
+        DriveInfo[] all;
+        try { all = DriveInfo.GetDrives(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return drives; }
+        foreach (var drive in all)
+        {
+            var root = drive.Name;
+            var shortName = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (shortName.Length == 0) shortName = root;
+            try
+            {
+                if (!drive.IsReady)
+                {
+                    drives.Add(new DriveEntry(root, shortName, $"Open {root} in the active pane", 0, 0, false));
+                    continue;
+                }
+                var label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? DriveTypeLabel(drive.DriveType) : drive.VolumeLabel;
+                drives.Add(new DriveEntry(root, $"{shortName} · {label}", $"Open {root} in the active pane", drive.TotalSize, drive.AvailableFreeSpace, true));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                drives.Add(new DriveEntry(root, shortName, $"Open {root} in the active pane", 0, 0, false));
+            }
+        }
+        return drives;
+    }
+
+    private static string DriveTypeLabel(DriveType type) => type switch
+    {
+        DriveType.Fixed => "Local disk",
+        DriveType.Removable => "Removable",
+        DriveType.Network => "Network drive",
+        DriveType.CDRom => "Disc drive",
+        DriveType.Ram => "RAM disk",
+        _ => "Drive"
+    };
+
+    /// <summary>
+    /// Rebuilds a pane's Home page: pinned drive cards with free-space bars,
+    /// Desktop and Videos quick cards, and the recent list. Rebuilt on every
+    /// show (and on window activation) so free space and recents are current.
+    /// </summary>
+    private void RenderHomeView(PaneState pane)
+    {
+        var panel = pane.HomePanel;
+        panel.Children.Clear();
+        panel.Children.Add(HomeSectionLabel("PINNED"));
+        var cards = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 220, ItemHeight = 100 };
+        foreach (var drive in EnumerateDrives())
+            cards.Children.Add(DriveCard(pane, drive));
+        cards.Children.Add(FolderCard(pane, "Desktop", KnownFolderPath(Environment.SpecialFolder.Desktop)));
+        cards.Children.Add(FolderCard(pane, "Videos", KnownFolderPath(Environment.SpecialFolder.MyVideos)));
+        panel.Children.Add(cards);
+        panel.Children.Add(HomeSectionLabel("RECENT"));
+        if (_recentsStore.Entries.Count == 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Folders you open and files you launch will appear here.",
+                FontSize = 12,
+                Foreground = ThemeBrush("MeridianTextSecondaryBrush"),
+                TextWrapping = TextWrapping.Wrap
+            });
+            return;
+        }
+        foreach (var entry in _recentsStore.Entries.Take(10))
+            panel.Children.Add(RecentRow(pane, entry));
+        var clear = new Button
+        {
+            Content = "Clear recent list",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        ToolTipService.SetToolTip(clear, "Forget the recent list. The files and folders themselves are not touched.");
+        AutomationProperties.SetName(clear, "Clear recent list");
+        clear.Click += async (s, e) =>
+        {
+            await _recentsStore.ClearAsync();
+            if (_left.IsHome) RenderHomeView(_left);
+            if (_right.IsHome) RenderHomeView(_right);
+            SetStatus("Recent list cleared.");
+        };
+        panel.Children.Add(clear);
+    }
+
+    private TextBlock HomeSectionLabel(string title) => new()
+    {
+        Text = title,
+        FontSize = 11,
+        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        Foreground = ThemeBrush("MeridianTextTertiaryBrush"),
+        Margin = new Thickness(0, 6, 0, 0)
+    };
+
+    private Button DriveCard(PaneState pane, DriveEntry drive)
+    {
+        var content = new StackPanel { Spacing = 4 };
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        titleRow.Children.Add(new SymbolIcon { Symbol = Symbol.MapDrive, Width = 16, Height = 16 });
+        titleRow.Children.Add(new TextBlock { Text = drive.Label, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        content.Children.Add(titleRow);
+        content.Children.Add(new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = DriveSummary.UsedFraction(drive.TotalBytes, drive.FreeBytes) * 100,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = drive.IsReady ? DriveSummary.FreeSpaceLabel(drive.TotalBytes, drive.FreeBytes) : "Not ready",
+            FontSize = 11,
+            Foreground = ThemeBrush("MeridianTextSecondaryBrush")
+        });
+        var card = CardButton(pane, content, drive.RootPath, $"Open {drive.RootPath} in the {pane.Name.ToLowerInvariant()} pane");
+        AutomationProperties.SetName(card, drive.IsReady
+            ? $"{drive.Label}, {DriveSummary.FreeSpaceLabel(drive.TotalBytes, drive.FreeBytes)}"
+            : $"{drive.Label}, not ready");
+        return card;
+    }
+
+    private Button FolderCard(PaneState pane, string name, string path)
+    {
+        var content = new StackPanel { Spacing = 4 };
+        content.Children.Add(new FontIcon { Glyph = "\uE8B7", FontSize = 22, Foreground = ThemeBrush("MeridianTextSecondaryBrush"), HorizontalAlignment = HorizontalAlignment.Center });
+        content.Children.Add(new TextBlock { Text = name, HorizontalAlignment = HorizontalAlignment.Center });
+        return CardButton(pane, content, path, $"Open the {name} folder in the {pane.Name.ToLowerInvariant()} pane");
+    }
+
+    private Button CardButton(PaneState pane, UIElement content, string targetPath, string toolTip)
+    {
+        var card = new Button
+        {
+            Content = content,
+            Width = 212,
+            Height = 92,
+            Margin = new Thickness(0, 0, 8, 8),
+            Padding = new Thickness(10),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Background = ThemeBrush("MeridianChromeBrush"),
+            BorderBrush = ThemeBrush("MeridianBorderBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Tag = targetPath
+        };
+        ToolTipService.SetToolTip(card, toolTip);
+        AutomationProperties.SetName(card, toolTip);
+        card.Click += async (s, e) => await NavigateAsync(pane, targetPath);
+        return card;
+    }
+
+    private Button RecentRow(PaneState pane, RecentPathEntry entry)
+    {
+        var name = Path.GetFileName(entry.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(name)) name = entry.Path;
+        var texts = new StackPanel { Spacing = 0 };
+        texts.Children.Add(new TextBlock { Text = name, TextTrimming = TextTrimming.CharacterEllipsis });
+        texts.Children.Add(new TextBlock { Text = entry.Path, FontSize = 11, Foreground = ThemeBrush("MeridianTextSecondaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        row.Children.Add(new FontIcon { Glyph = entry.IsDirectory ? "\uE8B7" : "\uE7C3", FontSize = 16, Foreground = ThemeBrush("MeridianTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(texts);
+        var button = new Button
+        {
+            Content = row,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(8, 4, 8, 4)
+        };
+        ToolTipService.SetToolTip(button, entry.IsDirectory ? $"Open {entry.Path}" : $"Open {entry.Path} with its default app");
+        AutomationProperties.SetName(button, name);
+        button.Click += async (s, e) => await OpenRecentAsync(pane, entry);
+        return button;
+    }
+
+    private async Task OpenRecentAsync(PaneState pane, RecentPathEntry entry)
+    {
+        SetActivePane(pane);
+        if (entry.IsDirectory)
+        {
+            await NavigateAsync(pane, entry.Path);
+            return;
+        }
+        var folder = Path.GetDirectoryName(entry.Path);
+        if (!string.IsNullOrWhiteSpace(folder)) await NavigateAsync(pane, folder);
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = entry.Path, UseShellExecute = true });
+            _ = _recentsStore.RecordAsync(entry.Path, isDirectory: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            SetStatus("Could not open file · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
     private void ApplyFilter(PaneState pane)
     {
+        if (pane.IsHome) return;
         var query = pane.FilterBox.Text.Trim();
         var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
 
@@ -470,7 +855,7 @@ public sealed partial class MainWindow : Window
 
     private async Task NavigateUpAsync(PaneState pane)
     {
-        if (string.IsNullOrWhiteSpace(pane.CurrentPath)) return;
+        if (pane.IsHome || string.IsNullOrWhiteSpace(pane.CurrentPath)) return;
         var parent = Directory.GetParent(pane.CurrentPath)?.FullName;
         if (parent is not null) await NavigateAsync(pane, parent);
     }
@@ -888,7 +1273,11 @@ public sealed partial class MainWindow : Window
     {
         if (pane.List.SelectedItem is not FileEntry selected) return;
         if (selected.IsDirectory) { await NavigateAsync(pane, selected.FullPath); return; }
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = selected.FullPath, UseShellExecute = true }); }
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = selected.FullPath, UseShellExecute = true });
+            _ = _recentsStore.RecordAsync(selected.FullPath, isDirectory: false);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         { SetStatus("Could not open file · " + ex.Message, StatusSeverity.Error); }
     }
@@ -898,6 +1287,11 @@ public sealed partial class MainWindow : Window
         if (selection.Count == 0)
         {
             SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning);
+            return;
+        }
+        if (destination.IsHome)
+        {
+            SetStatus("Open a folder in the other pane first — Home is not a move destination.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
@@ -986,6 +1380,7 @@ public sealed partial class MainWindow : Window
         if (_copyCancellation is not null) { SetStatus("A copy is already in progress.", StatusSeverity.Warning); return; }
         var selection = GetSelectedEntries(source);
         if (selection.Count == 0) { SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning); return; }
+        if (destination.IsHome) { SetStatus("Open a folder in the other pane first — Home is not a copy destination.", StatusSeverity.Warning); return; }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
         var sourcePaths = selection.Select(item => item.FullPath).ToArray();
@@ -2024,8 +2419,10 @@ public sealed partial class MainWindow : Window
         var accentSwatches = new Grid { RowSpacing = 6, ColumnSpacing = 6 };
         for (var column = 0; column < 4; column++)
             accentSwatches.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        accentSwatches.RowDefinitions.Add(new RowDefinition());
-        accentSwatches.RowDefinitions.Add(new RowDefinition());
+        // One row per four presets, however many presets the palette ships.
+        var swatchRows = (AccentPalette.Presets.Count + 3) / 4;
+        for (var row = 0; row < swatchRows; row++)
+            accentSwatches.RowDefinitions.Add(new RowDefinition());
         // The custom color controls are created before the swatch loop: the
         // swatch handlers call RefreshAccentControls, which reads them, and
         // every variable it reads must be assigned before those handlers exist.
@@ -2044,7 +2441,7 @@ public sealed partial class MainWindow : Window
             Text = _accentCustomColor ?? string.Empty
         };
         AutomationProperties.SetName(customHexBox, "Custom accent color, hex value");
-        ToolTipService.SetToolTip(customHexBox, "Type a hex color such as #F04444");
+        ToolTipService.SetToolTip(customHexBox, "Type a hex color such as #4CC2FF");
         var applyCustomButton = new Button { Content = "Use custom color" };
         ToolTipService.SetToolTip(applyCustomButton, "Apply the hex color as the accent");
         AutomationProperties.SetName(applyCustomButton, "Use custom color");
@@ -2057,7 +2454,7 @@ public sealed partial class MainWindow : Window
         var customPanel = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
         customPanel.Children.Add(new TextBlock
         {
-            Text = "Type a hex color such as #F04444. It applies everywhere immediately. In the light theme it is darkened automatically so text stays readable.",
+            Text = "Type a hex color such as #4CC2FF. It applies everywhere immediately. In the light theme it is darkened automatically so text stays readable.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = ThemeBrush("MeridianTextSecondaryBrush")
         });
@@ -2121,7 +2518,7 @@ public sealed partial class MainWindow : Window
         {
             if (!AccentColor.TryParse(customHexBox.Text, out var custom))
             {
-                customError.Text = "That is not a valid hex color. Use six hex digits, like #F04444.";
+                customError.Text = "That is not a valid hex color. Use six hex digits, like #4CC2FF.";
                 customError.Visibility = Visibility.Visible;
                 return;
             }
@@ -2363,7 +2760,7 @@ public sealed partial class MainWindow : Window
         var deleteItem = isLeftPane ? LeftDeleteMenuItem : RightDeleteMenuItem;
         var other = isLeftPane ? _right : _left;
         var count = pane.List.SelectedItems.Count;
-        var hasDestination = !string.IsNullOrWhiteSpace(other.CurrentPath);
+        var hasDestination = !string.IsNullOrWhiteSpace(other.CurrentPath) && !other.IsHome;
         var direction = isLeftPane ? "right" : "left";
         copyItem.IsEnabled = count > 0 && hasDestination && _copyCancellation is null;
         moveItem.IsEnabled = count > 0 && hasDestination;
@@ -2394,6 +2791,7 @@ public sealed partial class MainWindow : Window
     {
         _activePane = pane;
         UpdateActivePaneVisuals();
+        RefreshSidebarSelection();
         RefreshDetailsStrip();
     }
 
@@ -2425,6 +2823,14 @@ public sealed partial class MainWindow : Window
     {
         var nameBlock = ReferenceEquals(pane, _left) ? LeftFolderName : RightFolderName;
         var pathBlock = ReferenceEquals(pane, _left) ? LeftFolderPath : RightFolderPath;
+        if (pane.IsHome)
+        {
+            nameBlock.Text = "Home";
+            pathBlock.Text = "Pinned folders, drives and recent items";
+            ToolTipService.SetToolTip(pathBlock, null);
+            UpdatePaneHeaderAutomation();
+            return;
+        }
         var path = pane.CurrentPath;
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         if (string.IsNullOrWhiteSpace(name)) name = string.IsNullOrWhiteSpace(path) ? pane.Name + " pane" : path;
@@ -2557,9 +2963,18 @@ public sealed partial class MainWindow : Window
 
             DetailsName.Text = entry.Name;
             ToolTipService.SetToolTip(DetailsName, entry.FullPath);
-            DetailsTypeText.Text = entry.TypeLabel + " · " + info.FullName;
-            DetailsDatesText.Text = $"Modified {info.LastWriteTime:g} · Created {info.CreationTime:g}";
-            DetailsSizeText.Text = entry.IsDirectory ? "Size: calculating…" : "Size: " + FormatFileSize(((FileInfo)info).Length);
+            DetailsHintText.Text = string.Empty;
+            DetailsHintText.Visibility = Visibility.Collapsed;
+            DetailsTypeText.Text = entry.TypeLabel;
+            DetailsLocationText.Text = info.FullName;
+            DetailsOpensInText.Text = entry.IsDirectory
+                ? "—"
+                : DefaultAppReader.TryGetFriendlyAppName(entry.FullPath) ?? "No default app found";
+            DetailsCreatedText.Text = info.CreationTime.ToString("g");
+            DetailsModifiedText.Text = info.LastWriteTime.ToString("g");
+            DetailsAccessedText.Text = info.LastAccessTime.ToString("g");
+            DetailsDimensionsText.Text = string.Empty;
+            DetailsSizeText.Text = entry.IsDirectory ? "Calculating…" : FormatFileSize(((FileInfo)info).Length);
             DetailsExifText.Text = string.Empty;
             DetailsExifText.Visibility = Visibility.Collapsed;
             DetailsThumbnail.Source = null;
@@ -2588,11 +3003,18 @@ public sealed partial class MainWindow : Window
     {
         DetailsName.Text = "Details";
         ToolTipService.SetToolTip(DetailsName, null);
-        DetailsTypeText.Text = message ?? (selectionCount == 0
+        DetailsHintText.Text = message ?? (selectionCount == 0
             ? "Select an item to see its details here."
             : $"{selectionCount:N0} items are selected. Details are shown for one item at a time.");
+        DetailsHintText.Visibility = Visibility.Visible;
+        DetailsTypeText.Text = string.Empty;
+        DetailsOpensInText.Text = string.Empty;
+        DetailsLocationText.Text = string.Empty;
         DetailsSizeText.Text = string.Empty;
-        DetailsDatesText.Text = string.Empty;
+        DetailsDimensionsText.Text = string.Empty;
+        DetailsCreatedText.Text = string.Empty;
+        DetailsModifiedText.Text = string.Empty;
+        DetailsAccessedText.Text = string.Empty;
         DetailsExifText.Text = string.Empty;
         DetailsExifText.Visibility = Visibility.Collapsed;
         DetailsThumbnail.Source = null;
@@ -2664,7 +3086,7 @@ public sealed partial class MainWindow : Window
         if (generation != _detailsStripGeneration || summary is null) return;
         var lines = new List<string>();
         if (summary.PixelWidth is { } width && summary.PixelHeight is { } height)
-            lines.Add($"Photo size: {width:N0} × {height:N0} pixels");
+            DetailsDimensionsText.Text = $"{width:N0} × {height:N0} pixels";
         if (FormatCameraName(summary.CameraMake, summary.CameraModel) is { } camera)
             lines.Add("Camera: " + camera);
         if (summary.DateTaken is { } taken)
@@ -2692,18 +3114,18 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     if (generation != _detailsStripGeneration || token.IsCancellationRequested) return;
-                    DetailsSizeText.Text = $"Size so far: {DirectoryReader.FormatSize(snapshot.TotalBytes)} · counting…";
+                    DetailsSizeText.Text = $"{DirectoryReader.FormatSize(snapshot.TotalBytes)} so far · counting…";
                 });
             });
             if (generation != _detailsStripGeneration || token.IsCancellationRequested) return;
-            DetailsSizeText.Text = $"Size: {DirectoryReader.FormatSize(result.TotalBytes)} · {result.FileCount:N0} files in {result.DirectoryCount:N0} folders" +
+            DetailsSizeText.Text = $"{DirectoryReader.FormatSize(result.TotalBytes)} · {result.FileCount:N0} files in {result.DirectoryCount:N0} folders" +
                 (result.SkippedCount > 0 ? $" · {result.SkippedCount:N0} items could not be counted" : string.Empty);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             if (generation == _detailsStripGeneration)
-                DetailsSizeText.Text = "Size could not be calculated · " + ex.Message;
+                DetailsSizeText.Text = "Could not be calculated · " + ex.Message;
         }
     }
 
@@ -3147,13 +3569,16 @@ public sealed partial class MainWindow : Window
         public string RightPath { get; set; } = rightPath;
     }
 
-    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status)
+    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel)
     {
         public string Name { get; } = name;
         public TextBox PathBox { get; } = pathBox;
         public TextBox FilterBox { get; } = filterBox;
         public ListView List { get; } = list;
         public TextBlock Status { get; } = status;
+        public Grid FilterRow { get; } = filterRow;
+        public ScrollViewer HomeView { get; } = homeView;
+        public StackPanel HomePanel { get; } = homePanel;
         public ObservableCollection<FileEntry> Items { get; } = [];
         public IReadOnlyList<FileEntry> AllItems { get; set; } = Array.Empty<FileEntry>();
         public DirectorySortField SortField { get; set; } = DirectorySortField.Name;
@@ -3162,5 +3587,8 @@ public sealed partial class MainWindow : Window
         public Stack<string> ForwardHistory { get; } = new();
         public string CurrentPath { get; set; } = string.Empty;
         public CancellationTokenSource? ReadCancellation { get; set; }
+
+        /// <summary>True while the pane shows the Home page instead of a folder.</summary>
+        public bool IsHome => string.Equals(CurrentPath, HomePath, StringComparison.Ordinal);
     }
 }
