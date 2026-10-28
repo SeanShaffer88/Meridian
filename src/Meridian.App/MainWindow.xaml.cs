@@ -879,11 +879,10 @@ public sealed partial class MainWindow : Window
 
         if (FindFirstImage(root) is not { } image) return;
         image.Tag = entry.FullPath;
-        if (args.InRecyclingQueue)
-        {
-            image.Source = null;
-            return;
-        }
+        // WinUI 3 has no InRecyclingQueue on the event args; clearing here and
+        // letting the Tag check in LoadThumbnailIntoAsync discard late loads
+        // for reused containers covers the same ground.
+        image.Source = null;
 
         var sizeClass = pane.ViewMode == PaneViewMode.Grid ? ThumbnailSizeClass.Grid : ThumbnailSizeClass.Tile;
         if (_thumbnailCache.TryGet(entry.FullPath, sizeClass, out var cached))
