@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.2.0
+
+- New dark Fluent theme based on near-black layered surfaces with white text; the light theme is derived from the same design tokens.
+- Accent colour is now a setting: eight preset colours plus a custom colour, applied immediately without restarting. Following the Windows accent colour remains available as an option.
+- Spacebar quick preview: Space opens a preview of the selected file (text, images, audio/video, bounded hex), arrow keys move through the folder while it stays open, Space or Esc closes it.
+- Details strip (Tools menu or Ctrl+Shift+D): thumbnail, file facts, and folder sizes measured in the background with progress; the setting is remembered.
+- Image details now include an EXIF summary (dimensions, camera, date taken; GPS coordinates shown as text).
+- Metadata editing for writable properties (title, comment, keywords, rating) on supported file types, always reviewed and confirmed before anything is written; properties a file cannot accept are shown read-only with the reason.
+- Permission viewer: a read-only view of a file's owner and access entries, with a handoff to the Windows security dialog for changes.
+
+## 0.1.0
+
 - Dual-pane browsing, paired workspace tabs, bookmarks, and local workspace persistence.
 - Folder DNA, Drop Shelf, read-only copy preview, and explicitly confirmed sequential batch copy with per-item progress and cancellation.
 - New-folder creation, file/folder rename (including case-only changes), basic properties, cross-pane copy/move, and Recycle Bin requests.
