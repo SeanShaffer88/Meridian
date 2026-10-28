@@ -151,6 +151,7 @@ public sealed partial class MainWindow : Window
             // Workspace persistence is a convenience; file browsing must continue if it fails.
             SetStatus("Workspace could not be saved · " + ex.Message, StatusSeverity.Error);
         }
+        return false;
     }
 
     private async Task PersistSettingsAsync()
@@ -375,16 +376,16 @@ public sealed partial class MainWindow : Window
         {
             fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(requestedPath.Trim().Trim('"')));
             var exists = await Task.Run(() => Directory.Exists(fullPath), token);
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested) return false;
             if (!exists) throw new DirectoryNotFoundException($"Folder not found: {fullPath}");
         }
-        catch (OperationCanceledException) { return; }
+        catch (OperationCanceledException) { return false; }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
             SetPaneStatus(pane, ex.Message); SetStatus("Navigation failed · " + ex.Message, StatusSeverity.Error); pane.PathBox.Text = pane.CurrentPath; return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
-        var token = pane.ReadCancellation.Token;
+        token = pane.ReadCancellation.Token;
         SetPaneStatus(pane, "Loading folder…");
         try
         {
@@ -1071,7 +1072,6 @@ public sealed partial class MainWindow : Window
         try
         {
             Directory.CreateDirectory(target);
-            var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
             SetStatus($"Created folder · {name}", StatusSeverity.Success);
         }
@@ -1091,7 +1091,6 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var pane = _activePane;
         var parentPath = pane.CurrentPath;
         var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
         AutomationProperties.SetName(nameBox, "New name");
