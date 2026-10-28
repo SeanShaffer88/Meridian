@@ -35,7 +35,8 @@ public static class DirectoryReader
                     SizeLabel = size,
                     SizeBytes = info is FileInfo sizedFile ? sizedFile.Length : 0,
                     ModifiedUtc = info.LastWriteTimeUtc,
-                    ModifiedLabel = info.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
+                    ModifiedLabel = info.LastWriteTime.ToString("yyyy-MM-dd HH:mm"),
+                    AgeLabel = RelativeAge.Format(info.LastWriteTimeUtc, DateTime.UtcNow)
                 });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
