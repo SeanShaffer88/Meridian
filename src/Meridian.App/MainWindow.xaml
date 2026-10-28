@@ -23,7 +23,7 @@
     </Grid.KeyboardAccelerators>
     <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-        <Border Width="32" Height="32" CornerRadius="8" Background="{ThemeResource MeridianAccentBrush}">
+        <Border Width="32" Height="32" CornerRadius="{StaticResource MeridianCardCornerRadius}" Background="{ThemeResource MeridianAccentBrush}">
           <FontIcon Glyph="&#xE8A5;" FontSize="18" Foreground="{ThemeResource MeridianOnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
         <StackPanel Spacing="0"><TextBlock Text="MERIDIAN" FontSize="16" FontWeight="SemiBold" CharacterSpacing="90" /><TextBlock Text="FILE MANAGER" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" /></StackPanel>
