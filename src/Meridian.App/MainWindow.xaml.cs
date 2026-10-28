@@ -49,6 +49,15 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource? _batchCancellation;
     private bool _batchPreparing;
     private string? _pinnedError;
+    private bool _detailsStripVisible;
+    private FileEntry? _detailsCurrentEntry;
+    private Dictionary<MetadataProperty, string> _detailsCurrentValues = new();
+    private int _detailsStripGeneration;
+    private CancellationTokenSource? _detailsStripCancellation;
+    private PaneState? _quickPreviewPane;
+    private FileEntry? _quickPreviewEntry;
+    private PreviewMediaLease? _quickPreviewLease;
+    private CancellationTokenSource? _quickPreviewCancellation;
 
     public MainWindow()
     {
@@ -88,6 +97,8 @@ public sealed partial class MainWindow : Window
             ApplyDensityPreference();
             ApplyPaneSplit();
             SetOrganizeSection(ParseOrganizeSection(settings.OrganizeSection));
+            _detailsStripVisible = settings.DetailsStripVisible;
+            ApplyDetailsStripVisibility();
         }
         try
         {
@@ -170,7 +181,8 @@ public sealed partial class MainWindow : Window
                 _openOrganizeSection.ToString(),
                 _accentMode.ToString(),
                 _accentPresetId,
-                _accentCustomColor));
+                _accentCustomColor,
+                _detailsStripVisible));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -408,6 +420,7 @@ public sealed partial class MainWindow : Window
             UpdatePaneHeader(pane);
             pane.AllItems = entries;
             ApplyFilter(pane);
+            RefreshDetailsStrip();
             SetStatus("Ready · Local-only · No telemetry");
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
             return true;
@@ -714,6 +727,29 @@ public sealed partial class MainWindow : Window
 
     private bool _previewDialogOpen;
 
+    /// <summary>
+    /// Owns the media objects one preview surface created, so closing or
+    /// replacing the preview always pauses and releases them.
+    /// </summary>
+    private sealed class PreviewMediaLease : IDisposable
+    {
+        public Microsoft.UI.Xaml.Controls.MediaPlayerElement? Player { get; set; }
+        public Windows.Media.Playback.MediaPlayer? Session { get; set; }
+
+        public void Dispose()
+        {
+            if (Player is not null)
+            {
+                Session?.Pause();
+                Player.SetMediaPlayer(null);
+                Player = null;
+            }
+
+            Session?.Dispose();
+            Session = null;
+        }
+    }
+
     private async void PreviewSelected_Click(object sender, RoutedEventArgs e)
     {
         if (_previewDialogOpen) return;
@@ -723,102 +759,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var path = selected.FullPath;
-        var decision = Meridian.Core.Viewer.ViewerRouter.Classify(path);
         var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = decision.Reason,
-            TextWrapping = TextWrapping.Wrap
-        });
-        Microsoft.UI.Xaml.Controls.MediaPlayerElement? player = null;
-        Windows.Media.Playback.MediaPlayer? mediaSession = null;
+        var lease = new PreviewMediaLease();
         _previewDialogOpen = true;
         try
         {
-            path = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(path);
-            if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
-            {
-                player = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
-                {
-                    AreTransportControlsEnabled = true,
-                    AutoPlay = false,
-                    Height = decision.Kind == Meridian.Core.Viewer.ViewerKind.Video ? 320 : 100
-                };
-                mediaSession = new Windows.Media.Playback.MediaPlayer();
-                player.SetMediaPlayer(mediaSession);
-                var mediaFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
-                mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromStorageFile(mediaFile);
-                var playbackStatus = new TextBlock
-                {
-                    Text = "Ready · press Play to start",
-                    TextWrapping = TextWrapping.Wrap
-                };
-                mediaSession.MediaFailed += (_, args) =>
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                        playbackStatus.Text = "Playback failed · the format or codec may be unsupported. " +
-                            args.ErrorMessage);
-                };
-                panel.Children.Add(player);
-                panel.Children.Add(playbackStatus);
-            }
-            else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
-            {
-                const long maximumImageFileBytes = 64L * 1024 * 1024;
-                if (new FileInfo(path).Length > maximumImageFileBytes)
-                    throw new IOException("Image exceeds the 64 MiB preview file limit. Open it in a dedicated image editor.");
-                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
-                using var stream = await file.OpenReadAsync();
-                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                await bitmap.SetSourceAsync(stream);
-                panel.Children.Add(new Microsoft.UI.Xaml.Controls.Image
-                {
-                    Source = bitmap,
-                    MaxHeight = 440,
-                    MaxWidth = 780,
-                    Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
-                });
-            }
-            else if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Text or Meridian.Core.Viewer.ViewerKind.Hex)
-            {
-                var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path,
-                    maxBytes: decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex ? 4096 : 65536);
-                string display;
-                if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex)
-                {
-                    display = Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes);
-                }
-                else
-                {
-                    if (Meridian.Core.Viewer.PreviewTextDecoder.TryDecode(bytes, out var decoded))
-                        display = decoded;
-                    else
-                        display = "Text encoding is unsupported or binary content detected. Showing the first 4 KiB as hexadecimal.\n\n" +
-                            Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes.AsSpan(0, Math.Min(bytes.Length, 4096)));
-                }
-                panel.Children.Add(new ScrollViewer
-                {
-                    MaxHeight = 420,
-                    Content = new TextBox
-                    {
-                        Text = display,
-                        IsReadOnly = true,
-                        AcceptsReturn = true,
-                        TextWrapping = TextWrapping.NoWrap,
-                        MinHeight = 220
-                    }
-                });
-            }
-            else
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = "This format does not yet have an integrated renderer. No external application will be launched.",
-                    TextWrapping = TextWrapping.Wrap
-                });
-            }
-
+            await PopulatePreviewPanelAsync(selected, panel, lease);
             await new ContentDialog
             {
                 Title = "Preview · " + selected.Name,
@@ -835,12 +781,106 @@ public sealed partial class MainWindow : Window
         finally
         {
             _previewDialogOpen = false;
-            if (player is not null)
+            lease.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Fills a panel with the read-only preview for one file. Shared by the
+    /// Preview dialog and the Space quick preview so both render a file the
+    /// same way; surfaces the same failures the dialog has always reported.
+    /// </summary>
+    private async Task PopulatePreviewPanelAsync(FileEntry selected, StackPanel panel, PreviewMediaLease lease)
+    {
+        var decision = Meridian.Core.Viewer.ViewerRouter.Classify(selected.FullPath);
+        panel.Children.Add(new TextBlock
+        {
+            Text = decision.Reason,
+            TextWrapping = TextWrapping.Wrap
+        });
+        var path = Meridian.Core.Viewer.PreviewPathPolicy.ValidateRegularFile(selected.FullPath);
+        if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Video or Meridian.Core.Viewer.ViewerKind.Audio)
+        {
+            var player = new Microsoft.UI.Xaml.Controls.MediaPlayerElement
             {
-                mediaSession?.Pause();
-                player.SetMediaPlayer(null);
-                mediaSession?.Dispose();
+                AreTransportControlsEnabled = true,
+                AutoPlay = false,
+                Height = decision.Kind == Meridian.Core.Viewer.ViewerKind.Video ? 320 : 100
+            };
+            var mediaSession = new Windows.Media.Playback.MediaPlayer();
+            player.SetMediaPlayer(mediaSession);
+            lease.Player = player;
+            lease.Session = mediaSession;
+            var mediaFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            mediaSession.Source = Windows.Media.Core.MediaSource.CreateFromStorageFile(mediaFile);
+            var playbackStatus = new TextBlock
+            {
+                Text = "Ready · press Play to start",
+                TextWrapping = TextWrapping.Wrap
+            };
+            mediaSession.MediaFailed += (_, args) =>
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                    playbackStatus.Text = "Playback failed · the format or codec may be unsupported. " +
+                        args.ErrorMessage);
+            };
+            panel.Children.Add(player);
+            panel.Children.Add(playbackStatus);
+        }
+        else if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Image)
+        {
+            const long maximumImageFileBytes = 64L * 1024 * 1024;
+            if (new FileInfo(path).Length > maximumImageFileBytes)
+                throw new IOException("Image exceeds the 64 MiB preview file limit. Open it in a dedicated image editor.");
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            using var stream = await file.OpenReadAsync();
+            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+            await bitmap.SetSourceAsync(stream);
+            panel.Children.Add(new Microsoft.UI.Xaml.Controls.Image
+            {
+                Source = bitmap,
+                MaxHeight = 440,
+                MaxWidth = 780,
+                Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+            });
+        }
+        else if (decision.Kind is Meridian.Core.Viewer.ViewerKind.Text or Meridian.Core.Viewer.ViewerKind.Hex)
+        {
+            var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(path,
+                maxBytes: decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex ? 4096 : 65536);
+            string display;
+            if (decision.Kind == Meridian.Core.Viewer.ViewerKind.Hex)
+            {
+                display = Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes);
             }
+            else
+            {
+                if (Meridian.Core.Viewer.PreviewTextDecoder.TryDecode(bytes, out var decoded))
+                    display = decoded;
+                else
+                    display = "Text encoding is unsupported or binary content detected. Showing the first 4 KiB as hexadecimal.\n\n" +
+                        Meridian.Core.Viewer.SafeFilePreview.HexDump(bytes.AsSpan(0, Math.Min(bytes.Length, 4096)));
+            }
+            panel.Children.Add(new ScrollViewer
+            {
+                MaxHeight = 420,
+                Content = new TextBox
+                {
+                    Text = display,
+                    IsReadOnly = true,
+                    AcceptsReturn = true,
+                    TextWrapping = TextWrapping.NoWrap,
+                    MinHeight = 220
+                }
+            });
+        }
+        else
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "This format does not yet have an integrated renderer. No external application will be launched.",
+                TextWrapping = TextWrapping.Wrap
+            });
         }
     }
 
@@ -2222,8 +2262,17 @@ public sealed partial class MainWindow : Window
     private static List<FileEntry> GetSelectedEntries(PaneState pane) =>
         pane.List.SelectedItems.OfType<FileEntry>().ToList();
 
-    private void LeftItems_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSelectionStatus(_left);
-    private void RightItems_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSelectionStatus(_right);
+    private void LeftItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateSelectionStatus(_left);
+        if (ReferenceEquals(_activePane, _left)) RefreshDetailsStrip();
+    }
+
+    private void RightItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateSelectionStatus(_right);
+        if (ReferenceEquals(_activePane, _right)) RefreshDetailsStrip();
+    }
 
     // Mirrors the counts ApplyFilter writes, without rebuilding the item list.
     private void UpdateSelectionStatus(PaneState pane)
@@ -2262,6 +2311,21 @@ public sealed partial class MainWindow : Window
     private async Task HandleListKeyDownAsync(PaneState pane, KeyRoutedEventArgs e)
     {
         var ctrlDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        if (e.Key == VirtualKey.Space)
+        {
+            var shiftDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            var altDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            if (!ctrlDown && !shiftDown && !altDown)
+            {
+                // Plain Space had no job in the file lists: selection
+                // toggling is Ctrl+Space, which is left untouched and still
+                // reaches the list. Plain Space opens the quick preview.
+                e.Handled = true;
+                await OpenQuickPreviewAsync(pane);
+                return;
+            }
+        }
+
         if (ctrlDown && e.Key == VirtualKey.A)
         {
             e.Handled = true;
@@ -2330,6 +2394,7 @@ public sealed partial class MainWindow : Window
     {
         _activePane = pane;
         UpdateActivePaneVisuals();
+        RefreshDetailsStrip();
     }
 
     private void UpdateActivePaneVisuals()
@@ -2424,6 +2489,569 @@ public sealed partial class MainWindow : Window
     private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); } }
     private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
 
+    // ----- Details strip -----
+
+    private void DetailsStripMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _detailsStripVisible = DetailsStripMenuItem.IsChecked;
+        ApplyDetailsStripVisibility();
+        _ = PersistSettingsAsync();
+    }
+
+    private void DetailsStripShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        _detailsStripVisible = !_detailsStripVisible;
+        ApplyDetailsStripVisibility();
+        _ = PersistSettingsAsync();
+    }
+
+    private void ApplyDetailsStripVisibility()
+    {
+        DetailsStrip.Visibility = _detailsStripVisible ? Visibility.Visible : Visibility.Collapsed;
+        DetailsStripMenuItem.IsChecked = _detailsStripVisible;
+        if (_detailsStripVisible)
+        {
+            RefreshDetailsStrip();
+        }
+        else
+        {
+            // Stop any in-flight detail work; a hidden strip shows nothing.
+            _detailsStripGeneration++;
+            _detailsStripCancellation?.Cancel();
+        }
+    }
+
+    private void RefreshDetailsStrip()
+    {
+        if (!_detailsStripVisible) return;
+        _ = RefreshDetailsStripAsync();
+    }
+
+    private async Task RefreshDetailsStripAsync()
+    {
+        var generation = ++_detailsStripGeneration;
+        _detailsStripCancellation?.Cancel();
+        _detailsStripCancellation?.Dispose();
+        _detailsStripCancellation = new CancellationTokenSource();
+        var token = _detailsStripCancellation.Token;
+        try
+        {
+            var selected = GetSelectedEntries(_activePane);
+            if (selected.Count != 1)
+            {
+                _detailsCurrentEntry = null;
+                ShowDetailsStripHint(selected.Count);
+                return;
+            }
+
+            var entry = selected[0];
+            _detailsCurrentEntry = entry;
+            FileSystemInfo info = entry.IsDirectory ? new DirectoryInfo(entry.FullPath) : new FileInfo(entry.FullPath);
+            info.Refresh();
+            if (!info.Exists)
+            {
+                ShowDetailsStripHint(0, "That item is no longer available.");
+                return;
+            }
+
+            DetailsName.Text = entry.Name;
+            ToolTipService.SetToolTip(DetailsName, entry.FullPath);
+            DetailsTypeText.Text = entry.TypeLabel + " · " + info.FullName;
+            DetailsDatesText.Text = $"Modified {info.LastWriteTime:g} · Created {info.CreationTime:g}";
+            DetailsSizeText.Text = entry.IsDirectory ? "Size: calculating…" : "Size: " + FormatFileSize(((FileInfo)info).Length);
+            DetailsExifText.Text = string.Empty;
+            DetailsExifText.Visibility = Visibility.Collapsed;
+            DetailsThumbnail.Source = null;
+            DetailsThumbnail.Visibility = Visibility.Collapsed;
+            DetailsThumbnailGlyph.Glyph = entry.Glyph;
+            DetailsThumbnailGlyph.Visibility = Visibility.Visible;
+            DetailsAccessText.Text = "Reading who can open this…";
+            DetailsSecurityButton.IsEnabled = false;
+
+            _ = LoadDetailsThumbnailAsync(entry, generation);
+            if (entry.IsDirectory)
+                _ = LoadDetailsFolderSizeAsync(entry, generation, token);
+            else
+                _ = LoadDetailsExifAsync(entry, generation);
+            _ = LoadDetailsMetadataAsync(entry, generation);
+            _ = LoadDetailsAccessAsync(entry, generation);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        {
+            if (generation == _detailsStripGeneration)
+                ShowDetailsStripHint(0, "Details could not be read · " + ex.Message);
+        }
+    }
+
+    private void ShowDetailsStripHint(int selectionCount, string? message = null)
+    {
+        DetailsName.Text = "Details";
+        ToolTipService.SetToolTip(DetailsName, null);
+        DetailsTypeText.Text = message ?? (selectionCount == 0
+            ? "Select an item to see its details here."
+            : $"{selectionCount:N0} items are selected. Details are shown for one item at a time.");
+        DetailsSizeText.Text = string.Empty;
+        DetailsDatesText.Text = string.Empty;
+        DetailsExifText.Text = string.Empty;
+        DetailsExifText.Visibility = Visibility.Collapsed;
+        DetailsThumbnail.Source = null;
+        DetailsThumbnail.Visibility = Visibility.Collapsed;
+        DetailsThumbnailGlyph.Glyph = "\uE946";
+        DetailsThumbnailGlyph.Visibility = Visibility.Visible;
+        DetailsAccessText.Text = string.Empty;
+        DetailsSecurityButton.IsEnabled = false;
+        SetDetailsEditorEnabled(false, "Select one file to see the details you can edit.");
+    }
+
+    private async Task LoadDetailsThumbnailAsync(FileEntry entry, int generation)
+    {
+        Microsoft.UI.Xaml.Media.Imaging.BitmapImage? bitmap = null;
+        try
+        {
+            if (entry.IsDirectory)
+            {
+                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(entry.FullPath);
+                using var thumbnail = await folder.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 120);
+                if (thumbnail is not null)
+                {
+                    bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmap.SetSourceAsync(thumbnail);
+                }
+            }
+            else
+            {
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
+                using var thumbnail = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 120);
+                if (thumbnail is not null)
+                {
+                    bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmap.SetSourceAsync(thumbnail);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+            System.Runtime.InteropServices.COMException or NotSupportedException)
+        {
+            bitmap = null;
+        }
+
+        if (generation != _detailsStripGeneration || bitmap is null) return;
+        DetailsThumbnail.Source = bitmap;
+        DetailsThumbnail.Visibility = Visibility.Visible;
+        DetailsThumbnailGlyph.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task LoadDetailsExifAsync(FileEntry entry, int generation)
+    {
+        var extension = Path.GetExtension(entry.FullPath);
+        if (!extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".tif", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".tiff", StringComparison.OrdinalIgnoreCase)) return;
+
+        Meridian.Core.Viewer.ExifSummary? summary = null;
+        try
+        {
+            var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(entry.FullPath, maxBytes: 262144);
+            if (Meridian.Core.Viewer.ExifReader.TryRead(bytes, out var parsed)) summary = parsed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            summary = null;
+        }
+
+        if (generation != _detailsStripGeneration || summary is null) return;
+        var lines = new List<string>();
+        if (summary.PixelWidth is { } width && summary.PixelHeight is { } height)
+            lines.Add($"Photo size: {width:N0} × {height:N0} pixels");
+        if (FormatCameraName(summary.CameraMake, summary.CameraModel) is { } camera)
+            lines.Add("Camera: " + camera);
+        if (summary.DateTaken is { } taken)
+            lines.Add("Taken: " + taken.ToString("g"));
+        if (summary.FormatCoordinates() is { } coordinates)
+            lines.Add("Location recorded in the photo: " + coordinates);
+        if (lines.Count == 0) return;
+        DetailsExifText.Text = string.Join("\n", lines);
+        DetailsExifText.Visibility = Visibility.Visible;
+    }
+
+    private static string? FormatCameraName(string? make, string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return string.IsNullOrWhiteSpace(make) ? null : make;
+        if (string.IsNullOrWhiteSpace(make)) return model;
+        return model.StartsWith(make, StringComparison.OrdinalIgnoreCase) ? model : make + " " + model;
+    }
+
+    private async Task LoadDetailsFolderSizeAsync(FileEntry entry, int generation, CancellationToken token)
+    {
+        try
+        {
+            var result = await FolderSizeCalculator.CalculateAsync(entry.FullPath, token, snapshot =>
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (generation != _detailsStripGeneration || token.IsCancellationRequested) return;
+                    DetailsSizeText.Text = $"Size so far: {DirectoryReader.FormatSize(snapshot.TotalBytes)} · counting…";
+                });
+            });
+            if (generation != _detailsStripGeneration || token.IsCancellationRequested) return;
+            DetailsSizeText.Text = $"Size: {DirectoryReader.FormatSize(result.TotalBytes)} · {result.FileCount:N0} files in {result.DirectoryCount:N0} folders" +
+                (result.SkippedCount > 0 ? $" · {result.SkippedCount:N0} items could not be counted" : string.Empty);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            if (generation == _detailsStripGeneration)
+                DetailsSizeText.Text = "Size could not be calculated · " + ex.Message;
+        }
+    }
+
+    private async Task LoadDetailsMetadataAsync(FileEntry entry, int generation)
+    {
+        var values = new Dictionary<MetadataProperty, string>
+        {
+            [MetadataProperty.Title] = string.Empty,
+            [MetadataProperty.Comment] = string.Empty,
+            [MetadataProperty.Rating] = string.Empty,
+            [MetadataProperty.Keywords] = string.Empty
+        };
+        bool markedReadOnly;
+        try
+        {
+            markedReadOnly = !entry.IsDirectory && new FileInfo(entry.FullPath).IsReadOnly;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            markedReadOnly = false;
+        }
+
+        if (!EditableMetadataPolicy.TryGetEditableProperties(entry.FullPath, entry.IsDirectory, markedReadOnly, out _, out var reason))
+        {
+            if (generation != _detailsStripGeneration) return;
+            _detailsCurrentValues = values;
+            ApplyDetailsValuesToEditor(values);
+            SetDetailsEditorEnabled(false, reason);
+            return;
+        }
+
+        try
+        {
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
+            var stored = await file.Properties.RetrievePropertiesAsync(
+                EditableMetadataPolicy.All.Select(descriptor => descriptor.ShellName));
+            values[MetadataProperty.Title] = StoredText(stored, "System.Title");
+            values[MetadataProperty.Comment] = StoredText(stored, "System.Comment");
+            values[MetadataProperty.Keywords] = MetadataEditPlanner.NormalizeKeywords(StoredKeywords(stored));
+            values[MetadataProperty.Rating] = RatingScale.ToDisplayText(StoredRating(stored));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+            System.Runtime.InteropServices.COMException or NotSupportedException or InvalidOperationException)
+        {
+            if (generation != _detailsStripGeneration) return;
+            _detailsCurrentValues = values;
+            ApplyDetailsValuesToEditor(values);
+            SetDetailsEditorEnabled(false, "Windows could not read this file's details here · " + ex.Message);
+            return;
+        }
+
+        if (generation != _detailsStripGeneration) return;
+        _detailsCurrentValues = values;
+        ApplyDetailsValuesToEditor(values);
+        SetDetailsEditorEnabled(true, null);
+    }
+
+    private static string StoredText(IDictionary<string, object> stored, string shellName) =>
+        stored.TryGetValue(shellName, out var value) && value is string text ? text : string.Empty;
+
+    private static string StoredKeywords(IDictionary<string, object> stored)
+    {
+        if (!stored.TryGetValue("System.Keywords", out var value) || value is null) return string.Empty;
+        return value switch
+        {
+            string single => single,
+            IEnumerable<string> many => string.Join("; ", many),
+            System.Collections.IEnumerable items => string.Join("; ", items.Cast<object>().Select(item => item?.ToString() ?? string.Empty)),
+            _ => value.ToString() ?? string.Empty
+        };
+    }
+
+    private static uint StoredRating(IDictionary<string, object> stored)
+    {
+        if (!stored.TryGetValue("System.Rating", out var value) || value is null) return 0;
+        return value switch
+        {
+            uint unsigned => unsigned,
+            int signed => signed <= 0 ? 0u : (uint)signed,
+            long wide => wide <= 0 ? 0u : (uint)Math.Min(wide, uint.MaxValue),
+            _ => 0
+        };
+    }
+
+    private void ApplyDetailsValuesToEditor(IReadOnlyDictionary<MetadataProperty, string> values)
+    {
+        DetailsTitleBox.Text = values[MetadataProperty.Title];
+        DetailsCommentBox.Text = values[MetadataProperty.Comment];
+        DetailsKeywordsBox.Text = values[MetadataProperty.Keywords];
+        DetailsRating.Value = int.TryParse(values[MetadataProperty.Rating], out var stars) ? stars : 0;
+    }
+
+    private void SetDetailsEditorEnabled(bool enabled, string? reason)
+    {
+        DetailsTitleBox.IsEnabled = enabled;
+        DetailsCommentBox.IsEnabled = enabled;
+        DetailsKeywordsBox.IsEnabled = enabled;
+        DetailsRating.IsEnabled = enabled;
+        DetailsReviewButton.IsEnabled = enabled;
+        DetailsEditReason.Text = reason ?? string.Empty;
+        DetailsEditReason.Visibility = string.IsNullOrEmpty(reason) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void DetailsReviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_detailsCurrentEntry is not { } entry) return;
+        var stars = (int)Math.Round(DetailsRating.Value);
+        var requested = new Dictionary<MetadataProperty, string>
+        {
+            [MetadataProperty.Title] = DetailsTitleBox.Text,
+            [MetadataProperty.Comment] = DetailsCommentBox.Text,
+            [MetadataProperty.Rating] = stars == 0 ? string.Empty : stars.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [MetadataProperty.Keywords] = DetailsKeywordsBox.Text
+        };
+        var plan = MetadataEditPlanner.BuildPlan(entry.FullPath, _detailsCurrentValues, requested);
+        if (!plan.HasChanges)
+        {
+            SetStatus("No detail changes to save.", StatusSeverity.Warning);
+            return;
+        }
+
+        var lines = string.Join("\n", plan.Changes.Select(change => $"{change.Property.Label}: \"{change.OldDisplay}\" → \"{change.NewDisplay}\""));
+        var dialog = new ContentDialog
+        {
+            Title = "Save detail changes?",
+            Content = $"Change the details stored inside this file?\n\n{entry.FullPath}\n\n{lines}\n\nOnly this file is changed. The old values are replaced; you can edit them again here at any time. If Windows cannot save a detail, nothing is written and the problem is reported.",
+            PrimaryButtonText = "Save changes",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        // Revalidate, like every other confirmed action: if the selection
+        // moved on while the dialog was open, do not write to a file the
+        // user is no longer looking at.
+        var current = GetSelectedEntries(_activePane);
+        if (current.Count != 1 || !string.Equals(current[0].FullPath, plan.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("Save cancelled · The selection changed. Review the item and its details again.", StatusSeverity.Warning);
+            return;
+        }
+
+        await ApplyMetadataPlanAsync(entry, plan, requested);
+    }
+
+    private async Task ApplyMetadataPlanAsync(FileEntry entry, MetadataEditPlan plan, IReadOnlyDictionary<MetadataProperty, string> requested)
+    {
+        try
+        {
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
+            var values = new List<KeyValuePair<string, object>>();
+            foreach (var change in plan.Changes)
+            {
+                var raw = requested.TryGetValue(change.Property.Property, out var text) ? text : string.Empty;
+                object? value = change.Property.Property switch
+                {
+                    MetadataProperty.Title => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim(),
+                    MetadataProperty.Comment => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim(),
+                    MetadataProperty.Rating => string.IsNullOrWhiteSpace(raw)
+                        ? null
+                        : RatingScale.ToShellValue(int.Parse(raw, System.Globalization.CultureInfo.InvariantCulture)),
+                    MetadataProperty.Keywords => MetadataEditPlanner.SplitKeywords(raw) is { Count: > 0 } tags
+                        ? tags.ToArray()
+                        : null,
+                    _ => null
+                };
+                values.Add(new KeyValuePair<string, object>(change.Property.ShellName, value!));
+            }
+
+            await file.Properties.SavePropertiesAsync(values);
+            SetStatus($"Details saved · {entry.Name}", StatusSeverity.Success);
+            RefreshDetailsStrip();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or FormatException or
+            System.Runtime.InteropServices.COMException or NotSupportedException or InvalidOperationException)
+        {
+            SetStatus("Details could not be saved · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    private async Task LoadDetailsAccessAsync(FileEntry entry, int generation)
+    {
+        AccessControlSummary summary;
+        try
+        {
+            summary = await Task.Run(() => AccessControlReader.Read(entry.FullPath, entry.IsDirectory));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            summary = new AccessControlSummary(null, [], "The access list could not be read.");
+        }
+
+        if (generation != _detailsStripGeneration) return;
+        DetailsAccessText.Text = string.Join("\n", AccessControlSummaryFormatter.DescribeLines(summary));
+        DetailsSecurityButton.IsEnabled = true;
+    }
+
+    private void DetailsSecurityButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_detailsCurrentEntry is not { } entry) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = entry.FullPath,
+                UseShellExecute = true,
+                Verb = "properties"
+            });
+            SetStatus("Opened Windows Properties · permissions are changed on its Security tab. Meridian only shows them.");
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            SetStatus("Could not open Windows Properties · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    // ----- Quick preview (Space) -----
+
+    private async Task OpenQuickPreviewAsync(PaneState pane)
+    {
+        if (_quickPreviewPane is not null) return;
+        if (pane.List.SelectedItem is not FileEntry entry)
+        {
+            SetStatus("Select an item to preview.", StatusSeverity.Warning);
+            return;
+        }
+
+        SetActivePane(pane);
+        _quickPreviewPane = pane;
+        QuickPreviewOverlay.Visibility = Visibility.Visible;
+        await ShowQuickPreviewItemAsync(pane, entry);
+        QuickPreviewOverlay.Focus(FocusState.Programmatic);
+    }
+
+    private async Task ShowQuickPreviewItemAsync(PaneState pane, FileEntry entry)
+    {
+        _quickPreviewCancellation?.Cancel();
+        _quickPreviewCancellation?.Dispose();
+        _quickPreviewCancellation = new CancellationTokenSource();
+        _quickPreviewLease?.Dispose();
+        _quickPreviewLease = new PreviewMediaLease();
+        _quickPreviewEntry = entry;
+        QuickPreviewPanel.Children.Clear();
+        QuickPreviewTitle.Text = entry.Name;
+        ToolTipService.SetToolTip(QuickPreviewTitle, entry.FullPath);
+        var index = pane.Items.IndexOf(entry);
+        QuickPreviewPosition.Text = pane.Items.Count > 0 && index >= 0
+            ? $"Item {index + 1:N0} of {pane.Items.Count:N0} · {pane.CurrentPath}"
+            : pane.CurrentPath;
+        try
+        {
+            if (entry.IsDirectory)
+            {
+                QuickPreviewPanel.Children.Add(new TextBlock
+                {
+                    Text = "Folder · " + entry.FullPath,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = ThemeBrush("MeridianTextSecondaryBrush")
+                });
+                var sizeLine = new TextBlock { Text = "Size: calculating…", TextWrapping = TextWrapping.Wrap };
+                QuickPreviewPanel.Children.Add(sizeLine);
+                _ = LoadQuickPreviewFolderSizeAsync(entry, sizeLine, _quickPreviewCancellation.Token);
+            }
+            else
+            {
+                await PopulatePreviewPanelAsync(entry, QuickPreviewPanel, _quickPreviewLease);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+            System.Runtime.InteropServices.COMException or System.Security.SecurityException)
+        {
+            QuickPreviewPanel.Children.Add(new TextBlock
+            {
+                Text = "Preview unavailable · " + ex.Message,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ThemeBrush("MeridianErrorBrush")
+            });
+            SetStatus("Preview unavailable · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    private async Task LoadQuickPreviewFolderSizeAsync(FileEntry entry, TextBlock sizeLine, CancellationToken token)
+    {
+        try
+        {
+            var result = await FolderSizeCalculator.CalculateAsync(entry.FullPath, token);
+            if (token.IsCancellationRequested || !ReferenceEquals(_quickPreviewEntry, entry)) return;
+            sizeLine.Text = $"Size: {DirectoryReader.FormatSize(result.TotalBytes)} · {result.FileCount:N0} files in {result.DirectoryCount:N0} folders" +
+                (result.SkippedCount > 0 ? $" · {result.SkippedCount:N0} items could not be counted" : string.Empty);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            if (!token.IsCancellationRequested && ReferenceEquals(_quickPreviewEntry, entry))
+                sizeLine.Text = "Size could not be calculated · " + ex.Message;
+        }
+    }
+
+    private async Task StepQuickPreviewAsync(int delta)
+    {
+        if (_quickPreviewPane is not { } pane) return;
+        if (pane.Items.Count == 0) return;
+        var current = pane.List.SelectedItem as FileEntry;
+        var index = current is null ? -1 : pane.Items.IndexOf(current);
+        var next = Math.Clamp(index + delta, 0, pane.Items.Count - 1);
+        if (next == index) return;
+        var entry = pane.Items[next];
+        pane.List.SelectedIndex = next;
+        pane.List.ScrollIntoView(entry);
+        await ShowQuickPreviewItemAsync(pane, entry);
+    }
+
+    private void CloseQuickPreview()
+    {
+        if (_quickPreviewPane is not { } pane) return;
+        _quickPreviewCancellation?.Cancel();
+        _quickPreviewLease?.Dispose();
+        _quickPreviewLease = null;
+        _quickPreviewPane = null;
+        _quickPreviewEntry = null;
+        QuickPreviewOverlay.Visibility = Visibility.Collapsed;
+        pane.List.Focus(FocusState.Programmatic);
+    }
+
+    private async void QuickPreviewOverlay_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case VirtualKey.Escape:
+            case VirtualKey.Space:
+                e.Handled = true;
+                CloseQuickPreview();
+                break;
+            case VirtualKey.Up:
+            case VirtualKey.Left:
+                e.Handled = true;
+                await StepQuickPreviewAsync(-1);
+                break;
+            case VirtualKey.Down:
+            case VirtualKey.Right:
+                e.Handled = true;
+                await StepQuickPreviewAsync(1);
+                break;
+        }
+    }
+
+    private void QuickPreviewCloseButton_Click(object sender, RoutedEventArgs e) => CloseQuickPreview();
     private enum OrganizeSection { None, Bookmarks, Shelf }
 
     private enum StatusSeverity { Info, Success, Warning, Error }
