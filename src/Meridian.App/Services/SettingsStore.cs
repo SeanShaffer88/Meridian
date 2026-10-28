@@ -19,7 +19,7 @@ internal enum DensityPreference
 /// Persists user interface preferences locally, beside the workspace store.
 /// The file is stored in the user's local application data directory. A missing
 /// or unreadable file yields the defaults, which reproduce the pre-settings look:
-/// dark theme, comfortable density, the sky-blue accent preset, centered pane split.
+/// dark theme, comfortable density, the red accent preset, centered pane split.
 /// </summary>
 internal sealed class SettingsStore
 {
@@ -36,13 +36,39 @@ internal sealed class SettingsStore
         {
             if (!File.Exists(_filePath)) return null;
             await using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-            return await JsonSerializer.DeserializeAsync<SettingsSnapshot>(stream, JsonOptions);
+            var snapshot = await JsonSerializer.DeserializeAsync<SettingsSnapshot>(stream, JsonOptions);
+            return snapshot is null ? null : MigrateAccentDefaultOnce(snapshot);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             // A damaged or inaccessible settings file must not prevent the app from opening.
             return null;
         }
+    }
+
+    /// <summary>
+    /// One-time migration, run at load: a settings file written before the
+    /// red default shipped can still carry the previous sky-blue default as
+    /// its stored accent (as the "Sky" preset id, or as a custom hex equal
+    /// to it) because that is what the program itself saved while Sky was
+    /// the default. The first load rewrites that stored value to the red
+    /// default and marks the record migrated, so a Sky choice made
+    /// deliberately afterwards is kept exactly. The rewrite persists on the
+    /// next ordinary save; until then, re-running it on every load is
+    /// idempotent.
+    /// </summary>
+    private static SettingsSnapshot MigrateAccentDefaultOnce(SettingsSnapshot snapshot)
+    {
+        if (snapshot.AccentDefaultMigrated) return snapshot;
+        var (mode, presetId, customHex) = AccentPalette.MigrateLegacyDefaultAccent(
+            snapshot.AccentMode, snapshot.AccentPreset, snapshot.AccentCustomColor);
+        return snapshot with
+        {
+            AccentMode = mode,
+            AccentPreset = presetId,
+            AccentCustomColor = customHex,
+            AccentDefaultMigrated = true
+        };
     }
 
     public async Task SaveAsync(SettingsSnapshot snapshot)
@@ -92,6 +118,9 @@ internal sealed class SettingsStore
 /// written before the sidebar existed read as shown. ColumnWidth is the shared
 /// Miller-column width in device-independent units; files written before it
 /// existed read as 0, which the window treats as "use the default width".
+/// AccentDefaultMigrated records whether the one-time accent migration (see
+/// SettingsStore) has been applied to this file; files written before it
+/// existed read as false, so the migration runs on their first load.
 /// </summary>
 internal sealed record SettingsSnapshot(
     string? Theme = null,
@@ -104,4 +133,5 @@ internal sealed record SettingsSnapshot(
     string? AccentCustomColor = null,
     bool DetailsStripVisible = false,
     bool SidebarVisible = true,
-    double ColumnWidth = 0);
+    double ColumnWidth = 0,
+    bool AccentDefaultMigrated = false);

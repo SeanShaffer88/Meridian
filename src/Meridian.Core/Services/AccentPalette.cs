@@ -74,15 +74,23 @@ public static class AccentPalette
     /// <summary>The light theme's panel surface; light variants are derived against it.</summary>
     public static AccentColor LightPanelReference { get; } = new(0xC7, 0xC4, 0xBF);
 
-    public const string DefaultPresetId = "Sky";
+    public const string DefaultPresetId = "Red";
 
-    /// <summary>The shipped default accent: the sky-blue preset, also the fallback for every invalid choice.</summary>
-    public static AccentColor DefaultColor { get; } = new(0x4C, 0xC2, 0xFF);
+    /// <summary>The shipped default accent: the red preset, also the fallback for every invalid choice.</summary>
+    public static AccentColor DefaultColor { get; } = new(0xF0, 0x44, 0x44);
+
+    /// <summary>
+    /// The previous shipped default (the sky-blue preset, default before the
+    /// darker red theme). Kept only so a stored accent equal to it can be
+    /// recognised as "never changed from the old default" by the one-time
+    /// migration; see <see cref="MigrateLegacyDefaultAccent"/>.
+    /// </summary>
+    public static AccentColor PreviousDefaultColor { get; } = new(0x4C, 0xC2, 0xFF);
 
     public static IReadOnlyList<AccentPreset> Presets { get; } =
     [
-        new("Sky", "Sky", new AccentColor(0x4C, 0xC2, 0xFF)),
         new("Red", "Red", new AccentColor(0xF0, 0x44, 0x44)),
+        new("Sky", "Sky", new AccentColor(0x4C, 0xC2, 0xFF)),
         new("Orange", "Orange", new AccentColor(0xF0, 0x7D, 0x2B)),
         new("Amber", "Amber", new AccentColor(0xF5, 0xB8, 0x3D)),
         new("Green", "Green", new AccentColor(0x3D, 0xA5, 0x6A)),
@@ -120,8 +128,12 @@ public static class AccentPalette
     /// accent wins in FollowWindows mode (used as-is in both themes, matching
     /// how Windows itself presents it); a valid custom colour beats the
     /// preset fallback; an unknown preset or unreadable custom value falls
-    /// back to the default sky blue. In the light theme, preset and custom colours
-    /// are replaced by their derived light variant.
+    /// back to the default red. Resolution is pure: a stored choice means
+    /// exactly what it says, in both themes — the one-time switch away from
+    /// the previous default happens in the settings load, via
+    /// <see cref="MigrateLegacyDefaultAccent"/>, never here. In the light
+    /// theme, preset and custom colours are replaced by their derived light
+    /// variant.
     /// </summary>
     public static AccentColor Resolve(AccentMode mode, string? presetId, string? customHex, bool lightTheme, AccentColor? windowsAccent)
     {
@@ -142,6 +154,42 @@ public static class AccentPalette
         }
 
         return lightTheme && deriveLightVariant ? DeriveLightVariant(baseColor) : baseColor;
+    }
+
+    /// <summary>
+    /// The one-time migration of a stored accent choice away from the
+    /// previous shipped default. A stored choice equal to that default — the
+    /// "Sky" preset id, or a custom hex equal to the Sky colour — was in
+    /// practice never a deliberate choice: it is what the program itself
+    /// saved while Sky was the default. Such a value is rewritten to the red
+    /// default (the custom form becomes the Red preset, dropping the hex, so
+    /// the migrated state is indistinguishable from a fresh install). Every
+    /// other value — FollowWindows, any other preset, any other custom
+    /// colour, and malformed input — is returned exactly as stored, so a Sky
+    /// choice made deliberately after the migration is never rewritten.
+    /// Callers run this once, at settings load, and record that they did.
+    /// </summary>
+    public static (string? Mode, string? PresetId, string? CustomHex) MigrateLegacyDefaultAccent(
+        string? mode, string? presetId, string? customHex)
+    {
+        if (string.Equals(mode, nameof(AccentMode.FollowWindows), StringComparison.Ordinal))
+            return (mode, presetId, customHex);
+
+        if (string.Equals(mode, nameof(AccentMode.Custom), StringComparison.Ordinal))
+        {
+            return AccentColor.TryParse(customHex, out var stored) && stored == PreviousDefaultColor
+                ? (nameof(AccentMode.Preset), DefaultPresetId, null)
+                : (mode, presetId, customHex);
+        }
+
+        // Files written before the mode existed carry only a preset id; a
+        // null mode with a preset id is the preset form of the same state.
+        var presetForm = string.Equals(mode, nameof(AccentMode.Preset), StringComparison.Ordinal)
+            || (mode is null && !string.IsNullOrWhiteSpace(presetId));
+        if (presetForm && string.Equals(FindPreset(presetId)?.Id, "Sky", StringComparison.Ordinal))
+            return (mode, DefaultPresetId, customHex);
+
+        return (mode, presetId, customHex);
     }
 
     /// <summary>
