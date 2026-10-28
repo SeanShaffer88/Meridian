@@ -1986,35 +1986,9 @@ public sealed partial class MainWindow : Window
             accentSwatches.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         accentSwatches.RowDefinitions.Add(new RowDefinition());
         accentSwatches.RowDefinitions.Add(new RowDefinition());
-        var presetIndex = 0;
-        foreach (var preset in AccentPalette.Presets)
-        {
-            var swatch = new Button
-            {
-                Height = 36,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(8),
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, preset.Color.R, preset.Color.G, preset.Color.B))
-            };
-            ToolTipService.SetToolTip(swatch, $"Accent color: {preset.Name}");
-            AutomationProperties.SetName(swatch, $"Accent color: {preset.Name}");
-            Grid.SetRow(swatch, presetIndex / 4);
-            Grid.SetColumn(swatch, presetIndex % 4);
-            presetIndex++;
-            swatch.Click += (s, args) =>
-            {
-                if (_accentMode == AccentMode.Preset &&
-                    string.Equals(_accentPresetId, preset.Id, StringComparison.OrdinalIgnoreCase)) return;
-                _accentMode = AccentMode.Preset;
-                _accentPresetId = preset.Id;
-                ApplyAccentBrushes();
-                RefreshAccentControls();
-                _ = PersistSettingsAsync();
-            };
-            swatchButtons.Add((preset, swatch));
-            accentSwatches.Children.Add(swatch);
-        }
+        // The custom color controls are created before the swatch loop: the
+        // swatch handlers call RefreshAccentControls, which reads them, and
+        // every variable it reads must be assigned before those handlers exist.
         var customPreview = new Border
         {
             Width = 36,
@@ -2058,7 +2032,35 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(customRevealButton, "Custom color");
         customRevealButton.Click += (s, args) =>
             customPanel.Visibility = customPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-
+        var presetIndex = 0;
+        foreach (var preset in AccentPalette.Presets)
+        {
+            var swatch = new Button
+            {
+                Height = 36,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, preset.Color.R, preset.Color.G, preset.Color.B))
+            };
+            ToolTipService.SetToolTip(swatch, $"Accent color: {preset.Name}");
+            AutomationProperties.SetName(swatch, $"Accent color: {preset.Name}");
+            Grid.SetRow(swatch, presetIndex / 4);
+            Grid.SetColumn(swatch, presetIndex % 4);
+            presetIndex++;
+            swatch.Click += (s, args) =>
+            {
+                if (_accentMode == AccentMode.Preset &&
+                    string.Equals(_accentPresetId, preset.Id, StringComparison.OrdinalIgnoreCase)) return;
+                _accentMode = AccentMode.Preset;
+                _accentPresetId = preset.Id;
+                ApplyAccentBrushes();
+                RefreshAccentControls();
+                _ = PersistSettingsAsync();
+            };
+            swatchButtons.Add((preset, swatch));
+            accentSwatches.Children.Add(swatch);
+        }
         void RefreshAccentControls()
         {
             foreach (var (preset, button) in swatchButtons)
