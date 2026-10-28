@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
 - Fix: the program failed to open in 0.3.0 — a grouping control reported its starting value while the window was still being built, before the panes existed. The grouping and filter paths now guard against that, and a test checks every control that can report during window construction.
 
