@@ -397,68 +397,143 @@ public sealed partial class MainWindow : Window
     }
     private async Task MoveSelectedAsync(PaneState source, PaneState destination)
     {
-        if (source.List.SelectedItem is not FileEntry selected)
+        var selection = GetSelectedEntries(source);
+        if (selection.Count == 0)
         {
             GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first.";
             return;
         }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
-        var kind = selected.IsDirectory ? "folder" : "file";
-        var dialog = new ContentDialog
+        ContentDialog dialog;
+        if (selection.Count == 1)
         {
-            Title = "Move item?",
-            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
-            PrimaryButtonText = "Move",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Content.XamlRoot
-        };
+            var selected = selection[0];
+            var kind = selected.IsDirectory ? "folder" : "file";
+            dialog = new ContentDialog
+            {
+                Title = "Move item?",
+                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
+                PrimaryButtonText = "Move",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
+        else
+        {
+            dialog = new ContentDialog
+            {
+                Title = "Move items?",
+                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. If an item cannot be moved, the move stops and items already moved stay moved.",
+                PrimaryButtonText = "Move",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var sourcePath = selected.FullPath;
+        var sourcePaths = selection.Select(item => item.FullPath).ToArray();
         var sourceFolder = source.CurrentPath;
         var destinationPath = destination.CurrentPath;
+        var movedCount = 0;
         try
         {
-            var movedTo = await Task.Run(() => FileOperations.MoveItem(sourcePath, destinationPath));
+            await Task.Run(() =>
+            {
+                foreach (var sourcePath in sourcePaths)
+                {
+                    FileOperations.MoveItem(sourcePath, destinationPath);
+                    movedCount++;
+                }
+            });
             if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
                 await NavigateAsync(source, sourceFolder, addHistory: false);
             if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
                 await NavigateAsync(destination, destinationPath, addHistory: false);
-            GlobalStatus.Text = $"Moved successfully · {Path.GetFileName(movedTo)}";
+            GlobalStatus.Text = sourcePaths.Length == 1
+                ? $"Moved successfully · {Path.GetFileName(sourcePaths[0])}"
+                : $"Moved {movedCount:N0} items";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Move failed · " + ex.Message;
+            if (movedCount > 0)
+            {
+                if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
+                    await NavigateAsync(source, sourceFolder, addHistory: false);
+                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                    await NavigateAsync(destination, destinationPath, addHistory: false);
+            }
+            GlobalStatus.Text = movedCount > 0
+                ? $"Move stopped after {movedCount:N0} of {sourcePaths.Length:N0} items · {ex.Message}"
+                : "Move failed · " + ex.Message;
         }
     }
 
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
         if (_copyCancellation is not null) { GlobalStatus.Text = "A copy is already in progress."; return; }
-        if (source.List.SelectedItem is not FileEntry selected) { GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first."; return; }
+        var selection = GetSelectedEntries(source);
+        if (selection.Count == 0) { GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first."; return; }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
-        if (string.Equals(Path.GetFullPath(selected.FullPath), Path.GetFullPath(destination.CurrentPath), StringComparison.OrdinalIgnoreCase))
-        { GlobalStatus.Text = "The destination is the selected folder. Choose another destination."; return; }
 
+        var sourcePaths = selection.Select(item => item.FullPath).ToArray();
         var destinationPath = destination.CurrentPath;
+        // A folder can never be copied into itself. Single copies check here;
+        // batch copies are also refused by the BatchCopy preflight before anything is copied.
+        foreach (var sourcePath in sourcePaths)
+        {
+            if (Directory.Exists(sourcePath) &&
+                string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+            { GlobalStatus.Text = "The destination is the selected folder. Choose another destination."; return; }
+        }
+
         var cancellation = new CancellationTokenSource();
         _copyCancellation = cancellation;
         CancelCopyButton.IsEnabled = true;
-        GlobalStatus.Text = $"Copying {selected.Name}…"; SetPaneStatus(source, "Copy in progress…");
+        GlobalStatus.Text = sourcePaths.Length == 1 ? $"Copying {selection[0].Name}…" : $"Copying {sourcePaths.Length:N0} items…";
+        SetPaneStatus(source, "Copy in progress…");
         try
         {
-            var copiedTo = await Task.Run(() => FileOperations.CopyItem(selected.FullPath, destinationPath, cancellation.Token), cancellation.Token);
-            if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
-            SetPaneStatus(source, "Ready"); GlobalStatus.Text = $"Copied successfully · {Path.GetFileName(copiedTo)}";
+            if (sourcePaths.Length == 1)
+            {
+                var copiedTo = await Task.Run(() => FileOperations.CopyItem(sourcePaths[0], destinationPath, cancellation.Token), cancellation.Token);
+                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
+                SetPaneStatus(source, "Ready"); GlobalStatus.Text = $"Copied successfully · {Path.GetFileName(copiedTo)}";
+            }
+            else
+            {
+                var progress = new Progress<BatchCopy.Progress>(state =>
+                {
+                    if (_copyCancellation == cancellation)
+                        GlobalStatus.Text = $"Copying {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}";
+                });
+                var result = await Task.Run(() => BatchCopy.Execute(sourcePaths, destinationPath, cancellation.Token, progress), cancellation.Token);
+                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
+                if (result.Succeeded)
+                {
+                    SetPaneStatus(source, "Ready");
+                    GlobalStatus.Text = $"{result.CompletedTargets.Count:N0} items copied";
+                }
+                else if (result.Cancelled)
+                {
+                    SetPaneStatus(source, "Copy cancelled");
+                    GlobalStatus.Text = $"Copy cancelled · {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items copied. Items already copied stay copied.";
+                }
+                else
+                {
+                    SetPaneStatus(source, "Copy failed");
+                    GlobalStatus.Text = $"Copy stopped after {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items · {result.Failure}";
+                }
+            }
         }
         catch (OperationCanceledException)
         {
             SetPaneStatus(source, "Copy cancelled");
             GlobalStatus.Text = "Copy cancelled · Partial staging data was cleaned up where possible.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or InvalidOperationException)
         { SetPaneStatus(source, "Copy failed"); GlobalStatus.Text = "Copy failed · " + ex.Message; }
         finally
         {
@@ -520,9 +595,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void RenameSelected_Click(object sender, RoutedEventArgs e)
+    private async void RenameSelected_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync(_activePane);
+
+    private async Task RenameSelectedAsync(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        if (pane.List.SelectedItem is not FileEntry selected)
         {
             GlobalStatus.Text = "Select a file or folder to rename.";
             return;
@@ -544,7 +621,6 @@ public sealed partial class MainWindow : Window
         try
         {
             var renamedTo = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
-            var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
             GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal)
                 ? "Name unchanged."
@@ -556,9 +632,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void PropertiesSelected_Click(object sender, RoutedEventArgs e)
+    private async void PropertiesSelected_Click(object sender, RoutedEventArgs e) => await PropertiesSelectedAsync(_activePane);
+
+    private async Task PropertiesSelectedAsync(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        if (pane.List.SelectedItem is not FileEntry selected)
         {
             GlobalStatus.Text = "Select a file or folder to view its properties.";
             return;
@@ -624,41 +702,70 @@ public sealed partial class MainWindow : Window
         return $"{size:0.##} {units[unit]} ({bytes:N0} bytes)";
     }
 
-    private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    private async void DeleteSelected_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync(_activePane);
+
+    private async Task DeleteSelectedAsync(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        var selection = GetSelectedEntries(pane);
+        if (selection.Count == 0)
         {
             GlobalStatus.Text = "Select a file or folder to delete.";
             return;
         }
 
-        var kind = selected.IsDirectory ? "folder" : "file";
-        var dialog = new ContentDialog
+        ContentDialog dialog;
+        if (selection.Count == 1)
         {
-            Title = "Move to Recycle Bin?",
-            Content = $"Move this {kind} to the Recycle Bin?\n\n{selected.FullPath}\n\nYou can restore it from the Recycle Bin unless Windows prevents doing so.",
-            PrimaryButtonText = "Move to Recycle Bin",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Content.XamlRoot
-        };
+            var selected = selection[0];
+            var kind = selected.IsDirectory ? "folder" : "file";
+            dialog = new ContentDialog
+            {
+                Title = "Move to Recycle Bin?",
+                Content = $"Move this {kind} to the Recycle Bin?\n\n{selected.FullPath}\n\nYou can restore it from the Recycle Bin unless Windows prevents doing so.",
+                PrimaryButtonText = "Move to Recycle Bin",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
+        else
+        {
+            dialog = new ContentDialog
+            {
+                Title = "Move to Recycle Bin?",
+                Content = $"Move {selection.Count:N0} items to the Recycle Bin?\n\nFrom: {pane.CurrentPath}\n\nYou can restore them from the Recycle Bin unless Windows prevents doing so. If an item cannot be moved, the delete stops and items already moved stay in the Recycle Bin.",
+                PrimaryButtonText = "Move to Recycle Bin",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        var deletedCount = 0;
         try
         {
-            if (selected.IsDirectory)
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-            else
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            foreach (var item in selection)
+            {
+                if (item.IsDirectory)
+                    Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(item.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                else
+                    Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(item.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                deletedCount++;
+            }
 
-            var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = $"Moved to Recycle Bin · {selected.Name}";
+            GlobalStatus.Text = selection.Count == 1
+                ? $"Moved to Recycle Bin · {selection[0].Name}"
+                : $"Moved {deletedCount:N0} items to Recycle Bin";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
         {
-            GlobalStatus.Text = "Could not move item to Recycle Bin · " + ex.Message;
+            if (deletedCount > 0) await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            GlobalStatus.Text = deletedCount > 0
+                ? $"Delete stopped after {deletedCount:N0} of {selection.Count:N0} items · {ex.Message}"
+                : "Could not move item to Recycle Bin · " + ex.Message;
         }
     }
 
@@ -702,19 +809,30 @@ public sealed partial class MainWindow : Window
         await dialog.ShowAsync();
     }
 
-    private void AddToShelf_Click(object sender, RoutedEventArgs e)
+    private void AddToShelf_Click(object sender, RoutedEventArgs e) => AddSelectedToShelf(_activePane);
+
+    private void AddSelectedToShelf(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        var selection = GetSelectedEntries(pane);
+        if (selection.Count == 0)
         {
             GlobalStatus.Text = "Select a file or folder to add to the Drop Shelf.";
             return;
         }
-        if (_dropShelf.Add(selected.FullPath))
+        var added = 0;
+        foreach (var item in selection)
         {
-            _shelfPaths.Add(Path.GetFullPath(selected.FullPath));
-            GlobalStatus.Text = $"Added to Drop Shelf · {_shelfPaths.Count:N0} collected";
+            if (_dropShelf.Add(item.FullPath))
+            {
+                _shelfPaths.Add(Path.GetFullPath(item.FullPath));
+                added++;
+            }
         }
-        else GlobalStatus.Text = "This item is already on the Drop Shelf.";
+        GlobalStatus.Text = selection.Count == 1
+            ? (added == 1 ? $"Added to Drop Shelf · {_shelfPaths.Count:N0} collected" : "This item is already on the Drop Shelf.")
+            : added > 0
+                ? $"Added {added:N0} items to Drop Shelf · {_shelfPaths.Count:N0} collected"
+                : "Those items are already on the Drop Shelf.";
     }
 
     private void RemoveFromShelf_Click(object sender, RoutedEventArgs e)
@@ -1088,6 +1206,97 @@ public sealed partial class MainWindow : Window
     }
 
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
+
+    private static List<FileEntry> GetSelectedEntries(PaneState pane) =>
+        pane.List.SelectedItems.OfType<FileEntry>().ToList();
+
+    private void LeftItems_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSelectionStatus(_left);
+    private void RightItems_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSelectionStatus(_right);
+
+    // Mirrors the counts ApplyFilter writes, without rebuilding the item list.
+    private void UpdateSelectionStatus(PaneState pane)
+    {
+        var count = pane.List.SelectedItems.Count;
+        if (count > 1)
+        {
+            SetPaneStatus(pane, $"{count:N0} selected");
+            return;
+        }
+        var query = pane.FilterBox.Text.Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            SetPaneStatus(pane, $"{pane.AllItems.Count:N0} items");
+            return;
+        }
+        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
+        SetPaneStatus(pane, $"{matches.Count:N0} of {pane.AllItems.Count:N0} items · filtered");
+    }
+
+    private async void LeftItems_KeyDown(object sender, KeyRoutedEventArgs e) => await HandleListKeyDownAsync(_left, e);
+    private async void RightItems_KeyDown(object sender, KeyRoutedEventArgs e) => await HandleListKeyDownAsync(_right, e);
+
+    private async Task HandleListKeyDownAsync(PaneState pane, KeyRoutedEventArgs e)
+    {
+        var ctrlDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        if (ctrlDown && e.Key == VirtualKey.A)
+        {
+            e.Handled = true;
+            pane.List.SelectAll();
+            return;
+        }
+        switch (e.Key)
+        {
+            case VirtualKey.Delete:
+                e.Handled = true;
+                await DeleteSelectedAsync(pane);
+                break;
+            case VirtualKey.F2:
+                e.Handled = true;
+                if (pane.List.SelectedItems.Count == 1) await RenameSelectedAsync(pane);
+                else if (pane.List.SelectedItems.Count > 1) GlobalStatus.Text = "Select a single item to rename.";
+                break;
+            case VirtualKey.Enter:
+                e.Handled = true;
+                await OpenSelectedAsync(pane);
+                break;
+        }
+    }
+
+    private void LeftContextMenu_Opening(object sender, object e) => UpdateContextMenu(_left, isLeftPane: true);
+    private void RightContextMenu_Opening(object sender, object e) => UpdateContextMenu(_right, isLeftPane: false);
+
+    private void UpdateContextMenu(PaneState pane, bool isLeftPane)
+    {
+        var copyItem = isLeftPane ? LeftCopyMenuItem : RightCopyMenuItem;
+        var moveItem = isLeftPane ? LeftMoveMenuItem : RightMoveMenuItem;
+        var renameItem = isLeftPane ? LeftRenameMenuItem : RightRenameMenuItem;
+        var propertiesItem = isLeftPane ? LeftPropertiesMenuItem : RightPropertiesMenuItem;
+        var shelfItem = isLeftPane ? LeftShelfMenuItem : RightShelfMenuItem;
+        var deleteItem = isLeftPane ? LeftDeleteMenuItem : RightDeleteMenuItem;
+        var other = isLeftPane ? _right : _left;
+        var count = pane.List.SelectedItems.Count;
+        var hasDestination = !string.IsNullOrWhiteSpace(other.CurrentPath);
+        var direction = isLeftPane ? "right" : "left";
+        copyItem.IsEnabled = count > 0 && hasDestination && _copyCancellation is null;
+        moveItem.IsEnabled = count > 0 && hasDestination;
+        renameItem.IsEnabled = count == 1;
+        propertiesItem.IsEnabled = count == 1;
+        shelfItem.IsEnabled = count > 0;
+        deleteItem.IsEnabled = count > 0;
+        copyItem.Text = count > 1 ? $"Copy {count:N0} items to {direction} pane" : $"Copy to {direction} pane";
+        moveItem.Text = count > 1 ? $"Move {count:N0} items to {direction} pane" : $"Move to {direction} pane";
+        shelfItem.Text = count > 1 ? $"Add {count:N0} items to Drop Shelf" : "Add to Drop Shelf";
+        deleteItem.Text = count > 1 ? $"Delete {count:N0} items (Recycle Bin)" : "Delete (Recycle Bin)";
+    }
+
+    private async void RenameFromLeft_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync(_left);
+    private async void RenameFromRight_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync(_right);
+    private async void PropertiesFromLeft_Click(object sender, RoutedEventArgs e) => await PropertiesSelectedAsync(_left);
+    private async void PropertiesFromRight_Click(object sender, RoutedEventArgs e) => await PropertiesSelectedAsync(_right);
+    private async void DeleteFromLeft_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync(_left);
+    private async void DeleteFromRight_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync(_right);
+    private void AddToShelfFromLeft_Click(object sender, RoutedEventArgs e) => AddSelectedToShelf(_left);
+    private void AddToShelfFromRight_Click(object sender, RoutedEventArgs e) => AddSelectedToShelf(_right);
     private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_left);
     private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_right);
     private void LeftItems_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_left);
