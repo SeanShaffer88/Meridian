@@ -61,7 +61,11 @@ These features are **implemented on the main development branch**. They are not 
 | **Keyboard-first navigation** | Switch panes, focus location or filter fields, refresh, and navigate history with shortcuts. |
 | **Folder DNA — first signature experience** | See a quick profile of the active folder: file/folder counts, known file sizes, date range, and largest type groups. |
 | **Drop Shelf** | Collect paths from unrelated folders without moving the originals; remove, clear, or show the location of a collected item. The shelf is in-memory and does not survive an app restart. |
-| **Operation Simulator + confirmed batch copy** | Preview shelf items against the active pane’s destination folder, review ready/blocked counts and collisions, then explicitly confirm a no-overwrite sequential batch copy. |
+| **Operation Simulator + confirmed batch copy** | Preview shelf items against the active pane’s destination folder, review ready/blocked counts and collisions, then explicitly confirm the batch; it runs through the Transfers queue. |
+| **Transfers queue** | Copy and Move run as queued jobs in a Transfers strip below the panes: progress with speed and time left, Pause/Resume/Cancel, and a per-file choice (Replace / Keep both / Skip) whenever a name already exists. Jobs are saved as they run, so a job left unfinished reappears — paused, never auto-restarted — next time Meridian opens. |
+| **Transfer History + undo** | Finished transfers are recorded in the strip's History view. A finished Copy or Move can be undone from there when the files it produced are still exactly as the transfer left them; when undo is not safe, the button's tooltip says why. |
+| **Drag and drop** | Drag selected items onto the other pane, a folder row, a sidebar location, or a Home drive/folder card. Dropping moves on the same volume and copies across volumes; Ctrl forces Copy and Shift forces Move, and the drag caption names the operation and destination before you let go. Files dragged in from Explorer work the same way. |
+| **File hash** | Tools → File hash… shows the SHA-256 fingerprint of each selected file, with a copy button per file and a compare field that reports "Matches <file>" or "Does not match" for a hash you paste. |
 | **Conservative file actions** | Copy, move, rename, create folders, view basic properties, and request Recycle Bin deletion. |
 | **Universal Viewer** | Preview text (UTF-8/UTF-16), hex, and images, and play audio/video with Windows media controls and no autoplay. Reads are bounded and read-only; playback behavior is not yet verified on real devices. |
 | **Archives** | Inspect ZIP/TAR/TGZ contents read-only, create an archive from selected files and folders, or extract into a new no-overwrite folder under entry-policy and size limits, with cancellation. |
@@ -85,7 +89,15 @@ It does **not** recursively calculate folder sizes, hash files, or scan nested d
 
 Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview shows up to 100 individual results while counting the whole batch.
 
-**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Per-item batch progress and cancellation are available: the status area reports completed/total items, and **Cancel batch** requests cancellation during execution at supported checkpoints. The initial confirmation preflight is not cancellable from this button on `main` (see PR #41). A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
+**Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying runs as a job in the Transfers queue (see below), refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the transfer engine rechecks the filesystem at execution time. Progress appears in the Transfers strip, and **Cancel batch** cancels the queued shelf job (or the preparation phase before it starts). A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
+
+### Transfers: a queue for copying and moving
+
+Copy and Move are queued as jobs in the **Transfers strip** that appears below the panes. Jobs run one at a time, in the order they were added. Each job shows its progress, speed, and estimated time left, and can be **paused** (progress so far is kept), **resumed**, or **cancelled** (files already finished stay in place; a half-copied file is removed). While a job runs, the status bar shows a compact summary. The strip can be collapsed, and Meridian remembers that choice.
+
+When a destination name already exists, what happens is your **Settings** choice under **When a name already exists**: **Ask me each time** (the job waits in the strip and you choose Replace / Keep both / Skip per file, with an "Apply to all remaining" option), **Skip the item**, **Keep both** (the incoming file gets a numbered name), **Replace the existing file**, or **Replace only if the incoming file is newer**. Settings also offers **Verify copies with a checksum (slower)**: each copied file is read back and its SHA-256 compared with the original before the copy is put in place; a copy that does not match is removed and the original is kept.
+
+Finished jobs move to the strip's **History** view, most recent first. From there, a finished Copy or Move can often be **undone** — undoing a copy deletes exactly the files that copy created (folders it created are left in place), and undoing a move moves the files back — but only while those files are unchanged since the transfer; when undo is not offered, the Undo button's tooltip explains why. Deletes are never undoable from History. The queue and history are stored locally in `%LOCALAPPDATA%\Meridian` (`transfer-queue.json` and `transfer-history.json`); history keeps the most recent 100 finished jobs.
 
 ### Universal Viewer and media player
 
@@ -191,14 +203,14 @@ Meridian is designed around conservative defaults, not irreversible surprises.
 
 | Current behavior | What to know |
 | --- | --- |
-| **No silent overwrites** | Copy and move reject destination-name collisions. |
+| **Name collisions follow your setting** | Copy and move use the Settings choice for names that already exist: Ask (the default), Skip, Keep both, Replace, or Replace if newer. Nothing is overwritten unless the setting — or your per-file choice while Ask is on — says so. |
 | **Staged copying** | Copy writes to temporary `.meridian-*.partial` paths before finalizing. Cleanup is attempted after errors, but is not guaranteed. |
-| **Copy cancellation** | Cancellation is checked during supported copy operations; cleanup can still fail. |
+| **Transfer cancellation** | Cancelling a transfer keeps files already finished and removes the half-copied staging file; cleanup can still fail. |
 | **Recycle Bin requests** | Delete asks Windows to use the Recycle Bin after confirmation. Availability and recovery vary by filesystem and location. |
 | **No automatic elevation** | Meridian operates using the current user's access rights. |
 | **Local-first design** | No required account, advertising, or telemetry. |
 
-**Important limitations:** There is no general undo engine, automatic restore point, dedicated audit log, post-copy checksum verification, or guaranteed transactional rollback. Cross-volume moves copy first and then remove the source; if removal fails, **both copies may remain**. Reparse-point and filesystem edge cases still require additional validation.
+**Important limitations:** Undo covers only finished Copy and Move transfers recorded in Transfer History, and only while their results are unchanged; there is no universal undo engine, automatic restore point, dedicated audit log, or guaranteed transactional rollback. Post-copy checksum verification is available as a Settings option and is off by default. Cross-volume moves copy first and then remove the source; if removal fails, **both copies may remain**. Reparse-point and filesystem edge cases still require additional validation.
 
 **An Operation Simulator preview is not a filesystem lock or guarantee**—conditions can change between preview and execution. The underlying operation must still enforce its safety rules.
 
@@ -231,7 +243,7 @@ Automated builds are not a substitute for testing actual devices, Windows shell 
 - **Installer:** Use **Settings → Apps → Installed apps** or the installed uninstaller, where available. Full uninstall verification is still pending.
 - **Portable package:** Close Meridian and delete the extracted application folder. Some settings may remain in per-user application data.
 - **Deleted a file?** Check the Windows Recycle Bin; restoration is not guaranteed.
-- **Copied, moved, or renamed something?** Inspect both locations before manually reversing it. Meridian does not currently provide universal undo.
+- **Copied or moved something?** Check Transfer History in the Transfers strip — many finished copies and moves can be undone from there while their results are unchanged. Renames have no undo; inspect both locations before manually reversing one.
 - **Copy failed?** Check for `.meridian-*.partial` leftovers; verify contents and that no operation is using them before removing anything.
 - **Startup failed?** Check `%LOCALAPPDATA%\Meridian\last-error.log` if present and keep the complete published folder, including `Meridian.pri`.
 - **Settings/privacy:** `%LOCALAPPDATA%\Meridian\workspace.json` stores paths, bookmark/tab labels and active-tab selection. Portable copies also use this location. Diagnostics can contain paths; see the [user guide](docs/USER_GUIDE.md#local-data-and-privacy).

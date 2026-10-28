@@ -7,6 +7,15 @@
 - The selection highlight is now a dark red-gray (a pale red-gray in the light theme). It no longer follows the accent colour, so changing the accent never changes how selected files look.
 - Meridian now has its own app icon — two panes forming an M around a red meridian line — shown on the taskbar, on shortcuts and in Settings instead of the generic program icon, and the same mark appears in the title bar.
 
+- Copy and Move now run in a Transfers queue: a strip below the panes shows each job's progress, speed and estimated time left, with Pause, Resume and Cancel. Jobs run one at a time and are saved as they go; a job left unfinished when Meridian closes comes back paused and never restarts on its own.
+- When a copy or move reaches a file whose name already exists at the destination, the job waits in the strip and you choose per file — Replace, Keep both (the incoming file gets a numbered name), or Skip — with an option to apply the choice to all remaining files.
+- Finished transfers are kept in a History view in the same strip. A finished Copy or Move can be undone from History while the files it produced are unchanged; the Undo button explains itself when undo is not available. Deletes cannot be undone from History.
+- Drag and drop: drag selected files onto the other pane, a folder inside a pane, a sidebar location, or a Home drive or folder card to copy or move them. Dropping moves within the same volume and copies across volumes; Ctrl forces Copy and Shift forces Move, and the drag label names the operation and destination before you let go. Dragging files in from Explorer works the same way.
+- New Tools command "File hash…": shows the SHA-256 fingerprint of each selected file with a button to copy it, plus a compare field that tells you whether a pasted hash matches one of the files.
+- New Settings choices for transfers: "When a name already exists" (Ask me each time, Skip, Keep both, Replace, or Replace only if newer) and "Verify copies with a checksum (slower)", which reads each copy back and compares its SHA-256 with the original before putting it in place.
+- Drop Shelf copies run through the Transfers queue after their preview and confirmation, like other copies.
+- Every interactive control in the main window and in Settings now carries a plain-words tooltip; controls that overwrite files or cancel work say what will happen.
+
 ## 0.4.0
 
 - The window now uses a custom title bar: the header row is the title bar, with the minimize, maximize and close buttons at its top-right corner, and the operations toolbar (Copy, Move, New folder, Rename, and the archive and view actions) sits in the header beside the Meridian wordmark. On narrow windows the toolbar's extra actions move into its "…" menu instead of crowding the header.

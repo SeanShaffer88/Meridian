@@ -121,6 +121,12 @@ internal sealed class SettingsStore
 /// AccentDefaultMigrated records whether the one-time accent migration (see
 /// SettingsStore) has been applied to this file; files written before it
 /// existed read as false, so the migration runs on their first load.
+/// VerifyCopiesWithChecksum records the Settings toggle of the same name;
+/// files written before it existed read as false.
+/// NameCollisionPolicy is a CollisionPolicy name ("Ask", "Skip", "KeepBoth",
+/// "Replace", "ReplaceIfNewer"); files written before it existed read as
+/// null, which the window treats as Ask. TransfersStripCollapsed records
+/// whether the Transfers strip's list is hidden; it defaults to false.
 /// </summary>
 internal sealed record SettingsSnapshot(
     string? Theme = null,
@@ -134,4 +140,7 @@ internal sealed record SettingsSnapshot(
     bool DetailsStripVisible = false,
     bool SidebarVisible = true,
     double ColumnWidth = 0,
-    bool AccentDefaultMigrated = false);
+    bool AccentDefaultMigrated = false,
+    bool VerifyCopiesWithChecksum = false,
+    string? NameCollisionPolicy = null,
+    bool TransfersStripCollapsed = false);
