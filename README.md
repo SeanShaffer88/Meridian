@@ -63,6 +63,9 @@ These features are **implemented on the main development branch**. They are not 
 | **Drop Shelf** | Collect paths from unrelated folders without moving the originals; remove, clear, or show the location of a collected item. The shelf is in-memory and does not survive an app restart. |
 | **Operation Simulator + confirmed batch copy** | Preview shelf items against the active pane’s destination folder, review ready/blocked counts and collisions, then explicitly confirm a no-overwrite sequential batch copy. |
 | **Conservative file actions** | Copy, move, rename, create folders, view basic properties, and request Recycle Bin deletion. |
+| **Universal Viewer** | Preview text (UTF-8/UTF-16), hex, and images, and play audio/video with Windows media controls and no autoplay. Reads are bounded and read-only; playback behavior is not yet verified on real devices. |
+| **Archives** | Inspect ZIP/TAR/TGZ contents read-only, create an archive from selected files and folders, or extract into a new no-overwrite folder under entry-policy and size limits, with cancellation. |
+| **TimeVault (read-only)** | Discover existing Windows shadow copies and list a snapshot's version of the current folder. Discovery only — no recovery operations, and real VSS access is unverified. |
 | **Windows preview packages** | CI produces portable application folders and per-user installers for x64 and ARM64. |
 
 ### Folder DNA: understand a folder at a glance
@@ -83,6 +86,10 @@ It does **not** recursively calculate folder sizes, hash files, or scan nested d
 Working across folders no longer has to mean moving files immediately. Select an item, choose **Shelf selected**, then browse elsewhere and collect another. **Preview shelf → active folder** evaluates the entire collection against the destination shown in your active pane, identifying known conflicts without copying, moving, or deleting anything. The preview shows up to 100 individual results while counting the whole batch.
 
 **Batch copying is now available:** Use **Copy shelf…** to recheck the batch and explicitly confirm the destination and item count. Copying is sequential, refuses known preflight blockers, and does not overwrite existing destination files. Originals remain in place. If a later item fails, earlier successful copies are not automatically rolled back. The shelf does not persist between launches. Preview results are advisory; the copy engine rechecks the filesystem at execution time. Per-item batch progress and cancellation are available: the status area reports completed/total items, and **Cancel batch** requests cancellation during execution at supported checkpoints. The initial confirmation preflight is not cancellable from this button on `main` (see PR #41). A cancelled batch can leave earlier completed copies in the destination; it does not automatically roll them back.
+
+### Universal Viewer and media player
+
+The [Universal Viewer](docs/UNIVERSAL_VIEWER.md) includes bounded text/hex preview, image decoding, and native Windows audio/video controls without autoplay. It passes Windows x64/ARM64 compilation; **actual playback and interactive preview behavior remain unverified**; PDF rendering and stronger decoder safeguards remain incomplete.
 
 ### A workspace that follows your thinking
 
@@ -118,6 +125,16 @@ The ideas below define the direction of the project. **Unless explicitly listed 
 | **Optional local intelligence** | Get useful suggestions without mandatory cloud processing or silent file modifications. |
 
 **Our rule for innovation:** a feature should solve a real problem, stay understandable, and earn its complexity. Speed, privacy, accessibility, and file safety matter more than spectacle.
+
+### Meridian TimeVault — explore yesterday without risking today
+
+**TimeVault is in development, not a released recovery tool.** It includes Windows WMI snapshot discovery, volume matching, a toolbar snapshot picker with a limited read-only folder listing, and an unconnected backend-only single-file export service. None of these features has completed real Windows VSS verification.
+
+The proposed experience includes a full read-only **Shadow Copy Explorer**, a **File Time Machine** timeline, **Recovery Studio** with explicit user confirmation, snapshot-wide search, a **Difference Lens** for comparing versions, verified export checksums, and snapshot health diagnostics. These remain planned.
+
+TimeVault works only when Windows exposes accessible snapshots. VSS is **not a backup system**: snapshots can disappear, may require elevated access, and must not be treated as guaranteed recovery points. TimeVault will not silently create, delete, or modify snapshots.
+
+Explore the [TimeVault engineering plan](docs/TIMEVAULT.md).
 
 See the full [innovation-first roadmap](docs/ROADMAP.md).
 
@@ -215,9 +232,20 @@ Automated builds are not a substitute for testing actual devices, Windows shell 
 - **Portable package:** Close Meridian and delete the extracted application folder. Some settings may remain in per-user application data.
 - **Deleted a file?** Check the Windows Recycle Bin; restoration is not guaranteed.
 - **Copied, moved, or renamed something?** Inspect both locations before manually reversing it. Meridian does not currently provide universal undo.
-- **Copy failed?** Check for `.meridian-*.partial` leftovers; verify what they contain before removing anything.
+- **Copy failed?** Check for `.meridian-*.partial` leftovers; verify contents and that no operation is using them before removing anything.
+- **Startup failed?** Check `%LOCALAPPDATA%\Meridian\last-error.log` if present and keep the complete published folder, including `Meridian.pri`.
+- **Settings/privacy:** `%LOCALAPPDATA%\Meridian\workspace.json` stores paths, bookmark/tab labels and active-tab selection. Portable copies also use this location. Diagnostics can contain paths; see the [user guide](docs/USER_GUIDE.md#local-data-and-privacy).
 
 Uninstalling Meridian does **not** reverse file operations.
+
+## Project stewardship and support
+
+**Author & Principal Architect:** Sean Shaffer  
+**Contact & security inquiries:** [seanshaffer88@proton.me](mailto:seanshaffer88@proton.me)  
+**Repository & portfolio:** [github.com/SeanShaffer88](https://github.com/SeanShaffer88)  
+**Optional project support:** [Buy Me a Coffee](https://buymeacoffee.com/seanspawn88)
+
+Sponsorship is voluntary and does not affect Meridian's open-source license, access to features, or security-report handling. For sensitive vulnerability reports, use the contact email rather than posting exploit details in a public issue.
 
 ## Help shape Meridian
 
