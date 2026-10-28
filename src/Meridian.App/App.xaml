@@ -47,6 +47,14 @@
           <SolidColorBrush x:Key="MeridianPressedBackgroundBrush" Color="#24000000" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
+      <Thickness x:Key="MeridianHeaderMargin">12,8</Thickness>
+      <Thickness x:Key="MeridianChromeMargin">8,4</Thickness>
+      <Thickness x:Key="MeridianWorkAreaMargin">8</Thickness>
+      <Thickness x:Key="MeridianStatusBarMargin">8,6</Thickness>
+      <Thickness x:Key="MeridianPaneHeaderMargin">8,8</Thickness>
+      <Thickness x:Key="MeridianPaneRowMargin">8,0,8,8</Thickness>
+      <Thickness x:Key="MeridianPaneStatusMargin">8,6</Thickness>
+      <Thickness x:Key="MeridianListItemMargin">8,4</Thickness>
     </ResourceDictionary>
   </Application.Resources>
 </Application>
