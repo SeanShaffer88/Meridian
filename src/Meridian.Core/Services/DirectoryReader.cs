@@ -48,7 +48,7 @@ public static class DirectoryReader
     }
 
     /// <summary>Filters a previously-read directory listing without touching the filesystem again.</summary>
-    public static IReadOnlyList<FileEntry> Filter(IReadOnlyList<FileEntry> entries, string? query, DirectorySortField sortField = DirectorySortField.Name, bool descending = false)
+    public static IReadOnlyList<FileEntry> Filter(IReadOnlyList<FileEntry> entries, string? query, DirectorySortField sortField = DirectorySortField.Name, bool descending = false, bool includeFullPath = true)
     {
         ArgumentNullException.ThrowIfNull(entries);
         var normalizedQuery = query?.Trim();
@@ -57,7 +57,7 @@ public static class DirectoryReader
         {
             filtered = entries.Where(item =>
                 item.Name.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
-                item.FullPath.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                (includeFullPath && item.FullPath.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)) ||
                 item.TypeLabel.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase));
         }
 

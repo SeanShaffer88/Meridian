@@ -5,6 +5,27 @@ namespace Meridian.Core.Tests;
 public sealed class FileOperationsTests
 {
     [Fact]
+    public void CopyItem_RejectsNestedSymbolicLinkAndRemovesPartialStaging()
+    {
+        using var temp = new TemporaryDirectory();
+        var source = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(temp.Path, "destination")).FullName;
+        var outside = Path.Combine(temp.Path, "outside.txt");
+        File.WriteAllText(outside, "do not copy through link");
+        File.WriteAllText(Path.Combine(source, "first.txt"), "safe");
+        try { File.CreateSymbolicLink(Path.Combine(source, "linked.txt"), outside); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return; // Symlink creation may require Windows Developer Mode.
+        }
+
+        Assert.Throws<IOException>(() => FileOperations.CopyItem(source, destination));
+        Assert.Empty(Directory.GetFileSystemEntries(destination));
+        Assert.Equal("safe", File.ReadAllText(Path.Combine(source, "first.txt")));
+        Assert.Equal("do not copy through link", File.ReadAllText(outside));
+    }
+
+    [Fact]
     public void CopyItem_RefusesLinkedDestinationWithoutWriting()
     {
         using var temp = new TemporaryDirectory();

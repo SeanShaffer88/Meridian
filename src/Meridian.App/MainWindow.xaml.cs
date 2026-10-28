@@ -3,9 +3,11 @@ using Meridian.Models;
 using Meridian.Services;
 using Microsoft.VisualBasic.FileIO;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 
 namespace Meridian;
@@ -15,7 +17,23 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _left;
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
+    private readonly SettingsStore _settingsStore = new();
+    private readonly Windows.UI.ViewManagement.UISettings _uiSettings = new();
+    private ThemePreference _themePreference = ThemePreference.Dark;
+    private DensityPreference _densityPreference = DensityPreference.Comfortable;
+    private bool _followWindowsAccent;
+    private double _paneSplitFraction = 0.5;
+    private Microsoft.UI.Windowing.AppWindow? _appWindow;
+    private double _rasterizationScale = 1.0;
+    private bool _enforcingMinimumWindowSize;
+    private bool _splitDragging;
+    private double _splitDragStartX;
+    private double _splitDragStartFraction;
     private readonly DropShelf _dropShelf = new();
+    private readonly List<ContextCapsule> _capsules = [];
+    private readonly ContextCapsuleStore _capsuleStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "capsules.json"));
+    private bool _capsuleStorageUnavailable;
+    private bool _capsuleSaving;
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
     private readonly List<WorkspaceTab> _workspaceTabs = [];
@@ -23,19 +41,27 @@ public sealed partial class MainWindow : Window
     private int _nextWorkspaceTabNumber = 1;
     private bool _switchingWorkspaceTab;
     private PaneState _activePane;
+    private OrganizeSection _openOrganizeSection = OrganizeSection.None;
     private bool _restoringWorkspace;
     private CancellationTokenSource? _copyCancellation;
     private CancellationTokenSource? _batchCancellation;
     private bool _batchPreparing;
+    private string? _pinnedError;
 
     public MainWindow()
     {
         InitializeComponent();
+        _appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(
+            Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)));
+        _appWindow.Changed += AppWindow_Changed;
+        if (Content is FrameworkElement rootElement) rootElement.Loaded += RootElement_Loaded;
+        _uiSettings.ColorValuesChanged += UiSettings_ColorValuesChanged;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus);
         _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus);
         _activePane = _left;
+        UpdateActivePaneVisuals();
         LeftItems.ItemsSource = _left.Items;
         RightItems.ItemsSource = _right.Items;
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -47,6 +73,28 @@ public sealed partial class MainWindow : Window
 
     private async Task InitializeAsync(string documents, string downloads)
     {
+        var settings = await _settingsStore.LoadAsync();
+        if (settings is not null)
+        {
+            _themePreference = ParseThemePreference(settings.Theme);
+            _densityPreference = ParseDensityPreference(settings.Density);
+            _followWindowsAccent = settings.FollowWindowsAccent;
+            _paneSplitFraction = Math.Clamp(settings.PaneSplitFraction, 0.25, 0.75);
+            ApplyThemePreference();
+            ApplyDensityPreference();
+            ApplyPaneSplit();
+            SetOrganizeSection(ParseOrganizeSection(settings.OrganizeSection));
+        }
+        try
+        {
+            _capsules.AddRange(await _capsuleStore.LoadAsync());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        {
+            // Never replace unreadable saved data with a new empty document.
+            _capsuleStorageUnavailable = true;
+            SetStatus("Saved Capsules could not be loaded; saving is disabled to preserve the original file · " + ex.Message, StatusSeverity.Error);
+        }
         var saved = await _workspaceStore.LoadAsync();
         _bookmarks.Clear();
         foreach (var bookmark in saved?.Bookmarks ?? []) _bookmarks.Add(bookmark);
@@ -100,9 +148,44 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             // Workspace persistence is a convenience; file browsing must continue if it fails.
-            GlobalStatus.Text = "Workspace could not be saved · " + ex.Message;
+            SetStatus("Workspace could not be saved · " + ex.Message, StatusSeverity.Error);
         }
     }
+
+    private async Task PersistSettingsAsync()
+    {
+        try
+        {
+            await _settingsStore.SaveAsync(new SettingsSnapshot(
+                _themePreference.ToString(),
+                _densityPreference.ToString(),
+                _followWindowsAccent,
+                _paneSplitFraction,
+                _openOrganizeSection.ToString()));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            // Settings persistence is a convenience; file browsing must continue if it fails.
+            SetStatus("Settings could not be saved · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    private static ThemePreference ParseThemePreference(string? value) => value switch
+    {
+        nameof(ThemePreference.Light) => ThemePreference.Light,
+        nameof(ThemePreference.System) => ThemePreference.System,
+        _ => ThemePreference.Dark
+    };
+
+    private static DensityPreference ParseDensityPreference(string? value) =>
+        value == nameof(DensityPreference.Compact) ? DensityPreference.Compact : DensityPreference.Comfortable;
+
+    private static OrganizeSection ParseOrganizeSection(string? value) => value switch
+    {
+        nameof(OrganizeSection.Bookmarks) => OrganizeSection.Bookmarks,
+        nameof(OrganizeSection.Shelf) => OrganizeSection.Shelf,
+        _ => OrganizeSection.None
+    };
 
     private string NextWorkspaceTabName()
     {
@@ -133,17 +216,20 @@ public sealed partial class MainWindow : Window
                 MinWidth = 110,
                 Padding = new Thickness(10, 4, 10, 4)
             };
+            AutomationProperties.SetName(tabButton, (i == _activeWorkspaceTabIndex ? "Active workspace tab: " : "Workspace tab: ") + tab.Name);
             tabButton.Click += WorkspaceTab_Click;
             WorkspaceTabsPanel.Children.Add(tabButton);
             if (_workspaceTabs.Count > 1)
             {
                 var closeButton = new Button
                 {
-                    Content = "×",
+                    Content = new SymbolIcon { Symbol = Symbol.Cancel },
                     Tag = tab,
-                    MinWidth = 28,
-                    Padding = new Thickness(4, 2, 4, 2)
+                    Width = 28,
+                    Height = 28,
+                    Padding = new Thickness(0)
                 };
+                AutomationProperties.SetName(closeButton, "Close workspace tab: " + tab.Name);
                 ToolTipService.SetToolTip(closeButton, "Close " + tab.Name);
                 closeButton.Click += CloseWorkspaceTab_Click;
                 WorkspaceTabsPanel.Children.Add(closeButton);
@@ -162,7 +248,7 @@ public sealed partial class MainWindow : Window
         _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
         RefreshWorkspaceTabs();
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Opened {tab.Name}";
+        SetStatus($"Opened {tab.Name}");
     }
 
     private async void WorkspaceTab_Click(object sender, RoutedEventArgs e)
@@ -222,7 +308,7 @@ public sealed partial class MainWindow : Window
         tab.LeftPath = _left.CurrentPath;
         tab.RightPath = _right.CurrentPath;
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Switched to {tab.Name}";
+        SetStatus($"Switched to {tab.Name}");
     }
 
     private async Task AddBookmarkAsync()
@@ -231,7 +317,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(path)) return;
         if (_bookmarks.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)))
         {
-            GlobalStatus.Text = "That location is already bookmarked.";
+            SetStatus("That location is already bookmarked.", StatusSeverity.Warning);
             return;
         }
 
@@ -240,7 +326,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name)) name = path;
         _bookmarks.Add(new BookmarkSnapshot(name, path));
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Bookmarked · {name}";
+        SetStatus($"Bookmarked · {name}", StatusSeverity.Success);
     }
 
     private async void AddBookmark_Click(object sender, RoutedEventArgs e) => await AddBookmarkAsync();
@@ -249,14 +335,14 @@ public sealed partial class MainWindow : Window
     {
         if (BookmarksBox.SelectedItem is not BookmarkSnapshot selected)
         {
-            GlobalStatus.Text = "Select a saved location to remove.";
+            SetStatus("Select a saved location to remove.", StatusSeverity.Warning);
             return;
         }
 
         _bookmarks.Remove(selected);
         BookmarksBox.SelectedItem = null;
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Removed bookmark · {selected.Name}";
+        SetStatus($"Removed bookmark · {selected.Name}", StatusSeverity.Success);
     }
 
     private async void BookmarksBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -266,7 +352,7 @@ public sealed partial class MainWindow : Window
         BookmarksBox.SelectedItem = null;
     }
 
-    private async Task NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
+    private async Task<bool> NavigateAsync(PaneState pane, string requestedPath, bool addHistory = true)
     {
         string fullPath;
         try
@@ -276,33 +362,46 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return;
-        }
-        if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            pane.BackHistory.Push(pane.CurrentPath); pane.ForwardHistory.Clear();
+            SetPaneStatus(pane, ex.Message); SetStatus("Navigation failed · " + ex.Message, StatusSeverity.Error); pane.PathBox.Text = pane.CurrentPath; return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
         var token = pane.ReadCancellation.Token;
-        pane.CurrentPath = fullPath; pane.PathBox.Text = fullPath; SetPaneStatus(pane, "Loading folder…");
+        SetPaneStatus(pane, "Loading folder…");
         try
         {
             var entries = await Task.Run(() => DirectoryReader.Read(fullPath, token), token);
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested) return false;
+            if (addHistory && !string.IsNullOrWhiteSpace(pane.CurrentPath) && !string.Equals(pane.CurrentPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                pane.BackHistory.Push(pane.CurrentPath);
+                pane.ForwardHistory.Clear();
+            }
+            pane.CurrentPath = fullPath;
+            pane.PathBox.Text = fullPath;
+            UpdatePaneHeader(pane);
             pane.AllItems = entries;
             ApplyFilter(pane);
-            GlobalStatus.Text = "Ready · Local-only · No telemetry";
+            SetStatus("Ready · Local-only · No telemetry");
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
+            return true;
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { return false; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        { SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Could not read folder · " + ex.Message; }
+        {
+            if (!token.IsCancellationRequested)
+            {
+                SetPaneStatus(pane, ex.Message);
+                SetStatus("Could not read folder · " + ex.Message, StatusSeverity.Error);
+                pane.PathBox.Text = pane.CurrentPath;
+            }
+            return false;
+        }
     }
 
     private void ApplyFilter(PaneState pane)
     {
         var query = pane.FilterBox.Text.Trim();
-        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending);
+        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
 
         pane.Items.Clear();
         foreach (var item in matches)
@@ -338,16 +437,24 @@ public sealed partial class MainWindow : Window
     private async Task NavigateBackAsync(PaneState pane)
     {
         if (pane.BackHistory.Count == 0) return;
-        var target = pane.BackHistory.Pop();
-        if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.ForwardHistory.Push(pane.CurrentPath);
-        await NavigateAsync(pane, target, addHistory: false);
+        var target = pane.BackHistory.Peek();
+        var previous = pane.CurrentPath;
+        if (await NavigateAsync(pane, target, addHistory: false))
+        {
+            pane.BackHistory.Pop();
+            if (!string.IsNullOrWhiteSpace(previous)) pane.ForwardHistory.Push(previous);
+        }
     }
     private async Task NavigateForwardAsync(PaneState pane)
     {
         if (pane.ForwardHistory.Count == 0) return;
-        var target = pane.ForwardHistory.Pop();
-        if (!string.IsNullOrWhiteSpace(pane.CurrentPath)) pane.BackHistory.Push(pane.CurrentPath);
-        await NavigateAsync(pane, target, addHistory: false);
+        var target = pane.ForwardHistory.Peek();
+        var previous = pane.CurrentPath;
+        if (await NavigateAsync(pane, target, addHistory: false))
+        {
+            pane.ForwardHistory.Pop();
+            if (!string.IsNullOrWhiteSpace(previous)) pane.BackHistory.Push(previous);
+        }
     }
     private async Task OpenSelectedAsync(PaneState pane)
     {
@@ -355,94 +462,184 @@ public sealed partial class MainWindow : Window
         if (selected.IsDirectory) { await NavigateAsync(pane, selected.FullPath); return; }
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = selected.FullPath, UseShellExecute = true }); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
-        { GlobalStatus.Text = "Could not open file · " + ex.Message; }
+        { SetStatus("Could not open file · " + ex.Message, StatusSeverity.Error); }
     }
     private async Task MoveSelectedAsync(PaneState source, PaneState destination)
     {
-        if (source.List.SelectedItem is not FileEntry selected)
+        var selection = GetSelectedEntries(source);
+        if (selection.Count == 0)
         {
-            GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first.";
+            SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
-        var kind = selected.IsDirectory ? "folder" : "file";
-        var dialog = new ContentDialog
+        ContentDialog dialog;
+        if (selection.Count == 1)
         {
-            Title = "Move item?",
-            Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
-            PrimaryButtonText = "Move",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Content.XamlRoot
-        };
+            var selected = selection[0];
+            var kind = selected.IsDirectory ? "folder" : "file";
+            dialog = new ContentDialog
+            {
+                Title = "Move item?",
+                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.\n\nIf you change your mind, you can move it back from the destination folder.",
+                PrimaryButtonText = "Move",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
+        else
+        {
+            dialog = new ContentDialog
+            {
+                Title = "Move items?",
+                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. If an item cannot be moved, the move stops and items already moved stay moved.\n\nYou can move items back from the destination folder afterwards.",
+                PrimaryButtonText = "Move",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var sourcePath = selected.FullPath;
+        ClearPinnedError();
+        var sourcePaths = selection.Select(item => item.FullPath).ToArray();
         var sourceFolder = source.CurrentPath;
         var destinationPath = destination.CurrentPath;
+        var movedCount = 0;
         try
         {
-            var movedTo = await Task.Run(() => FileOperations.MoveItem(sourcePath, destinationPath));
+            await Task.Run(() =>
+            {
+                foreach (var sourcePath in sourcePaths)
+                {
+                    FileOperations.MoveItem(sourcePath, destinationPath);
+                    movedCount++;
+                }
+            });
             if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
                 await NavigateAsync(source, sourceFolder, addHistory: false);
             if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
                 await NavigateAsync(destination, destinationPath, addHistory: false);
-            GlobalStatus.Text = $"Moved successfully · {Path.GetFileName(movedTo)}";
+            SetStatus(sourcePaths.Length == 1
+                ? $"Moved {Path.GetFileName(sourcePaths[0])} to {destinationPath}"
+                : $"Moved {movedCount:N0} items to {destinationPath}", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Move failed · " + ex.Message;
+            if (movedCount > 0)
+            {
+                if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
+                    await NavigateAsync(source, sourceFolder, addHistory: false);
+                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                    await NavigateAsync(destination, destinationPath, addHistory: false);
+            }
+            SetStatus(movedCount > 0
+                ? $"Move stopped after {movedCount:N0} of {sourcePaths.Length:N0} items · {ex.Message}"
+                : "Move failed · " + ex.Message, StatusSeverity.Error);
         }
     }
 
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
-        if (_copyCancellation is not null) { GlobalStatus.Text = "A copy is already in progress."; return; }
-        if (source.List.SelectedItem is not FileEntry selected) { GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first."; return; }
+        if (_copyCancellation is not null) { SetStatus("A copy is already in progress.", StatusSeverity.Warning); return; }
+        var selection = GetSelectedEntries(source);
+        if (selection.Count == 0) { SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning); return; }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
-        if (string.Equals(Path.GetFullPath(selected.FullPath), Path.GetFullPath(destination.CurrentPath), StringComparison.OrdinalIgnoreCase))
-        { GlobalStatus.Text = "The destination is the selected folder. Choose another destination."; return; }
 
+        var sourcePaths = selection.Select(item => item.FullPath).ToArray();
         var destinationPath = destination.CurrentPath;
+        // A folder can never be copied into itself. Single copies check here;
+        // batch copies are also refused by the BatchCopy preflight before anything is copied.
+        foreach (var sourcePath in sourcePaths)
+        {
+            if (Directory.Exists(sourcePath) &&
+                string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+            { SetStatus("The destination is the selected folder. Choose another destination.", StatusSeverity.Warning); return; }
+        }
+
         var cancellation = new CancellationTokenSource();
         _copyCancellation = cancellation;
         CancelCopyButton.IsEnabled = true;
-        GlobalStatus.Text = $"Copying {selected.Name}…"; SetPaneStatus(source, "Copy in progress…");
+        ClearPinnedError();
+        SetStatus(sourcePaths.Length == 1 ? $"Copying {selection[0].Name}…" : $"Copying {sourcePaths.Length:N0} items…");
+        if (sourcePaths.Length == 1) ShowOperationProgress($"Copying {selection[0].Name}", null);
+        SetPaneStatus(source, "Copy in progress…");
         try
         {
-            var copiedTo = await Task.Run(() => FileOperations.CopyItem(selected.FullPath, destinationPath, cancellation.Token), cancellation.Token);
-            if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
-            SetPaneStatus(source, "Ready"); GlobalStatus.Text = $"Copied successfully · {Path.GetFileName(copiedTo)}";
+            if (sourcePaths.Length == 1)
+            {
+                var copiedTo = await Task.Run(() => FileOperations.CopyItem(sourcePaths[0], destinationPath, cancellation.Token), cancellation.Token);
+                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
+                SetPaneStatus(source, "Ready"); SetStatus($"Copied {Path.GetFileName(copiedTo)} to {destinationPath}", StatusSeverity.Success);
+            }
+            else
+            {
+                var progress = new Progress<BatchCopy.Progress>(state =>
+                {
+                    if (_copyCancellation == cancellation)
+                        ShowOperationProgress($"Copying {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}",
+                            state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
+                });
+                var result = await Task.Run(() => BatchCopy.Execute(sourcePaths, destinationPath, cancellation.Token, progress), cancellation.Token);
+                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
+                if (result.Succeeded)
+                {
+                    SetPaneStatus(source, "Ready");
+                    SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destinationPath}", StatusSeverity.Success);
+                }
+                else if (result.Cancelled)
+                {
+                    SetPaneStatus(source, "Copy cancelled");
+                    SetStatus($"Copy cancelled · {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items copied. Items already copied stay copied.", StatusSeverity.Warning);
+                }
+                else
+                {
+                    SetPaneStatus(source, "Copy failed");
+                    SetStatus($"Copy stopped after {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items · {result.Failure}", StatusSeverity.Error);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
             SetPaneStatus(source, "Copy cancelled");
-            GlobalStatus.Text = "Copy cancelled · Partial staging data was cleaned up where possible.";
+            SetStatus("Copy cancelled · Partial staging data was cleaned up where possible.", StatusSeverity.Warning);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
-        { SetPaneStatus(source, "Copy failed"); GlobalStatus.Text = "Copy failed · " + ex.Message; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or InvalidOperationException)
+        { SetPaneStatus(source, "Copy failed"); SetStatus("Copy failed · " + ex.Message, StatusSeverity.Error); }
         finally
         {
             if (ReferenceEquals(_copyCancellation, cancellation)) _copyCancellation = null;
             CancelCopyButton.IsEnabled = false;
+            HideOperationProgress();
             cancellation.Dispose();
         }
     }
 
-    private async void NewFolder_Click(object sender, RoutedEventArgs e)
+    private async void NewFolder_Click(object sender, RoutedEventArgs e) => await CreateNewFolderAsync();
+
+    private async Task CreateNewFolderAsync()
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
-            GlobalStatus.Text = "Choose a folder before creating a new folder.";
+            SetStatus("Choose a folder before creating a new folder.", StatusSeverity.Warning);
             return;
         }
 
         var nameBox = new TextBox { PlaceholderText = "Folder name", MinWidth = 280 };
+        AutomationProperties.SetName(nameBox, "Folder name");
+        var newFolderContent = new StackPanel { Spacing = 8 };
+        newFolderContent.Children.Add(new TextBlock
+        {
+            Text = $"The new folder is created inside:\n{_activePane.CurrentPath}\n\nNothing else changes. You can rename or delete the folder afterwards.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        newFolderContent.Children.Add(nameBox);
         var dialog = new ContentDialog
         {
             Title = "Create new folder",
-            Content = nameBox,
+            Content = newFolderContent,
             PrimaryButtonText = "Create",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -458,14 +655,14 @@ public sealed partial class MainWindow : Window
             name.Contains(Path.AltDirectorySeparatorChar) ||
             Path.IsPathRooted(name))
         {
-            GlobalStatus.Text = "Folder name is invalid. Enter a single folder name without path separators.";
+            SetStatus("Folder name is invalid. Enter a single folder name without path separators.", StatusSeverity.Warning);
             return;
         }
 
         var target = Path.Combine(_activePane.CurrentPath, name);
         if (File.Exists(target) || Directory.Exists(target))
         {
-            GlobalStatus.Text = $"Cannot create folder · '{name}' already exists.";
+            SetStatus($"Cannot create folder · '{name}' already exists.", StatusSeverity.Warning);
             return;
         }
 
@@ -474,27 +671,37 @@ public sealed partial class MainWindow : Window
             Directory.CreateDirectory(target);
             var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = $"Created folder · {name}";
+            SetStatus($"Created folder · {name}", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not create folder · " + ex.Message;
+            SetStatus("Could not create folder · " + ex.Message, StatusSeverity.Error);
         }
     }
 
-    private async void RenameSelected_Click(object sender, RoutedEventArgs e)
+    private async void RenameSelected_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync(_activePane);
+
+    private async Task RenameSelectedAsync(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        if (pane.List.SelectedItem is not FileEntry selected)
         {
-            GlobalStatus.Text = "Select a file or folder to rename.";
+            SetStatus("Select a file or folder to rename.", StatusSeverity.Warning);
             return;
         }
 
         var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
+        AutomationProperties.SetName(nameBox, "New name");
+        var renameContent = new StackPanel { Spacing = 8 };
+        renameContent.Children.Add(new TextBlock
+        {
+            Text = "Only the name changes. The item stays in the same folder with its contents unchanged, and you can rename it again at any time.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        renameContent.Children.Add(nameBox);
         var dialog = new ContentDialog
         {
             Title = "Rename item",
-            Content = nameBox,
+            Content = renameContent,
             PrimaryButtonText = "Rename",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -506,23 +713,26 @@ public sealed partial class MainWindow : Window
         try
         {
             var renamedTo = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
-            var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal)
+            var unchanged = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal);
+            SetStatus(unchanged
                 ? "Name unchanged."
-                : $"Renamed · {Path.GetFileName(renamedTo)}";
+                : $"Renamed · {Path.GetFileName(renamedTo)}",
+                unchanged ? StatusSeverity.Info : StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not rename item · " + ex.Message;
+            SetStatus("Could not rename item · " + ex.Message, StatusSeverity.Error);
         }
     }
 
-    private async void PropertiesSelected_Click(object sender, RoutedEventArgs e)
+    private async void PropertiesSelected_Click(object sender, RoutedEventArgs e) => await PropertiesSelectedAsync(_activePane);
+
+    private async Task PropertiesSelectedAsync(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        if (pane.List.SelectedItem is not FileEntry selected)
         {
-            GlobalStatus.Text = "Select a file or folder to view its properties.";
+            SetStatus("Select a file or folder to view its properties.", StatusSeverity.Warning);
             return;
         }
 
@@ -561,14 +771,14 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not read properties · " + ex.Message;
+            SetStatus("Could not read properties · " + ex.Message, StatusSeverity.Error);
         }
     }
 
-    private static void AddPropertyRow(StackPanel panel, string label, string value)
+    private void AddPropertyRow(StackPanel panel, string label, string value)
     {
         var row = new StackPanel { Spacing = 2 };
-        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray) });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = ThemeBrush("MeridianDialogLabelBrush") });
         row.Children.Add(new TextBlock { Text = value, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap });
         panel.Children.Add(row);
     }
@@ -586,41 +796,71 @@ public sealed partial class MainWindow : Window
         return $"{size:0.##} {units[unit]} ({bytes:N0} bytes)";
     }
 
-    private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    private async void DeleteSelected_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync(_activePane);
+
+    private async Task DeleteSelectedAsync(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        var selection = GetSelectedEntries(pane);
+        if (selection.Count == 0)
         {
-            GlobalStatus.Text = "Select a file or folder to delete.";
+            SetStatus("Select a file or folder to delete.", StatusSeverity.Warning);
             return;
         }
 
-        var kind = selected.IsDirectory ? "folder" : "file";
-        var dialog = new ContentDialog
+        ContentDialog dialog;
+        if (selection.Count == 1)
         {
-            Title = "Move to Recycle Bin?",
-            Content = $"Move this {kind} to the Recycle Bin?\n\n{selected.FullPath}\n\nYou can restore it from the Recycle Bin unless Windows prevents doing so.",
-            PrimaryButtonText = "Move to Recycle Bin",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Content.XamlRoot
-        };
+            var selected = selection[0];
+            var kind = selected.IsDirectory ? "folder" : "file";
+            dialog = new ContentDialog
+            {
+                Title = "Move to Recycle Bin?",
+                Content = $"Move this {kind} to the Recycle Bin?\n\n{selected.FullPath}\n\nYou can restore it from the Recycle Bin unless Windows prevents doing so.",
+                PrimaryButtonText = "Move to Recycle Bin",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
+        else
+        {
+            dialog = new ContentDialog
+            {
+                Title = "Move to Recycle Bin?",
+                Content = $"Move {selection.Count:N0} items to the Recycle Bin?\n\nFrom: {pane.CurrentPath}\n\nYou can restore them from the Recycle Bin unless Windows prevents doing so. If an item cannot be moved, the delete stops and items already moved stay in the Recycle Bin.",
+                PrimaryButtonText = "Move to Recycle Bin",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+        }
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        ClearPinnedError();
+        var deletedCount = 0;
         try
         {
-            if (selected.IsDirectory)
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-            else
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(selected.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            foreach (var item in selection)
+            {
+                if (item.IsDirectory)
+                    Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(item.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                else
+                    Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(item.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                deletedCount++;
+            }
 
-            var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = $"Moved to Recycle Bin · {selected.Name}";
+            SetStatus(selection.Count == 1
+                ? $"Moved to Recycle Bin · {selection[0].Name}"
+                : $"Moved {deletedCount:N0} items to Recycle Bin", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
         {
-            GlobalStatus.Text = "Could not move item to Recycle Bin · " + ex.Message;
+            if (deletedCount > 0) await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
+            SetStatus(deletedCount > 0
+                ? $"Delete stopped after {deletedCount:N0} of {selection.Count:N0} items · {ex.Message}"
+                : "Could not move item to Recycle Bin · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -629,7 +869,7 @@ public sealed partial class MainWindow : Window
         var pane = _activePane;
         if (string.IsNullOrWhiteSpace(pane.CurrentPath))
         {
-            GlobalStatus.Text = "Choose a folder to profile.";
+            SetStatus("Choose a folder to profile.", StatusSeverity.Warning);
             return;
         }
 
@@ -664,43 +904,56 @@ public sealed partial class MainWindow : Window
         await dialog.ShowAsync();
     }
 
-    private void AddToShelf_Click(object sender, RoutedEventArgs e)
+    private void AddToShelf_Click(object sender, RoutedEventArgs e) => AddSelectedToShelf(_activePane);
+
+    private void AddSelectedToShelf(PaneState pane)
     {
-        if (_activePane.List.SelectedItem is not FileEntry selected)
+        var selection = GetSelectedEntries(pane);
+        if (selection.Count == 0)
         {
-            GlobalStatus.Text = "Select a file or folder to add to the Drop Shelf.";
+            SetStatus("Select a file or folder to add to the Drop Shelf.", StatusSeverity.Warning);
             return;
         }
-        if (_dropShelf.Add(selected.FullPath))
+        var added = 0;
+        foreach (var item in selection)
         {
-            _shelfPaths.Add(Path.GetFullPath(selected.FullPath));
-            GlobalStatus.Text = $"Added to Drop Shelf · {_shelfPaths.Count:N0} collected";
+            if (_dropShelf.Add(item.FullPath))
+            {
+                _shelfPaths.Add(Path.GetFullPath(item.FullPath));
+                added++;
+            }
         }
-        else GlobalStatus.Text = "This item is already on the Drop Shelf.";
+        var shelfAdded = selection.Count == 1 ? added == 1 : added > 0;
+        SetStatus(selection.Count == 1
+            ? (added == 1 ? $"Added to Drop Shelf · {_shelfPaths.Count:N0} collected" : "This item is already on the Drop Shelf.")
+            : added > 0
+                ? $"Added {added:N0} items to Drop Shelf · {_shelfPaths.Count:N0} collected"
+                : "Those items are already on the Drop Shelf.",
+            shelfAdded ? StatusSeverity.Success : StatusSeverity.Warning);
     }
 
     private void RemoveFromShelf_Click(object sender, RoutedEventArgs e)
     {
         if (ShelfItemsBox.SelectedItem is not string selected)
         {
-            GlobalStatus.Text = "Select a Drop Shelf item to remove.";
+            SetStatus("Select a Drop Shelf item to remove.", StatusSeverity.Warning);
             return;
         }
         _dropShelf.Remove(selected);
         _shelfPaths.Remove(selected);
-        GlobalStatus.Text = $"Removed from Drop Shelf · {_shelfPaths.Count:N0} remaining";
+        SetStatus($"Removed from Drop Shelf · {_shelfPaths.Count:N0} remaining", StatusSeverity.Success);
     }
 
     private async void PreviewShelf_Click(object sender, RoutedEventArgs e)
     {
         if (_dropShelf.Paths.Count == 0)
         {
-            GlobalStatus.Text = "Add items to the Drop Shelf before previewing a batch.";
+            SetStatus("Add items to the Drop Shelf before previewing a batch.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
-            GlobalStatus.Text = "Open the intended destination folder in the active pane.";
+            SetStatus("Open the intended destination folder in the active pane.", StatusSeverity.Warning);
             return;
         }
 
@@ -709,13 +962,17 @@ public sealed partial class MainWindow : Window
             var sources = _dropShelf.Paths.ToArray();
             var destination = _activePane.CurrentPath;
             var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
-            var lines = plan.Items.Take(100).Select(item =>
+            var impact = ConsequenceMap.Explain(plan);
+            var risks = impact.Risks.Count == 0
+                ? "No known blockers identified at preview time."
+                : string.Join("\n", impact.Risks.Select(risk => $"• {risk.Count:N0} {risk.Status}: {risk.Explanation}"));
+            var lines = impact.DisplayedItems.Select(item =>
                 $"[{item.Result}] {Path.GetFileName(item.Source)}\n  {item.Explanation}\n  → {item.Target ?? "(unavailable)"}");
             var summary = $"Destination: {plan.DestinationDirectory}\n" +
-                $"Collected: {plan.Items.Count:N0} · Ready: {plan.ReadyCount:N0} · " +
-                $"Blocked: {plan.Items.Count - plan.ReadyCount:N0}\n\n" +
+                $"Collected: {impact.TotalItems:N0} · Ready: {impact.ReadyItems:N0} · " +
+                $"Blocked: {impact.BlockedItems:N0}\n\nRisk summary:\n{risks}\n\n" +
                 string.Join("\n\n", lines) +
-                (plan.Items.Count > 100 ? $"\n\n…and {plan.Items.Count - 100:N0} more items not shown." : "") +
+                (impact.OmittedItems > 0 ? $"\n\n…and {impact.OmittedItems:N0} more items not shown." : "") +
                 "\n\nREAD-ONLY PREVIEW: No files were copied, moved, or deleted. " +
                 "A preview cannot reserve paths or guarantee a later operation will succeed.";
             var dialog = new ContentDialog
@@ -733,7 +990,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not preview shelf · " + ex.Message;
+            SetStatus("Could not preview shelf · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -742,28 +999,32 @@ public sealed partial class MainWindow : Window
         if (_batchCancellation is not null || _batchPreparing) return;
         if (_dropShelf.Paths.Count == 0)
         {
-            GlobalStatus.Text = "Add files to the Drop Shelf first.";
+            SetStatus("Add files to the Drop Shelf first.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
-            GlobalStatus.Text = "Open the destination folder in the active pane.";
+            SetStatus("Open the destination folder in the active pane.", StatusSeverity.Warning);
             return;
         }
         var sources = _dropShelf.Paths.ToArray();
         var destination = _activePane.CurrentPath;
+        var destinationPane = _activePane;
+        using var cancellation = new CancellationTokenSource();
+        _batchCancellation = cancellation;
+        CancelShelfButton.IsEnabled = true;
         _batchPreparing = true;
         try
         {
-            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination));
+            var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination, cancellation.Token), cancellation.Token);
             if (plan.HasBlockers)
             {
-                GlobalStatus.Text = $"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.";
+                SetStatus($"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.", StatusSeverity.Error);
                 return;
             }
             var confirmation = new ContentDialog
             {
-                Title = "Confirm Drop Shelf batch copy",
+                Title = "Copy Drop Shelf items?",
                 Content = new TextBlock
                 {
                     Text = $"Copy {plan.Items.Count:N0} collected items to:\n{plan.DestinationDirectory}\n\n" +
@@ -778,23 +1039,23 @@ public sealed partial class MainWindow : Window
                 XamlRoot = Content.XamlRoot
             };
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
-            using var cancellation = new CancellationTokenSource();
-            _batchCancellation = cancellation;
-            CancelShelfButton.IsEnabled = true;
-            try
-            {
-                GlobalStatus.Text = "Copying Drop Shelf items…";
+            cancellation.Token.ThrowIfCancellationRequested();
+            ClearPinnedError();
+            SetStatus("Copying Drop Shelf items…");
                 var progress = new Progress<BatchCopy.Progress>(state =>
                 {
                     if (_batchCancellation == cancellation)
-                        GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}";
+                        ShowOperationProgress($"Batch copy · {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}",
+                            state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
-                await NavigateAsync(_activePane, destination, addHistory: false);
-                GlobalStatus.Text = result.Succeeded
-                    ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
-                    : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
-                      (result.Cancelled ? "Cancelled" : result.Failure);
+                await NavigateAsync(destinationPane, destination, addHistory: false);
+                if (result.Succeeded)
+                    SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destination}", StatusSeverity.Success);
+                else if (result.Cancelled)
+                    SetStatus($"Batch copy cancelled · {result.CompletedTargets.Count:N0} of {sources.Length:N0} items copied. Items already copied stay copied.", StatusSeverity.Warning);
+                else
+                    SetStatus($"Batch stopped after {result.CompletedTargets.Count:N0} of {sources.Length:N0} items · {result.Failure}", StatusSeverity.Error);
                 if (!result.Succeeded)
                 {
                     var details = new ContentDialog
@@ -822,67 +1083,189 @@ public sealed partial class MainWindow : Window
                     };
                     await details.ShowAsync();
                 }
-            }
-            finally
-            {
-                _batchCancellation = null;
-                CancelShelfButton.IsEnabled = false;
-            }
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("Batch preparation cancelled · No copy started.", StatusSeverity.Warning);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
             ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Batch copy did not start · " + ex.Message;
+            SetStatus("Batch copy did not start · " + ex.Message, StatusSeverity.Error);
         }
         finally
         {
+            _batchCancellation = null;
+            CancelShelfButton.IsEnabled = false;
+            HideOperationProgress();
             _batchPreparing = false;
         }
+    }
+
+    private async void SaveCapsule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_capsuleSaving) return;
+        _capsuleSaving = true;
+        try { await SaveCapsuleAsync(); }
+        catch (InvalidOperationException ex)
+        {
+            SetStatus("Could not open Capsule save · " + ex.Message, StatusSeverity.Error);
+        }
+        finally
+        {
+            _capsuleSaving = false;
+        }
+    }
+
+    private async Task SaveCapsuleAsync()
+    {
+        if (_capsuleStorageUnavailable)
+        {
+            SetStatus("Capsule saving disabled: the existing saved file could not be read. Back it up and repair it before saving.", StatusSeverity.Warning);
+            return;
+        }
+        if (_capsules.Count >= ContextCapsuleFormat.MaximumCapsules)
+        {
+            SetStatus("Capsule limit reached. No new Capsule was saved; existing Capsules are unchanged.", StatusSeverity.Warning);
+            return;
+        }
+        if (_dropShelf.Paths.Count == 0)
+        {
+            SetStatus("Add files or folders to the Drop Shelf before saving a Capsule.", StatusSeverity.Warning);
+            return;
+        }
+
+        var nameBox = new TextBox
+        {
+            Header = "Capsule name",
+            Text = $"Task {_capsules.Count + 1}",
+            MaxLength = ContextCapsule.MaximumNameLength
+        };
+        var capsuleContent = new StackPanel { Spacing = 8 };
+        capsuleContent.Children.Add(new TextBlock
+        {
+            Text = "A Capsule saves the current Drop Shelf paths as references only — file contents are not copied. You can review saved Capsules at any time with View Capsules.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        capsuleContent.Children.Add(nameBox);
+        var dialog = new ContentDialog
+        {
+            Title = "Save a Context Capsule",
+            Content = capsuleContent,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        try
+        {
+            var capsule = ContextCapsule.Capture(nameBox.Text, _dropShelf.Paths);
+            var updated = _capsules.Concat(new[] { capsule }).ToArray();
+            await _capsuleStore.SaveAsync(updated);
+            _capsules.Add(capsule);
+            var available = capsule.Inspect().Count(item => item.State == ContextCapsule.Presence.Present);
+            SetStatus($"Capsule '{capsule.Name}' saved locally · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.", StatusSeverity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            SetStatus("Could not save Capsule · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    private async void ViewCapsules_Click(object sender, RoutedEventArgs e)
+    {
+        var summary = _capsules.Count == 0
+            ? "No Capsules saved. Add items to the Drop Shelf and choose Save Capsule."
+            : string.Join("\n\n", _capsules.Select(capsule =>
+            {
+                var states = capsule.Inspect();
+                var available = states.Count(item => item.State == ContextCapsule.Presence.Present);
+                var preview = string.Join("\n", states.Take(12).Select(item =>
+                    (item.State == ContextCapsule.Presence.Present ? "Available: " : "Unavailable: ") + item.Path));
+                var omitted = states.Count > 12 ? $"\n… and {states.Count - 12} more references" : "";
+                return $"{capsule.Name} · {available}/{states.Count} available\n{preview}{omitted}";
+            }));
+        var dialog = new ContentDialog
+        {
+            Title = "Context Capsules · read-only",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 440,
+                MaxWidth = 720,
+                Content = new TextBlock
+                {
+                    Text = summary,
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true
+                }
+            },
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
     }
 
     private void CancelShelf_Click(object sender, RoutedEventArgs e)
     {
         _batchCancellation?.Cancel();
-        GlobalStatus.Text = "Cancelling batch copy…";
+        SetStatus("Cancelling batch copy…");
+    }
+
+    private void PruneShelf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_batchCancellation is not null || _batchPreparing)
+        {
+            SetStatus("Wait until the batch copy is finished before pruning the shelf.", StatusSeverity.Warning);
+            return;
+        }
+        var removed = _dropShelf.RemoveMissing();
+        _shelfPaths.Clear();
+        foreach (var path in _dropShelf.Paths) _shelfPaths.Add(path);
+        SetStatus(removed == 0
+            ? "Drop Shelf · No missing references found."
+            : $"Drop Shelf · Removed {removed:N0} missing references; no files were deleted.",
+            removed == 0 ? StatusSeverity.Info : StatusSeverity.Success);
     }
 
     private void ClearShelf_Click(object sender, RoutedEventArgs e)
     {
         _dropShelf.Clear();
         _shelfPaths.Clear();
-        GlobalStatus.Text = "Drop Shelf cleared · No files were changed.";
+        SetStatus("Drop Shelf cleared · No files were changed.", StatusSeverity.Success);
     }
 
     private async void ShowShelfLocation_Click(object sender, RoutedEventArgs e)
     {
         if (ShelfItemsBox.SelectedItem is not string selected)
         {
-            GlobalStatus.Text = "Select a Drop Shelf item first.";
+            SetStatus("Select a Drop Shelf item first.", StatusSeverity.Warning);
             return;
         }
         if (!File.Exists(selected) && !Directory.Exists(selected))
         {
-            GlobalStatus.Text = "Shelf item is missing · Nothing was changed.";
+            SetStatus("Shelf item is missing · Nothing was changed.", StatusSeverity.Warning);
             return;
         }
         var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(selected));
         if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
         {
-            GlobalStatus.Text = "The selected item's parent folder is unavailable.";
+            SetStatus("The selected item's parent folder is unavailable.", StatusSeverity.Warning);
             return;
         }
         await NavigateAsync(_activePane, parent);
         var match = _activePane.Items.FirstOrDefault(item =>
             string.Equals(item.FullPath, selected, StringComparison.OrdinalIgnoreCase));
         if (match is not null) _activePane.List.SelectedItem = match;
-        GlobalStatus.Text = $"Showing Drop Shelf item · {Path.GetFileName(selected)}";
+        SetStatus($"Showing Drop Shelf item · {Path.GetFileName(selected)}");
     }
 
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
         _copyCancellation.Cancel();
-        GlobalStatus.Text = "Cancelling copy…";
+        SetStatus("Cancelling copy…");
     }
 
     private async void RefreshShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -895,9 +1278,9 @@ public sealed partial class MainWindow : Window
     private void SwitchPaneShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        _activePane = ReferenceEquals(_activePane, _left) ? _right : _left;
+        SetActivePane(ReferenceEquals(_activePane, _left) ? _right : _left);
         _activePane.List.Focus(FocusState.Programmatic);
-        GlobalStatus.Text = $"Active pane · {_activePane.Name}";
+        SetStatus($"Active pane · {_activePane.Name}");
     }
 
     private void FocusActivePathShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -932,11 +1315,543 @@ public sealed partial class MainWindow : Window
         await NavigateUpAsync(_activePane);
     }
 
+    private async void NewFolderShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await CreateNewFolderAsync();
+    }
+
+    private async void CopyShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (ReferenceEquals(_activePane, _left)) await CopySelectedAsync(_left, _right);
+        else await CopySelectedAsync(_right, _left);
+    }
+
+    private async void MoveShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (ReferenceEquals(_activePane, _left)) await MoveSelectedAsync(_left, _right);
+        else await MoveSelectedAsync(_right, _left);
+    }
+
+    private void OpenInExplorerShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        OpenActivePaneInExplorer();
+    }
+
+    private async void PropertiesShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await PropertiesSelectedAsync(_activePane);
+    }
+
+    private async void RenameShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // When a file list has focus, its own F2 handling (Slice 4) renames and
+        // this accelerator must not claim the key, or rename would run twice.
+        if (IsFocusInPaneList()) return;
+        args.Handled = true;
+        await RenameSelectedAsync(_activePane);
+    }
+
+    private void CancelCopyShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // Esc only means "cancel copy" while a copy is actually running; every
+        // other Esc press keeps its normal behavior (closing flyouts, etc.).
+        if (_copyCancellation is null) return;
+        args.Handled = true;
+        CancelCopy_Click(this, new RoutedEventArgs());
+    }
+
+    private bool IsFocusInPaneList()
+    {
+        var focused = FocusManager.GetFocusedElement(Content.XamlRoot);
+        for (DependencyObject? current = focused as DependencyObject; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (ReferenceEquals(current, LeftItems) || ReferenceEquals(current, RightItems)) return true;
+        }
+        return false;
+    }
+
+    // Theme resources live in the application theme dictionaries; the window's
+    // current theme (not the application's startup theme) decides which
+    // dictionary a code-side lookup must read.
+    private Brush ThemeBrush(string key)
+    {
+        var themeKey = RootGrid.ActualTheme == ElementTheme.Light ? "Light" : "Dark";
+        if (Application.Current.Resources.ThemeDictionaries.TryGetValue(themeKey, out var themeDictionary) &&
+            themeDictionary is ResourceDictionary dictionary &&
+            dictionary.TryGetValue(key, out var value) &&
+            value is Brush brush)
+            return brush;
+        return (Brush)Application.Current.Resources[key];
+    }
+
+    private void ApplyThemePreference()
+    {
+        RootGrid.RequestedTheme = _themePreference switch
+        {
+            ThemePreference.Dark => ElementTheme.Dark,
+            ThemePreference.Light => ElementTheme.Light,
+            // System: follow the Windows app theme, detected from the system
+            // background color and refreshed when Windows changes it.
+            _ => IsSystemDarkTheme() ? ElementTheme.Dark : ElementTheme.Light
+        };
+        ApplyAccentBrushes();
+        UpdateActivePaneVisuals();
+    }
+
+    private static bool IsSystemDarkTheme()
+    {
+        try
+        {
+            var background = new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Background);
+            return 0.299 * background.R + 0.587 * background.G + 0.114 * background.B < 128;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return true;
+        }
+    }
+
+    private void UiSettings_ColorValuesChanged(Windows.UI.ViewManagement.UISettings sender, object args)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_themePreference == ThemePreference.System) ApplyThemePreference();
+            else if (_followWindowsAccent) ApplyAccentBrushes();
+        });
+    }
+
+    private void ApplyAccentBrushes()
+    {
+        Windows.UI.Color? systemAccent = null;
+        if (_followWindowsAccent)
+        {
+            try { systemAccent = _uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent); }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { systemAccent = null; }
+        }
+        // Mutate the shared brush objects in both theme dictionaries so every
+        // ThemeResource consumer and code-side lookup sees the same accent.
+        foreach (var entry in Application.Current.Resources.ThemeDictionaries)
+        {
+            if (entry.Value is not ResourceDictionary dictionary) continue;
+            var brandAccent = string.Equals(entry.Key?.ToString(), "Light", StringComparison.OrdinalIgnoreCase)
+                ? Windows.UI.Color.FromArgb(0xFF, 0xD9, 0x2B, 0x2B)
+                : Windows.UI.Color.FromArgb(0xFF, 0xF0, 0x44, 0x44);
+            var accent = systemAccent ?? brandAccent;
+            SetBrushColor(dictionary, "MeridianAccentBrush", accent);
+            SetBrushColor(dictionary, "MeridianActivePaneBorderBrush", accent);
+            SetBrushColor(dictionary, "MeridianSelectionBackgroundBrush", Windows.UI.Color.FromArgb(0x33, accent.R, accent.G, accent.B));
+        }
+    }
+
+    private static void SetBrushColor(ResourceDictionary dictionary, string key, Windows.UI.Color color)
+    {
+        if (dictionary.TryGetValue(key, out var value) && value is SolidColorBrush brush)
+            brush.Color = color;
+    }
+
+    private void ApplyDensityPreference()
+    {
+        var vertical = _densityPreference == DensityPreference.Compact ? 2 : 4;
+        Application.Current.Resources["MeridianListItemMargin"] = new Thickness(8, vertical, 8, vertical);
+        // Reassigning the item sources forces both lists to rebuild their item
+        // containers, so the template picks up the new margin immediately.
+        if (LeftItems.ItemsSource is not null) { LeftItems.ItemsSource = null; LeftItems.ItemsSource = _left.Items; }
+        if (RightItems.ItemsSource is not null) { RightItems.ItemsSource = null; RightItems.ItemsSource = _right.Items; }
+    }
+
+    private void ApplyPaneSplit()
+    {
+        LeftPaneColumn.Width = new GridLength(_paneSplitFraction, GridUnitType.Star);
+        RightPaneColumn.Width = new GridLength(1 - _paneSplitFraction, GridUnitType.Star);
+    }
+
+    private void SplitGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _splitDragging = true;
+        _splitDragStartFraction = _paneSplitFraction;
+        _splitDragStartX = e.GetCurrentPoint(WorkAreaGrid).Position.X;
+        (sender as UIElement)?.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void SplitGrip_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_splitDragging) return;
+        var width = WorkAreaGrid.ActualWidth;
+        if (width <= 0) return;
+        var x = e.GetCurrentPoint(WorkAreaGrid).Position.X;
+        _paneSplitFraction = Math.Clamp(_splitDragStartFraction + (x - _splitDragStartX) / width, 0.25, 0.75);
+        ApplyPaneSplit();
+    }
+
+    private void SplitGrip_PointerReleased(object sender, PointerRoutedEventArgs e) => EndSplitDrag();
+
+    private void SplitGrip_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndSplitDrag();
+
+    private void EndSplitDrag()
+    {
+        if (!_splitDragging) return;
+        _splitDragging = false;
+        _ = PersistSettingsAsync();
+    }
+
+    private void RootElement_Loaded(object sender, RoutedEventArgs e) => EnforceMinimumWindowSize();
+
+    private void AppWindow_Changed(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
+    {
+        if (args.DidSizeChange) EnforceMinimumWindowSize();
+    }
+
+    private void EnforceMinimumWindowSize()
+    {
+        // The WinUI presenter exposes no minimum size, so the ≈900×600 floor
+        // (in device-independent units) is enforced by clamping: once at
+        // startup and again whenever the window is resized below it.
+        if (_appWindow is null || _enforcingMinimumWindowSize) return;
+        if (Content.XamlRoot is not null) _rasterizationScale = Content.XamlRoot.RasterizationScale;
+        var minimumWidth = (int)Math.Round(900 * _rasterizationScale);
+        var minimumHeight = (int)Math.Round(600 * _rasterizationScale);
+        var size = _appWindow.Size;
+        if (size.Width >= minimumWidth && size.Height >= minimumHeight) return;
+        _enforcingMinimumWindowSize = true;
+        try
+        {
+            _appWindow.Resize(new Windows.Graphics.SizeInt32(Math.Max(size.Width, minimumWidth), Math.Max(size.Height, minimumHeight)));
+        }
+        finally
+        {
+            _enforcingMinimumWindowSize = false;
+        }
+    }
+
+    private async void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var themeButtons = new RadioButtons { Header = "Theme", MaxColumns = 3 };
+        themeButtons.Items.Add("Dark");
+        themeButtons.Items.Add("Light");
+        themeButtons.Items.Add("System");
+        themeButtons.SelectedIndex = _themePreference switch
+        {
+            ThemePreference.Dark => 0,
+            ThemePreference.Light => 1,
+            _ => 2
+        };
+        AutomationProperties.SetName(themeButtons, "Theme");
+        var densityButtons = new RadioButtons { Header = "Density", MaxColumns = 2 };
+        densityButtons.Items.Add("Comfortable");
+        densityButtons.Items.Add("Compact");
+        densityButtons.SelectedIndex = _densityPreference == DensityPreference.Compact ? 1 : 0;
+        AutomationProperties.SetName(densityButtons, "Density");
+        var accentToggle = new ToggleSwitch
+        {
+            Header = "Accent color",
+            IsOn = _followWindowsAccent,
+            OnContent = "Windows accent color",
+            OffContent = "Meridian brand red"
+        };
+        AutomationProperties.SetName(accentToggle, "Follow Windows accent color");
+        var settingsContent = new StackPanel { Spacing = 16, MinWidth = 340 };
+        settingsContent.Children.Add(new TextBlock
+        {
+            Text = "Changes apply immediately and are saved on this PC. System theme follows the Windows app theme and updates when Windows changes it.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        settingsContent.Children.Add(themeButtons);
+        settingsContent.Children.Add(densityButtons);
+        settingsContent.Children.Add(accentToggle);
+
+        themeButtons.SelectionChanged += (s, args) =>
+        {
+            var preference = themeButtons.SelectedIndex switch
+            {
+                0 => ThemePreference.Dark,
+                1 => ThemePreference.Light,
+                _ => ThemePreference.System
+            };
+            if (preference == _themePreference) return;
+            _themePreference = preference;
+            ApplyThemePreference();
+            _ = PersistSettingsAsync();
+        };
+        densityButtons.SelectionChanged += (s, args) =>
+        {
+            var preference = densityButtons.SelectedIndex == 1 ? DensityPreference.Compact : DensityPreference.Comfortable;
+            if (preference == _densityPreference) return;
+            _densityPreference = preference;
+            ApplyDensityPreference();
+            _ = PersistSettingsAsync();
+        };
+        accentToggle.Toggled += (s, args) =>
+        {
+            if (accentToggle.IsOn == _followWindowsAccent) return;
+            _followWindowsAccent = accentToggle.IsOn;
+            ApplyAccentBrushes();
+            _ = PersistSettingsAsync();
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Settings",
+            Content = settingsContent,
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+            RequestedTheme = RootGrid.RequestedTheme
+        };
+        await dialog.ShowAsync();
+    }
+
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
-    private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
-    private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
-    private void LeftItems_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
-    private void RightItems_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
+
+    // All global status messages go through SetStatus so severity styling and error
+    // pinning behave identically everywhere. An error stays visible until the user
+    // dismisses it or a new operation starts; routine messages never overwrite it.
+    private void SetStatus(string message, StatusSeverity severity = StatusSeverity.Info)
+    {
+        if (_pinnedError is not null && severity != StatusSeverity.Error) return;
+        ApplyStatus(message, severity);
+        _pinnedError = severity == StatusSeverity.Error ? message : null;
+        DismissStatusButton.Visibility = _pinnedError is not null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ApplyStatus(string message, StatusSeverity severity)
+    {
+        var (glyph, brushKey) = severity switch
+        {
+            StatusSeverity.Success => ("\uE73E", "MeridianSuccessBrush"),
+            StatusSeverity.Warning => ("\uE7BA", "MeridianWarningBrush"),
+            StatusSeverity.Error => ("\uE783", "MeridianErrorBrush"),
+            _ => ("\uE946", "MeridianTextSecondaryBrush"),
+        };
+        StatusIcon.Glyph = glyph;
+        StatusIcon.Foreground = ThemeBrush(brushKey);
+        AutomationProperties.SetName(StatusIcon, severity switch
+        {
+            StatusSeverity.Success => "Status: success",
+            StatusSeverity.Warning => "Status: warning",
+            StatusSeverity.Error => "Status: error",
+            _ => "Status: information"
+        });
+        GlobalStatus.Text = message;
+        GlobalStatus.Foreground = ThemeBrush(
+            severity is StatusSeverity.Warning or StatusSeverity.Error ? brushKey : "MeridianTextSecondaryBrush");
+    }
+
+    private void ClearPinnedError()
+    {
+        _pinnedError = null;
+        DismissStatusButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void DismissStatus_Click(object sender, RoutedEventArgs e)
+    {
+        ClearPinnedError();
+        ApplyStatus("Ready · Local-only · No telemetry", StatusSeverity.Info);
+    }
+
+    private void ShowOperationProgress(string label, double? percent)
+    {
+        OperationProgressPanel.Visibility = Visibility.Visible;
+        OperationProgressLabel.Text = label;
+        if (percent is { } value)
+        {
+            OperationProgressBar.IsIndeterminate = false;
+            OperationProgressBar.Value = Math.Clamp(value, 0, 100);
+        }
+        else
+        {
+            OperationProgressBar.IsIndeterminate = true;
+        }
+    }
+
+    private void HideOperationProgress()
+    {
+        OperationProgressPanel.Visibility = Visibility.Collapsed;
+        OperationProgressBar.IsIndeterminate = false;
+    }
+
+    private static List<FileEntry> GetSelectedEntries(PaneState pane) =>
+        pane.List.SelectedItems.OfType<FileEntry>().ToList();
+
+    private void LeftItems_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSelectionStatus(_left);
+    private void RightItems_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateSelectionStatus(_right);
+
+    // Mirrors the counts ApplyFilter writes, without rebuilding the item list.
+    private void UpdateSelectionStatus(PaneState pane)
+    {
+        var selected = GetSelectedEntries(pane);
+        if (selected.Count > 0)
+        {
+            // FileEntry.SizeBytes is the file length for files and 0 for folders,
+            // so folders count as selected items without adding to the size total.
+            long totalBytes = 0;
+            var hasFile = false;
+            foreach (var entry in selected)
+            {
+                if (entry.IsDirectory) continue;
+                hasFile = true;
+                totalBytes += entry.SizeBytes;
+            }
+            SetPaneStatus(pane, hasFile
+                ? $"{selected.Count:N0} selected · {DirectoryReader.FormatSize(totalBytes)}"
+                : $"{selected.Count:N0} selected");
+            return;
+        }
+        var query = pane.FilterBox.Text.Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            SetPaneStatus(pane, $"{pane.AllItems.Count:N0} items");
+            return;
+        }
+        var matches = DirectoryReader.Filter(pane.AllItems, query, pane.SortField, pane.Descending, includeFullPath: false);
+        SetPaneStatus(pane, $"{matches.Count:N0} of {pane.AllItems.Count:N0} items · filtered");
+    }
+
+    private async void LeftItems_KeyDown(object sender, KeyRoutedEventArgs e) => await HandleListKeyDownAsync(_left, e);
+    private async void RightItems_KeyDown(object sender, KeyRoutedEventArgs e) => await HandleListKeyDownAsync(_right, e);
+
+    private async Task HandleListKeyDownAsync(PaneState pane, KeyRoutedEventArgs e)
+    {
+        var ctrlDown = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        if (ctrlDown && e.Key == VirtualKey.A)
+        {
+            e.Handled = true;
+            pane.List.SelectAll();
+            return;
+        }
+        switch (e.Key)
+        {
+            case VirtualKey.Delete:
+                e.Handled = true;
+                await DeleteSelectedAsync(pane);
+                break;
+            case VirtualKey.F2:
+                e.Handled = true;
+                if (pane.List.SelectedItems.Count == 1) await RenameSelectedAsync(pane);
+                else if (pane.List.SelectedItems.Count > 1) SetStatus("Select a single item to rename.", StatusSeverity.Warning);
+                break;
+            case VirtualKey.Enter:
+                e.Handled = true;
+                await OpenSelectedAsync(pane);
+                break;
+        }
+    }
+
+    private void LeftContextMenu_Opening(object sender, object e) => UpdateContextMenu(_left, isLeftPane: true);
+    private void RightContextMenu_Opening(object sender, object e) => UpdateContextMenu(_right, isLeftPane: false);
+
+    private void UpdateContextMenu(PaneState pane, bool isLeftPane)
+    {
+        var copyItem = isLeftPane ? LeftCopyMenuItem : RightCopyMenuItem;
+        var moveItem = isLeftPane ? LeftMoveMenuItem : RightMoveMenuItem;
+        var renameItem = isLeftPane ? LeftRenameMenuItem : RightRenameMenuItem;
+        var propertiesItem = isLeftPane ? LeftPropertiesMenuItem : RightPropertiesMenuItem;
+        var shelfItem = isLeftPane ? LeftShelfMenuItem : RightShelfMenuItem;
+        var deleteItem = isLeftPane ? LeftDeleteMenuItem : RightDeleteMenuItem;
+        var other = isLeftPane ? _right : _left;
+        var count = pane.List.SelectedItems.Count;
+        var hasDestination = !string.IsNullOrWhiteSpace(other.CurrentPath);
+        var direction = isLeftPane ? "right" : "left";
+        copyItem.IsEnabled = count > 0 && hasDestination && _copyCancellation is null;
+        moveItem.IsEnabled = count > 0 && hasDestination;
+        renameItem.IsEnabled = count == 1;
+        propertiesItem.IsEnabled = count == 1;
+        shelfItem.IsEnabled = count > 0;
+        deleteItem.IsEnabled = count > 0;
+        copyItem.Text = count > 1 ? $"Copy {count:N0} items to {direction} pane" : $"Copy to {direction} pane";
+        moveItem.Text = count > 1 ? $"Move {count:N0} items to {direction} pane" : $"Move to {direction} pane";
+        shelfItem.Text = count > 1 ? $"Add {count:N0} items to Drop Shelf" : "Add to Drop Shelf";
+        deleteItem.Text = count > 1 ? $"Delete {count:N0} items (Recycle Bin)" : "Delete (Recycle Bin)";
+    }
+
+    private async void RenameFromLeft_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync(_left);
+    private async void RenameFromRight_Click(object sender, RoutedEventArgs e) => await RenameSelectedAsync(_right);
+    private async void PropertiesFromLeft_Click(object sender, RoutedEventArgs e) => await PropertiesSelectedAsync(_left);
+    private async void PropertiesFromRight_Click(object sender, RoutedEventArgs e) => await PropertiesSelectedAsync(_right);
+    private async void DeleteFromLeft_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync(_left);
+    private async void DeleteFromRight_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync(_right);
+    private void AddToShelfFromLeft_Click(object sender, RoutedEventArgs e) => AddSelectedToShelf(_left);
+    private void AddToShelfFromRight_Click(object sender, RoutedEventArgs e) => AddSelectedToShelf(_right);
+    private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_left);
+    private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_right);
+    private void LeftItems_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_left);
+    private void RightItems_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_right);
+
+    private void SetActivePane(PaneState pane)
+    {
+        _activePane = pane;
+        UpdateActivePaneVisuals();
+    }
+
+    private void UpdateActivePaneVisuals()
+    {
+        SetPaneActiveVisual(LeftPaneRoot, LeftPaneHeader, ReferenceEquals(_activePane, _left));
+        SetPaneActiveVisual(RightPaneRoot, RightPaneHeader, ReferenceEquals(_activePane, _right));
+        UpdatePaneHeaderAutomation();
+    }
+
+    private void SetPaneActiveVisual(Grid paneRoot, Grid paneHeader, bool isActive)
+    {
+        paneRoot.BorderBrush = ThemeBrush(isActive ? "MeridianActivePaneBorderBrush" : "MeridianBorderBrush");
+        paneHeader.Background = isActive
+            ? ThemeBrush("MeridianActivePaneBackgroundBrush")
+            : null;
+    }
+
+    private void UpdatePaneHeaderAutomation()
+    {
+        AutomationProperties.SetName(LeftPaneHeader, PaneHeaderAutomationName(_left, LeftFolderName.Text));
+        AutomationProperties.SetName(RightPaneHeader, PaneHeaderAutomationName(_right, RightFolderName.Text));
+    }
+
+    private string PaneHeaderAutomationName(PaneState pane, string folderName) =>
+        $"{pane.Name} pane: {folderName}" + (ReferenceEquals(_activePane, pane) ? " (active pane)" : string.Empty);
+
+    private void UpdatePaneHeader(PaneState pane)
+    {
+        var nameBlock = ReferenceEquals(pane, _left) ? LeftFolderName : RightFolderName;
+        var pathBlock = ReferenceEquals(pane, _left) ? LeftFolderPath : RightFolderPath;
+        var path = pane.CurrentPath;
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(name)) name = string.IsNullOrWhiteSpace(path) ? pane.Name + " pane" : path;
+        nameBlock.Text = name;
+        pathBlock.Text = path;
+        if (!string.IsNullOrWhiteSpace(path)) ToolTipService.SetToolTip(pathBlock, path);
+        UpdatePaneHeaderAutomation();
+    }
+
+    private async void CopyActivePane_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        if (ReferenceEquals(_activePane, _left)) await CopySelectedAsync(_left, _right);
+        else await CopySelectedAsync(_right, _left);
+    }
+
+    private async void MoveActivePane_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        if (ReferenceEquals(_activePane, _left)) await MoveSelectedAsync(_left, _right);
+        else await MoveSelectedAsync(_right, _left);
+    }
+
+    private void OrganizeSection_Click(object sender, RoutedEventArgs e)
+    {
+        var target = ReferenceEquals(sender, BookmarksSectionToggle) ? OrganizeSection.Bookmarks : OrganizeSection.Shelf;
+        SetOrganizeSection(_openOrganizeSection == target ? OrganizeSection.None : target);
+        _ = PersistSettingsAsync();
+    }
+
+    private void SetOrganizeSection(OrganizeSection section)
+    {
+        _openOrganizeSection = section;
+        BookmarksSection.Visibility = section == OrganizeSection.Bookmarks ? Visibility.Visible : Visibility.Collapsed;
+        ShelfSection.Visibility = section == OrganizeSection.Shelf ? Visibility.Visible : Visibility.Collapsed;
+        BookmarksSectionToggle.IsChecked = section == OrganizeSection.Bookmarks;
+        ShelfSectionToggle.IsChecked = section == OrganizeSection.Shelf;
+    }
     private async void LeftUp_Click(object sender, RoutedEventArgs e) => await NavigateUpAsync(_left);
     private async void RightUp_Click(object sender, RoutedEventArgs e) => await NavigateUpAsync(_right);
     private async void LeftBack_Click(object sender, RoutedEventArgs e) => await NavigateBackAsync(_left);
@@ -952,16 +1867,22 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_left.CurrentPath)) await NavigateAsync(_left, _left.CurrentPath, addHistory: false);
         if (!string.IsNullOrWhiteSpace(_right.CurrentPath)) await NavigateAsync(_right, _right.CurrentPath, addHistory: false);
     }
-    private void OpenInExplorer_Click(object sender, RoutedEventArgs e)
+    private void OpenInExplorer_Click(object sender, RoutedEventArgs e) => OpenActivePaneInExplorer();
+
+    private void OpenActivePaneInExplorer()
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath)) return;
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{_activePane.CurrentPath}\"", UseShellExecute = true }); }
-        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception) { GlobalStatus.Text = "Could not open Explorer · " + ex.Message; }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception) { SetStatus("Could not open Explorer · " + ex.Message, StatusSeverity.Error); }
     }
     private async void LeftItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_left);
     private async void RightItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_right);
     private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); } }
     private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
+
+    private enum OrganizeSection { None, Bookmarks, Shelf }
+
+    private enum StatusSeverity { Info, Success, Warning, Error }
 
     private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
     {

@@ -1,6 +1,8 @@
 # Release Gate
 
-Do not publish a stable release until every applicable item has evidence.
+Do not publish a stable release until every applicable item has evidence. CI cross-publishing is not a substitute for native ARM64 testing; installer build success is not an installation or uninstallation test.
+
+See [verification status](VERIFICATION_REPORT.md), [threat model](THREAT_MODEL.md), and [performance measurement plan](PERFORMANCE.md).
 
 - [ ] Windows 11 x64 and ARM64 builds succeed from a clean checkout with documented SDK versions.
 - [ ] Core tests pass and relevant failure paths have tests.
