@@ -751,7 +751,7 @@ public sealed partial class MainWindow : Window
             SelectionMode = ListViewSelectionMode.Single,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
-            Margin = new Thickness(4, 0),
+            Margin = new Thickness(4, 0, 4, 0),
             ItemTemplate = (DataTemplate)RootGrid.Resources["ColumnItemTemplate"]
         };
         var column = new ColumnViewState(folderPath, list, errorBlock) { Depth = depth };
