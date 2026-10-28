@@ -27,6 +27,7 @@ public sealed partial class MainWindow : Window
     private int _nextWorkspaceTabNumber = 1;
     private bool _switchingWorkspaceTab;
     private PaneState _activePane;
+    private OrganizeSection _openOrganizeSection = OrganizeSection.None;
     private bool _restoringWorkspace;
     private CancellationTokenSource? _copyCancellation;
     private CancellationTokenSource? _batchCancellation;
@@ -40,6 +41,7 @@ public sealed partial class MainWindow : Window
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus);
         _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus);
         _activePane = _left;
+        UpdateActivePaneVisuals();
         LeftItems.ItemsSource = _left.Items;
         RightItems.ItemsSource = _right.Items;
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -153,10 +155,11 @@ public sealed partial class MainWindow : Window
             {
                 var closeButton = new Button
                 {
-                    Content = "×",
+                    Content = new SymbolIcon { Symbol = Symbol.Cancel },
                     Tag = tab,
-                    MinWidth = 28,
-                    Padding = new Thickness(4, 2, 4, 2)
+                    Width = 28,
+                    Height = 28,
+                    Padding = new Thickness(0)
                 };
                 ToolTipService.SetToolTip(closeButton, "Close " + tab.Name);
                 closeButton.Click += CloseWorkspaceTab_Click;
@@ -306,6 +309,7 @@ public sealed partial class MainWindow : Window
             }
             pane.CurrentPath = fullPath;
             pane.PathBox.Text = fullPath;
+            UpdatePaneHeader(pane);
             pane.AllItems = entries;
             ApplyFilter(pane);
             GlobalStatus.Text = "Ready · Local-only · No telemetry";
@@ -882,7 +886,6 @@ public sealed partial class MainWindow : Window
     {
         if (_capsuleSaving) return;
         _capsuleSaving = true;
-        SaveCapsuleButton.IsEnabled = false;
         try { await SaveCapsuleAsync(); }
         catch (InvalidOperationException ex)
         {
@@ -891,7 +894,6 @@ public sealed partial class MainWindow : Window
         finally
         {
             _capsuleSaving = false;
-            SaveCapsuleButton.IsEnabled = true;
         }
     }
 
@@ -1048,7 +1050,7 @@ public sealed partial class MainWindow : Window
     private void SwitchPaneShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        _activePane = ReferenceEquals(_activePane, _left) ? _right : _left;
+        SetActivePane(ReferenceEquals(_activePane, _left) ? _right : _left);
         _activePane.List.Focus(FocusState.Programmatic);
         GlobalStatus.Text = $"Active pane · {_activePane.Name}";
     }
@@ -1086,10 +1088,69 @@ public sealed partial class MainWindow : Window
     }
 
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
-    private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
-    private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
-    private void LeftItems_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _left;
-    private void RightItems_PointerPressed(object sender, PointerRoutedEventArgs e) => _activePane = _right;
+    private void LeftPane_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_left);
+    private void RightPane_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_right);
+    private void LeftItems_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_left);
+    private void RightItems_PointerPressed(object sender, PointerRoutedEventArgs e) => SetActivePane(_right);
+
+    private void SetActivePane(PaneState pane)
+    {
+        _activePane = pane;
+        UpdateActivePaneVisuals();
+    }
+
+    private void UpdateActivePaneVisuals()
+    {
+        SetPaneActiveVisual(LeftPaneRoot, LeftPaneHeader, ReferenceEquals(_activePane, _left));
+        SetPaneActiveVisual(RightPaneRoot, RightPaneHeader, ReferenceEquals(_activePane, _right));
+    }
+
+    private static void SetPaneActiveVisual(Grid paneRoot, Grid paneHeader, bool isActive)
+    {
+        paneRoot.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[isActive ? "MeridianActivePaneBorderBrush" : "MeridianBorderBrush"];
+        paneHeader.Background = isActive
+            ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["MeridianActivePaneBackgroundBrush"]
+            : null;
+    }
+
+    private void UpdatePaneHeader(PaneState pane)
+    {
+        var nameBlock = ReferenceEquals(pane, _left) ? LeftFolderName : RightFolderName;
+        var pathBlock = ReferenceEquals(pane, _left) ? LeftFolderPath : RightFolderPath;
+        var path = pane.CurrentPath;
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(name)) name = string.IsNullOrWhiteSpace(path) ? pane.Name + " pane" : path;
+        nameBlock.Text = name;
+        pathBlock.Text = path;
+        if (!string.IsNullOrWhiteSpace(path)) ToolTipService.SetToolTip(pathBlock, path);
+    }
+
+    private async void CopyActivePane_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        if (ReferenceEquals(_activePane, _left)) await CopySelectedAsync(_left, _right);
+        else await CopySelectedAsync(_right, _left);
+    }
+
+    private async void MoveActivePane_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        if (ReferenceEquals(_activePane, _left)) await MoveSelectedAsync(_left, _right);
+        else await MoveSelectedAsync(_right, _left);
+    }
+
+    private void OrganizeSection_Click(object sender, RoutedEventArgs e)
+    {
+        var target = ReferenceEquals(sender, BookmarksSectionToggle) ? OrganizeSection.Bookmarks : OrganizeSection.Shelf;
+        SetOrganizeSection(_openOrganizeSection == target ? OrganizeSection.None : target);
+    }
+
+    private void SetOrganizeSection(OrganizeSection section)
+    {
+        _openOrganizeSection = section;
+        BookmarksSection.Visibility = section == OrganizeSection.Bookmarks ? Visibility.Visible : Visibility.Collapsed;
+        ShelfSection.Visibility = section == OrganizeSection.Shelf ? Visibility.Visible : Visibility.Collapsed;
+        BookmarksSectionToggle.IsChecked = section == OrganizeSection.Bookmarks;
+        ShelfSectionToggle.IsChecked = section == OrganizeSection.Shelf;
+    }
     private async void LeftUp_Click(object sender, RoutedEventArgs e) => await NavigateUpAsync(_left);
     private async void RightUp_Click(object sender, RoutedEventArgs e) => await NavigateUpAsync(_right);
     private async void LeftBack_Click(object sender, RoutedEventArgs e) => await NavigateBackAsync(_left);
@@ -1115,6 +1176,8 @@ public sealed partial class MainWindow : Window
     private async void RightItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_right);
     private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); } }
     private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
+
+    private enum OrganizeSection { None, Bookmarks, Shelf }
 
     private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
     {
