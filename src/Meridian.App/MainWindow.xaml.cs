@@ -8,6 +8,10 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Meridian.Core.Transfers;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.ApplicationModel.DataTransfer.DragDrop;
+using Windows.Storage;
 using Windows.System;
 
 namespace Meridian;
@@ -57,7 +61,6 @@ public sealed partial class MainWindow : Window
     private PaneState _activePane;
     private OrganizeSection _openOrganizeSection = OrganizeSection.None;
     private bool _restoringSession;
-    private CancellationTokenSource? _copyCancellation;
     private CancellationTokenSource? _batchCancellation;
     private bool _batchPreparing;
     private string? _pinnedError;
@@ -94,6 +97,7 @@ public sealed partial class MainWindow : Window
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle, LeftDetailsViewToggle, LeftGridViewToggle, LeftTilesViewToggle, LeftGroup);
         _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle, RightDetailsViewToggle, RightGridViewToggle, RightTilesViewToggle, RightGroup);
         _activePane = _left;
+        InitializeTransfers();
         UpdateActivePaneVisuals();
         LeftItems.ItemsSource = _left.Items;
         RightItems.ItemsSource = _right.Items;
@@ -128,7 +132,11 @@ public sealed partial class MainWindow : Window
             ApplyDetailsStripVisibility();
             _sidebarVisible = settings.SidebarVisible;
             ApplySidebarVisibility();
+            _verifyCopiesWithChecksum = settings.VerifyCopiesWithChecksum;
+            _nameCollisionPolicy = ParseCollisionPolicy(settings.NameCollisionPolicy);
+            _transfersStripCollapsed = settings.TransfersStripCollapsed;
         }
+        await InitializeTransfersAsync();
         try
         {
             _capsules.AddRange(await _capsuleStore.LoadAsync());
@@ -207,7 +215,10 @@ public sealed partial class MainWindow : Window
                 // LoadAsync has already applied the one-time accent-default
                 // migration to the values above; every save records that, so
                 // an accent picked deliberately later is never re-migrated.
-                AccentDefaultMigrated: true));
+                AccentDefaultMigrated: true,
+                VerifyCopiesWithChecksum: _verifyCopiesWithChecksum,
+                NameCollisionPolicy: _nameCollisionPolicy.ToString(),
+                TransfersStripCollapsed: _transfersStripCollapsed));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -941,6 +952,12 @@ public sealed partial class MainWindow : Window
         list.DoubleTapped += (s, e) => _ = OpenSelectedAsync(pane);
         list.PointerPressed += (s, e) => SetActivePane(pane);
         list.ContextFlyout = BuildColumnContextFlyout(pane);
+        list.CanDragItems = true;
+        list.AllowDrop = true;
+        list.DragItemsStarting += PaneList_DragItemsStarting;
+        list.DragItemsCompleted += PaneList_DragItemsCompleted;
+        list.DragOver += (s, e) => HandlePaneDragOver(pane, list, column.FolderPath, e);
+        list.Drop += async (s, e) => await HandlePaneDropAsync(pane, list, column.FolderPath, e);
         var grid = new Grid();
         grid.Children.Add(list);
         grid.Children.Add(errorBlock);
@@ -985,6 +1002,12 @@ public sealed partial class MainWindow : Window
             shelfItem.Click += AddToShelfFromRight_Click;
             deleteItem.Click += DeleteFromRight_Click;
         }
+        ToolTipService.SetToolTip(copyItem, $"Copy the selected item to the {direction} pane. The copy runs in the Transfers queue");
+        ToolTipService.SetToolTip(moveItem, $"Move the selected item to the {direction} pane. The original is removed only after its copy is safely in place");
+        ToolTipService.SetToolTip(renameItem, "Rename the selected item (F2)");
+        ToolTipService.SetToolTip(propertiesItem, "See the selected item's size, dates, and details");
+        ToolTipService.SetToolTip(shelfItem, "Collect the selected item on the Drop Shelf without moving it");
+        ToolTipService.SetToolTip(deleteItem, "Move the selected item to the Recycle Bin. It can be restored from there until the bin is emptied");
         var flyout = new MenuFlyout();
         flyout.Items.Add(copyItem);
         flyout.Items.Add(moveItem);
@@ -1329,6 +1352,12 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(button, toolTip);
         AutomationProperties.SetName(button, label);
         button.Click += SidebarItem_Click;
+        if (!string.Equals(targetPath, HomePath, StringComparison.OrdinalIgnoreCase))
+        {
+            button.AllowDrop = true;
+            button.DragOver += SidebarItem_DragOver;
+            button.Drop += SidebarItem_Drop;
+        }
         SidebarContent.Children.Add(button);
         _sidebarNavButtons.Add((button, targetPath));
     }
@@ -1510,6 +1539,9 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(card, toolTip);
         AutomationProperties.SetName(card, toolTip);
         card.Click += async (s, e) => await NavigateAsync(pane, targetPath);
+        card.AllowDrop = true;
+        card.DragOver += Card_DragOver;
+        card.Drop += Card_Drop;
         return card;
     }
 
@@ -1811,6 +1843,8 @@ public sealed partial class MainWindow : Window
         var destination = Path.Combine(creationParent,
             (sources.Length == 1 ? Path.GetFileNameWithoutExtension(selected.Name) : "Selection") + ".zip");
         var formatPicker = new ComboBox { SelectedIndex = 0, MinWidth = 260 };
+        AutomationProperties.SetName(formatPicker, "Archive format");
+        ToolTipService.SetToolTip(formatPicker, "The archive format to create. ZIP opens almost anywhere; TAR and TAR.GZ hold the same files in one uncompressed or compressed bundle.");
         formatPicker.Items.Add("ZIP (.zip)");
         formatPicker.Items.Add("TAR (.tar)");
         formatPicker.Items.Add("TAR.GZ (.tar.gz)");
@@ -2104,7 +2138,7 @@ public sealed partial class MainWindow : Window
             dialog = new ContentDialog
             {
                 Title = "Move item?",
-                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original.\n\nIf you change your mind, you can move it back from the destination folder.",
+                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nThe move runs in the Transfers queue below the panes. Each item is copied first and its original is removed only after the copy is safely in place, so moves between volumes work too. If a name already exists, your Settings choice under \u201cWhen a name already exists\u201d applies. Finished moves appear in Transfer History, where many can be undone.",
                 PrimaryButtonText = "Move",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -2116,7 +2150,7 @@ public sealed partial class MainWindow : Window
             dialog = new ContentDialog
             {
                 Title = "Move items?",
-                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. Moves between volumes are refused; use Copy to keep the original. If an item cannot be moved, the move stops and items already moved stay moved.\n\nYou can move items back from the destination folder afterwards.",
+                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nThe move runs in the Transfers queue below the panes. Each item is copied first and its original is removed only after the copy is safely in place, so moves between volumes work too. If a name already exists, your Settings choice under \u201cWhen a name already exists\u201d applies. If an item cannot be moved, the job finishes with errors and items already moved stay moved. Finished moves appear in Transfer History, where many can be undone.",
                 PrimaryButtonText = "Move",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -2135,126 +2169,39 @@ public sealed partial class MainWindow : Window
         }
 
         ClearPinnedError();
-        var sourcePaths = selection.Select(item => item.FullPath).ToArray();
-        var sourceFolder = source.CurrentPath;
-        var destinationPath = destination.CurrentPath;
-        var movedCount = 0;
-        try
-        {
-            await Task.Run(() =>
-            {
-                foreach (var sourcePath in sourcePaths)
-                {
-                    FileOperations.MoveItem(sourcePath, destinationPath);
-                    movedCount++;
-                }
-            });
-            if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
-                await NavigateAsync(source, sourceFolder, addHistory: false);
-            if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
-                await NavigateAsync(destination, destinationPath, addHistory: false);
-            SetStatus(sourcePaths.Length == 1
-                ? $"Moved {Path.GetFileName(sourcePaths[0])} to {destinationPath}"
-                : $"Moved {movedCount:N0} items to {destinationPath}", StatusSeverity.Success);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
-        {
-            if (movedCount > 0)
-            {
-                if (string.Equals(source.CurrentPath, sourceFolder, StringComparison.OrdinalIgnoreCase))
-                    await NavigateAsync(source, sourceFolder, addHistory: false);
-                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
-                    await NavigateAsync(destination, destinationPath, addHistory: false);
-            }
-            SetStatus(movedCount > 0
-                ? $"Move stopped after {movedCount:N0} of {sourcePaths.Length:N0} items · {ex.Message}"
-                : "Move failed · " + ex.Message, StatusSeverity.Error);
-        }
+        var job = TransferJob.Create(
+            TransferJobKind.Move, currentPaths, confirmedDestination,
+            _nameCollisionPolicy, _verifyCopiesWithChecksum);
+        await _transfers.EnqueueAsync(job);
+        SetPaneStatus(source, "Move queued");
+        SetStatus($"Queued move \u00b7 {currentPaths.Length:N0} item(s) to {confirmedDestination}. Progress is in the Transfers strip below.", StatusSeverity.Success);
     }
 
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
-        if (_copyCancellation is not null) { SetStatus("A copy is already in progress.", StatusSeverity.Warning); return; }
         var selection = GetSelectedEntries(source);
         if (selection.Count == 0) { SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning); return; }
-        if (destination.IsHome) { SetStatus("Open a folder in the other pane first — Home is not a copy destination.", StatusSeverity.Warning); return; }
+        if (destination.IsHome) { SetStatus("Open a folder in the other pane first \u2014 Home is not a copy destination.", StatusSeverity.Warning); return; }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
         var sourcePaths = selection.Select(item => item.FullPath).ToArray();
         var destinationPath = destination.CurrentPath;
-        // A folder can never be copied into itself. Single copies check here;
-        // batch copies are also refused by the BatchCopy preflight before anything is copied.
+        // A folder can never be copied into itself or one of its own folders;
+        // the executor also refuses per item, but the whole request is refused
+        // here so nothing is queued that can only fail.
         foreach (var sourcePath in sourcePaths)
         {
-            if (Directory.Exists(sourcePath) &&
-                string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
-            { SetStatus("The destination is the selected folder. Choose another destination.", StatusSeverity.Warning); return; }
+            if (Directory.Exists(sourcePath) && IsSameOrDescendantPath(sourcePath, destinationPath))
+            { SetStatus("The destination is inside the selected folder. Choose another destination.", StatusSeverity.Warning); return; }
         }
 
-        var cancellation = new CancellationTokenSource();
-        _copyCancellation = cancellation;
-        CancelCopyButton.IsEnabled = true;
         ClearPinnedError();
-        SetStatus(sourcePaths.Length == 1 ? $"Copying {selection[0].Name}…" : $"Copying {sourcePaths.Length:N0} items…");
-        if (sourcePaths.Length == 1) ShowOperationProgress($"Copying {selection[0].Name}", null);
-        SetPaneStatus(source, "Copy in progress…");
-        var acceptingProgress = true;
-        try
-        {
-            if (sourcePaths.Length == 1)
-            {
-                var progress = new Progress<FileOperations.CopyProgress>(update =>
-                {
-                    if (acceptingProgress && ReferenceEquals(_copyCancellation, cancellation))
-                        ShowOperationProgress($"Copying {selection[0].Name} · {FormatFileSize(update.BytesCopied)} written", null);
-                });
-                var copiedTo = await Task.Run(() => FileOperations.CopyItem(sourcePaths[0], destinationPath, cancellation.Token, progress), cancellation.Token);
-                acceptingProgress = false;
-                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
-                SetPaneStatus(source, "Ready"); SetStatus($"Copied {Path.GetFileName(copiedTo)} to {destinationPath}", StatusSeverity.Success);
-            }
-            else
-            {
-                var progress = new Progress<BatchCopy.Progress>(state =>
-                {
-                    if (_copyCancellation == cancellation)
-                        ShowOperationProgress($"Copying {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}",
-                            state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
-                });
-                var result = await Task.Run(() => BatchCopy.Execute(sourcePaths, destinationPath, cancellation.Token, progress), cancellation.Token);
-                if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
-                if (result.Succeeded)
-                {
-                    SetPaneStatus(source, "Ready");
-                    SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destinationPath}", StatusSeverity.Success);
-                }
-                else if (result.Cancelled)
-                {
-                    SetPaneStatus(source, "Copy cancelled");
-                    SetStatus($"Copy cancelled · {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items copied. Items already copied stay copied.", StatusSeverity.Warning);
-                }
-                else
-                {
-                    SetPaneStatus(source, "Copy failed");
-                    SetStatus($"Copy stopped after {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items · {result.Failure}", StatusSeverity.Error);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            SetPaneStatus(source, "Copy cancelled");
-            SetStatus("Copy cancelled · Partial staging data was cleaned up where possible.", StatusSeverity.Warning);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or InvalidOperationException)
-        { SetPaneStatus(source, "Copy failed"); SetStatus("Copy failed · " + ex.Message, StatusSeverity.Error); }
-        finally
-        {
-            acceptingProgress = false;
-            if (ReferenceEquals(_copyCancellation, cancellation)) _copyCancellation = null;
-            CancelCopyButton.IsEnabled = false;
-            HideOperationProgress();
-            cancellation.Dispose();
-        }
+        var job = TransferJob.Create(
+            TransferJobKind.Copy, sourcePaths, destinationPath,
+            _nameCollisionPolicy, _verifyCopiesWithChecksum);
+        await _transfers.EnqueueAsync(job);
+        SetPaneStatus(source, "Copy queued");
+        SetStatus($"Queued copy \u00b7 {sourcePaths.Length:N0} item(s) to {destinationPath}. Progress is in the Transfers strip below.", StatusSeverity.Success);
     }
 
     private async void NewFolder_Click(object sender, RoutedEventArgs e) => await CreateNewFolderAsync();
@@ -2693,49 +2640,14 @@ public sealed partial class MainWindow : Window
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
             cancellation.Token.ThrowIfCancellationRequested();
             ClearPinnedError();
-            SetStatus("Copying Drop Shelf items…");
-                var progress = new Progress<BatchCopy.Progress>(state =>
-                {
-                    if (_batchCancellation == cancellation)
-                        ShowOperationProgress($"Batch copy · {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}",
-                            state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
-                });
-                var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
-                if (string.Equals(destinationPane.CurrentPath, destination, StringComparison.OrdinalIgnoreCase))
-                    await NavigateAsync(destinationPane, destination, addHistory: false);
-                if (result.Succeeded)
-                    SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destination}", StatusSeverity.Success);
-                else if (result.Cancelled)
-                    SetStatus($"Batch copy cancelled · {result.CompletedTargets.Count:N0} of {sources.Length:N0} items copied. Items already copied stay copied.", StatusSeverity.Warning);
-                else
-                    SetStatus($"Batch stopped after {result.CompletedTargets.Count:N0} of {sources.Length:N0} items · {result.Failure}", StatusSeverity.Error);
-                if (!result.Succeeded)
-                {
-                    var details = new ContentDialog
-                    {
-                        Title = result.Cancelled ? "Batch copy cancelled" : "Batch copy stopped",
-                        Content = new ScrollViewer
-                        {
-                            MaxHeight = 360,
-                            Content = new TextBlock
-                            {
-                                Text = $"Completed: {result.CompletedTargets.Count:N0} of {sources.Length:N0} items\n" +
-                                       $"Destination: {destination}\n" +
-                                       $"Stopped at: {result.FailedSource ?? "(unknown)"}\n" +
-                                       $"Reason: {(result.Cancelled ? "Cancelled by request" : result.Failure ?? "Unknown failure")}\n\n" +
-                                       "Earlier successful copies remain in the destination. Original files were not moved. " +
-                                       "There is no automatic rollback.\n\nCompleted targets:\n" +
-                                       string.Join("\n", result.CompletedTargets.Take(100)) +
-                                       (result.CompletedTargets.Count > 100 ? $"\n…and {result.CompletedTargets.Count - 100:N0} more" : ""),
-                                TextWrapping = TextWrapping.Wrap,
-                                IsTextSelectionEnabled = true
-                            }
-                        },
-                        CloseButtonText = "Close",
-                        XamlRoot = Content.XamlRoot
-                    };
-                    await details.ShowAsync();
-                }
+            var job = TransferJob.Create(
+                TransferJobKind.Copy, sources, destination,
+                _nameCollisionPolicy, _verifyCopiesWithChecksum);
+            await _transfers.EnqueueAsync(job);
+            _shelfJobId = job.Id;
+            CancelShelfButton.IsEnabled = true;
+            SetStatus($"Queued Drop Shelf copy \u00b7 {sources.Length:N0} item(s) to {destination}. Progress is in the Transfers strip below.");
+
         }
         catch (OperationCanceledException)
         {
@@ -2749,8 +2661,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _batchCancellation = null;
-            CancelShelfButton.IsEnabled = false;
-            HideOperationProgress();
+            CancelShelfButton.IsEnabled = _shelfJobId is not null;
             _batchPreparing = false;
         }
     }
@@ -2862,8 +2773,15 @@ public sealed partial class MainWindow : Window
 
     private void CancelShelf_Click(object sender, RoutedEventArgs e)
     {
+        if (_shelfJobId is { } jobId &&
+            _transfers.Jobs.FirstOrDefault(job => job.Id == jobId) is { } job)
+        {
+            _ = _transfers.CancelJobAsync(job);
+            SetStatus("Cancelling the Drop Shelf transfer… Items already copied stay copied; a half-copied item is removed.");
+            return;
+        }
         _batchCancellation?.Cancel();
-        SetStatus("Cancelling batch copy…");
+        SetStatus("Cancelling batch preparation…");
     }
 
     private void PruneShelf_Click(object sender, RoutedEventArgs e)
@@ -2921,9 +2839,9 @@ public sealed partial class MainWindow : Window
 
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
-        if (_copyCancellation is null) return;
-        _copyCancellation.Cancel();
-        SetStatus("Cancelling copy…");
+        if (_transfers.ActiveJob is not { } job) return;
+        _ = _transfers.CancelJobAsync(job);
+        SetStatus("Cancelling transfer… Files already finished stay in place; the half-copied file is removed.");
     }
 
     private async void RefreshShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -3016,11 +2934,20 @@ public sealed partial class MainWindow : Window
 
     private void CancelCopyShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        // Esc only means "cancel copy" while a copy is actually running; every
-        // other Esc press keeps its normal behavior (closing flyouts, etc.).
-        if (_copyCancellation is null) return;
-        args.Handled = true;
-        CancelCopy_Click(this, new RoutedEventArgs());
+        // Esc only means "cancel transfer" while a transfer is actually
+        // running (or a shelf batch is being prepared); every other Esc press
+        // keeps its normal behavior (closing flyouts, etc.).
+        if (_transfers.ActiveJob is not null)
+        {
+            args.Handled = true;
+            CancelCopy_Click(this, new RoutedEventArgs());
+            return;
+        }
+        if (_batchCancellation is not null)
+        {
+            args.Handled = true;
+            CancelShelf_Click(this, new RoutedEventArgs());
+        }
     }
 
     private bool IsFocusInPaneList()
@@ -3292,6 +3219,7 @@ public sealed partial class MainWindow : Window
             IsOn = _accentMode == AccentMode.FollowWindows
         };
         AutomationProperties.SetName(accentToggle, "Follow Windows accent color");
+        ToolTipService.SetToolTip(accentToggle, "Use the accent color Windows is set to. Turn it off to use one of the colors above, or your own hex color.");
         var accentHeader = new TextBlock { Text = "Accent color" };
         var swatchButtons = new List<(AccentPreset Preset, Button Button)>();
         var accentSwatches = new Grid { RowSpacing = 6, ColumnSpacing = 6 };
@@ -3408,6 +3336,43 @@ public sealed partial class MainWindow : Window
             _ = PersistSettingsAsync();
         };
 
+        var verifyCopiesToggle = new ToggleSwitch
+        {
+            Header = "Verify copies with a checksum (slower)",
+            IsOn = _verifyCopiesWithChecksum
+        };
+        AutomationProperties.SetName(verifyCopiesToggle, "Verify copies with a checksum");
+        ToolTipService.SetToolTip(verifyCopiesToggle, "After each file is copied, Meridian reads the copy back and compares its SHA-256 checksum with the original. If they differ, the copy is removed and the original is kept. Transfers take longer.");
+        verifyCopiesToggle.Toggled += (s, args) =>
+        {
+            if (verifyCopiesToggle.IsOn == _verifyCopiesWithChecksum) return;
+            _verifyCopiesWithChecksum = verifyCopiesToggle.IsOn;
+            _ = PersistSettingsAsync();
+        };
+        var collisionHeader = new TextBlock { Text = "When a name already exists" };
+        var collisionPicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        collisionPicker.Items.Add("Ask me each time");
+        collisionPicker.Items.Add("Skip the item");
+        collisionPicker.Items.Add("Keep both (add a number to the name)");
+        collisionPicker.Items.Add("Replace the existing file");
+        collisionPicker.Items.Add("Replace only if the incoming file is newer");
+        collisionPicker.SelectedIndex = (int)_nameCollisionPolicy;
+        AutomationProperties.SetName(collisionPicker, "When a name already exists");
+        ToolTipService.SetToolTip(collisionPicker, "What Copy and Move do when the destination already has an item with the same name. Ask me each time pauses the transfer in the Transfers strip and lets you choose for each file.");
+        collisionPicker.SelectionChanged += (s, args) =>
+        {
+            if (collisionPicker.SelectedIndex < 0) return;
+            var policy = (CollisionPolicy)collisionPicker.SelectedIndex;
+            if (policy == _nameCollisionPolicy) return;
+            _nameCollisionPolicy = policy;
+            _ = PersistSettingsAsync();
+        };
+        var collisionNote = new TextBlock
+        {
+            Text = "Applies to new Copy and Move transfers. Replace overwrites the existing file; Keep both saves the incoming file under a numbered name.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeBrush("MeridianTextSecondaryBrush")
+        };
         var settingsContent = new StackPanel { Spacing = 16, MinWidth = 340 };
         settingsContent.Children.Add(new TextBlock
         {
@@ -3416,6 +3381,10 @@ public sealed partial class MainWindow : Window
         });
         settingsContent.Children.Add(themeButtons);
         settingsContent.Children.Add(densityButtons);
+        settingsContent.Children.Add(verifyCopiesToggle);
+        settingsContent.Children.Add(collisionHeader);
+        settingsContent.Children.Add(collisionPicker);
+        settingsContent.Children.Add(collisionNote);
         settingsContent.Children.Add(accentHeader);
         settingsContent.Children.Add(accentSwatches);
         settingsContent.Children.Add(customRevealButton);
@@ -3650,7 +3619,7 @@ public sealed partial class MainWindow : Window
         var count = pane.SelectionList.SelectedItems.Count;
         var hasDestination = !string.IsNullOrWhiteSpace(other.CurrentPath) && !other.IsHome;
         var direction = isLeftPane ? "right" : "left";
-        copyItem.IsEnabled = count > 0 && hasDestination && _copyCancellation is null;
+        copyItem.IsEnabled = count > 0 && hasDestination;
         moveItem.IsEnabled = count > 0 && hasDestination;
         renameItem.IsEnabled = count == 1;
         propertiesItem.IsEnabled = count == 1;
@@ -4394,6 +4363,8 @@ public sealed partial class MainWindow : Window
                 TextWrapping = TextWrapping.Wrap
             });
             var selector = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Choose a snapshot" };
+            AutomationProperties.SetName(selector, "Snapshot");
+            ToolTipService.SetToolTip(selector, "Choose which shadow copy snapshot to inspect. Snapshots are read-only.");
             foreach (var snapshot in snapshots.OrderByDescending(item => item.CreatedAt))
             {
                 selector.Items.Add(new ComboBoxItem
@@ -4412,6 +4383,8 @@ public sealed partial class MainWindow : Window
                 IsTextSelectionEnabled = true
             };
             var inspect = new Button { Content = "Inspect current folder (read-only)", IsEnabled = snapshots.Count > 0 };
+            AutomationProperties.SetName(inspect, "Inspect current folder in snapshot");
+            ToolTipService.SetToolTip(inspect, "List the active pane's folder as it appears in the chosen snapshot. Nothing is changed or restored.");
             inspect.Click += async (_, _) =>
             {
                 if (selector.SelectedItem is not ComboBoxItem { Tag: Meridian.Core.TimeVault.ShadowCopy selected }) return;
