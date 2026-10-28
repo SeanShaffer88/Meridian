@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource? _copyCancellation;
     private CancellationTokenSource? _batchCancellation;
     private bool _batchPreparing;
+    private string? _pinnedError;
 
     public MainWindow()
     {
@@ -61,7 +62,7 @@ public sealed partial class MainWindow : Window
         {
             // Never replace unreadable saved data with a new empty document.
             _capsuleStorageUnavailable = true;
-            GlobalStatus.Text = "Saved Capsules could not be loaded; saving is disabled to preserve the original file · " + ex.Message;
+            SetStatus("Saved Capsules could not be loaded; saving is disabled to preserve the original file · " + ex.Message, StatusSeverity.Error);
         }
         var saved = await _workspaceStore.LoadAsync();
         _bookmarks.Clear();
@@ -116,7 +117,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             // Workspace persistence is a convenience; file browsing must continue if it fails.
-            GlobalStatus.Text = "Workspace could not be saved · " + ex.Message;
+            SetStatus("Workspace could not be saved · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -179,7 +180,7 @@ public sealed partial class MainWindow : Window
         _activeWorkspaceTabIndex = _workspaceTabs.Count - 1;
         RefreshWorkspaceTabs();
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Opened {tab.Name}";
+        SetStatus($"Opened {tab.Name}");
     }
 
     private async void WorkspaceTab_Click(object sender, RoutedEventArgs e)
@@ -239,7 +240,7 @@ public sealed partial class MainWindow : Window
         tab.LeftPath = _left.CurrentPath;
         tab.RightPath = _right.CurrentPath;
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Switched to {tab.Name}";
+        SetStatus($"Switched to {tab.Name}");
     }
 
     private async Task AddBookmarkAsync()
@@ -248,7 +249,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(path)) return;
         if (_bookmarks.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)))
         {
-            GlobalStatus.Text = "That location is already bookmarked.";
+            SetStatus("That location is already bookmarked.", StatusSeverity.Warning);
             return;
         }
 
@@ -257,7 +258,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name)) name = path;
         _bookmarks.Add(new BookmarkSnapshot(name, path));
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Bookmarked · {name}";
+        SetStatus($"Bookmarked · {name}", StatusSeverity.Success);
     }
 
     private async void AddBookmark_Click(object sender, RoutedEventArgs e) => await AddBookmarkAsync();
@@ -266,14 +267,14 @@ public sealed partial class MainWindow : Window
     {
         if (BookmarksBox.SelectedItem is not BookmarkSnapshot selected)
         {
-            GlobalStatus.Text = "Select a saved location to remove.";
+            SetStatus("Select a saved location to remove.", StatusSeverity.Warning);
             return;
         }
 
         _bookmarks.Remove(selected);
         BookmarksBox.SelectedItem = null;
         await PersistWorkspaceAsync();
-        GlobalStatus.Text = $"Removed bookmark · {selected.Name}";
+        SetStatus($"Removed bookmark · {selected.Name}", StatusSeverity.Success);
     }
 
     private async void BookmarksBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -293,7 +294,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            SetPaneStatus(pane, ex.Message); GlobalStatus.Text = "Navigation failed · " + ex.Message; pane.PathBox.Text = pane.CurrentPath; return false;
+            SetPaneStatus(pane, ex.Message); SetStatus("Navigation failed · " + ex.Message, StatusSeverity.Error); pane.PathBox.Text = pane.CurrentPath; return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
         var token = pane.ReadCancellation.Token;
@@ -312,7 +313,7 @@ public sealed partial class MainWindow : Window
             UpdatePaneHeader(pane);
             pane.AllItems = entries;
             ApplyFilter(pane);
-            GlobalStatus.Text = "Ready · Local-only · No telemetry";
+            SetStatus("Ready · Local-only · No telemetry");
             if (!_restoringWorkspace) await PersistWorkspaceAsync();
             return true;
         }
@@ -322,7 +323,7 @@ public sealed partial class MainWindow : Window
             if (!token.IsCancellationRequested)
             {
                 SetPaneStatus(pane, ex.Message);
-                GlobalStatus.Text = "Could not read folder · " + ex.Message;
+                SetStatus("Could not read folder · " + ex.Message, StatusSeverity.Error);
                 pane.PathBox.Text = pane.CurrentPath;
             }
             return false;
@@ -393,14 +394,14 @@ public sealed partial class MainWindow : Window
         if (selected.IsDirectory) { await NavigateAsync(pane, selected.FullPath); return; }
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = selected.FullPath, UseShellExecute = true }); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
-        { GlobalStatus.Text = "Could not open file · " + ex.Message; }
+        { SetStatus("Could not open file · " + ex.Message, StatusSeverity.Error); }
     }
     private async Task MoveSelectedAsync(PaneState source, PaneState destination)
     {
         var selection = GetSelectedEntries(source);
         if (selection.Count == 0)
         {
-            GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first.";
+            SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
@@ -413,7 +414,7 @@ public sealed partial class MainWindow : Window
             dialog = new ContentDialog
             {
                 Title = "Move item?",
-                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.",
+                Content = $"Move this {kind} to the other pane's current folder?\n\nFrom: {selected.FullPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten.\n\nIf you change your mind, you can move it back from the destination folder.",
                 PrimaryButtonText = "Move",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -425,7 +426,7 @@ public sealed partial class MainWindow : Window
             dialog = new ContentDialog
             {
                 Title = "Move items?",
-                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. If an item cannot be moved, the move stops and items already moved stay moved.",
+                Content = $"Move {selection.Count:N0} items to the other pane's current folder?\n\nFrom: {source.CurrentPath}\nTo: {destination.CurrentPath}\n\nExisting items will not be overwritten. If an item cannot be moved, the move stops and items already moved stay moved.\n\nYou can move items back from the destination folder afterwards.",
                 PrimaryButtonText = "Move",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -434,6 +435,7 @@ public sealed partial class MainWindow : Window
         }
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        ClearPinnedError();
         var sourcePaths = selection.Select(item => item.FullPath).ToArray();
         var sourceFolder = source.CurrentPath;
         var destinationPath = destination.CurrentPath;
@@ -452,9 +454,9 @@ public sealed partial class MainWindow : Window
                 await NavigateAsync(source, sourceFolder, addHistory: false);
             if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
                 await NavigateAsync(destination, destinationPath, addHistory: false);
-            GlobalStatus.Text = sourcePaths.Length == 1
-                ? $"Moved successfully · {Path.GetFileName(sourcePaths[0])}"
-                : $"Moved {movedCount:N0} items";
+            SetStatus(sourcePaths.Length == 1
+                ? $"Moved {Path.GetFileName(sourcePaths[0])} to {destinationPath}"
+                : $"Moved {movedCount:N0} items to {destinationPath}", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
@@ -465,17 +467,17 @@ public sealed partial class MainWindow : Window
                 if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase))
                     await NavigateAsync(destination, destinationPath, addHistory: false);
             }
-            GlobalStatus.Text = movedCount > 0
+            SetStatus(movedCount > 0
                 ? $"Move stopped after {movedCount:N0} of {sourcePaths.Length:N0} items · {ex.Message}"
-                : "Move failed · " + ex.Message;
+                : "Move failed · " + ex.Message, StatusSeverity.Error);
         }
     }
 
     private async Task CopySelectedAsync(PaneState source, PaneState destination)
     {
-        if (_copyCancellation is not null) { GlobalStatus.Text = "A copy is already in progress."; return; }
+        if (_copyCancellation is not null) { SetStatus("A copy is already in progress.", StatusSeverity.Warning); return; }
         var selection = GetSelectedEntries(source);
-        if (selection.Count == 0) { GlobalStatus.Text = $"Select an item in the {source.Name.ToLowerInvariant()} pane first."; return; }
+        if (selection.Count == 0) { SetStatus($"Select an item in the {source.Name.ToLowerInvariant()} pane first.", StatusSeverity.Warning); return; }
         if (string.IsNullOrWhiteSpace(destination.CurrentPath)) return;
 
         var sourcePaths = selection.Select(item => item.FullPath).ToArray();
@@ -486,13 +488,15 @@ public sealed partial class MainWindow : Window
         {
             if (Directory.Exists(sourcePath) &&
                 string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
-            { GlobalStatus.Text = "The destination is the selected folder. Choose another destination."; return; }
+            { SetStatus("The destination is the selected folder. Choose another destination.", StatusSeverity.Warning); return; }
         }
 
         var cancellation = new CancellationTokenSource();
         _copyCancellation = cancellation;
         CancelCopyButton.IsEnabled = true;
-        GlobalStatus.Text = sourcePaths.Length == 1 ? $"Copying {selection[0].Name}…" : $"Copying {sourcePaths.Length:N0} items…";
+        ClearPinnedError();
+        SetStatus(sourcePaths.Length == 1 ? $"Copying {selection[0].Name}…" : $"Copying {sourcePaths.Length:N0} items…");
+        if (sourcePaths.Length == 1) ShowOperationProgress($"Copying {selection[0].Name}", null);
         SetPaneStatus(source, "Copy in progress…");
         try
         {
@@ -500,45 +504,47 @@ public sealed partial class MainWindow : Window
             {
                 var copiedTo = await Task.Run(() => FileOperations.CopyItem(sourcePaths[0], destinationPath, cancellation.Token), cancellation.Token);
                 if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
-                SetPaneStatus(source, "Ready"); GlobalStatus.Text = $"Copied successfully · {Path.GetFileName(copiedTo)}";
+                SetPaneStatus(source, "Ready"); SetStatus($"Copied {Path.GetFileName(copiedTo)} to {destinationPath}", StatusSeverity.Success);
             }
             else
             {
                 var progress = new Progress<BatchCopy.Progress>(state =>
                 {
                     if (_copyCancellation == cancellation)
-                        GlobalStatus.Text = $"Copying {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}";
+                        ShowOperationProgress($"Copying {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}",
+                            state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sourcePaths, destinationPath, cancellation.Token, progress), cancellation.Token);
                 if (string.Equals(destination.CurrentPath, destinationPath, StringComparison.OrdinalIgnoreCase)) await NavigateAsync(destination, destinationPath, addHistory: false);
                 if (result.Succeeded)
                 {
                     SetPaneStatus(source, "Ready");
-                    GlobalStatus.Text = $"{result.CompletedTargets.Count:N0} items copied";
+                    SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destinationPath}", StatusSeverity.Success);
                 }
                 else if (result.Cancelled)
                 {
                     SetPaneStatus(source, "Copy cancelled");
-                    GlobalStatus.Text = $"Copy cancelled · {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items copied. Items already copied stay copied.";
+                    SetStatus($"Copy cancelled · {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items copied. Items already copied stay copied.", StatusSeverity.Warning);
                 }
                 else
                 {
                     SetPaneStatus(source, "Copy failed");
-                    GlobalStatus.Text = $"Copy stopped after {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items · {result.Failure}";
+                    SetStatus($"Copy stopped after {result.CompletedTargets.Count:N0} of {sourcePaths.Length:N0} items · {result.Failure}", StatusSeverity.Error);
                 }
             }
         }
         catch (OperationCanceledException)
         {
             SetPaneStatus(source, "Copy cancelled");
-            GlobalStatus.Text = "Copy cancelled · Partial staging data was cleaned up where possible.";
+            SetStatus("Copy cancelled · Partial staging data was cleaned up where possible.", StatusSeverity.Warning);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or InvalidOperationException)
-        { SetPaneStatus(source, "Copy failed"); GlobalStatus.Text = "Copy failed · " + ex.Message; }
+        { SetPaneStatus(source, "Copy failed"); SetStatus("Copy failed · " + ex.Message, StatusSeverity.Error); }
         finally
         {
             if (ReferenceEquals(_copyCancellation, cancellation)) _copyCancellation = null;
             CancelCopyButton.IsEnabled = false;
+            HideOperationProgress();
             cancellation.Dispose();
         }
     }
@@ -547,15 +553,22 @@ public sealed partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
-            GlobalStatus.Text = "Choose a folder before creating a new folder.";
+            SetStatus("Choose a folder before creating a new folder.", StatusSeverity.Warning);
             return;
         }
 
         var nameBox = new TextBox { PlaceholderText = "Folder name", MinWidth = 280 };
+        var newFolderContent = new StackPanel { Spacing = 8 };
+        newFolderContent.Children.Add(new TextBlock
+        {
+            Text = $"The new folder is created inside:\n{_activePane.CurrentPath}\n\nNothing else changes. You can rename or delete the folder afterwards.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        newFolderContent.Children.Add(nameBox);
         var dialog = new ContentDialog
         {
             Title = "Create new folder",
-            Content = nameBox,
+            Content = newFolderContent,
             PrimaryButtonText = "Create",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -571,14 +584,14 @@ public sealed partial class MainWindow : Window
             name.Contains(Path.AltDirectorySeparatorChar) ||
             Path.IsPathRooted(name))
         {
-            GlobalStatus.Text = "Folder name is invalid. Enter a single folder name without path separators.";
+            SetStatus("Folder name is invalid. Enter a single folder name without path separators.", StatusSeverity.Warning);
             return;
         }
 
         var target = Path.Combine(_activePane.CurrentPath, name);
         if (File.Exists(target) || Directory.Exists(target))
         {
-            GlobalStatus.Text = $"Cannot create folder · '{name}' already exists.";
+            SetStatus($"Cannot create folder · '{name}' already exists.", StatusSeverity.Warning);
             return;
         }
 
@@ -587,11 +600,11 @@ public sealed partial class MainWindow : Window
             Directory.CreateDirectory(target);
             var pane = _activePane;
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = $"Created folder · {name}";
+            SetStatus($"Created folder · {name}", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not create folder · " + ex.Message;
+            SetStatus("Could not create folder · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -601,15 +614,22 @@ public sealed partial class MainWindow : Window
     {
         if (pane.List.SelectedItem is not FileEntry selected)
         {
-            GlobalStatus.Text = "Select a file or folder to rename.";
+            SetStatus("Select a file or folder to rename.", StatusSeverity.Warning);
             return;
         }
 
         var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
+        var renameContent = new StackPanel { Spacing = 8 };
+        renameContent.Children.Add(new TextBlock
+        {
+            Text = "Only the name changes. The item stays in the same folder with its contents unchanged, and you can rename it again at any time.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        renameContent.Children.Add(nameBox);
         var dialog = new ContentDialog
         {
             Title = "Rename item",
-            Content = nameBox,
+            Content = renameContent,
             PrimaryButtonText = "Rename",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -622,13 +642,15 @@ public sealed partial class MainWindow : Window
         {
             var renamedTo = FileOperations.RenameItem(selected.FullPath, nameBox.Text);
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal)
+            var unchanged = string.Equals(renamedTo, selected.FullPath, StringComparison.Ordinal);
+            SetStatus(unchanged
                 ? "Name unchanged."
-                : $"Renamed · {Path.GetFileName(renamedTo)}";
+                : $"Renamed · {Path.GetFileName(renamedTo)}",
+                unchanged ? StatusSeverity.Info : StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not rename item · " + ex.Message;
+            SetStatus("Could not rename item · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -638,7 +660,7 @@ public sealed partial class MainWindow : Window
     {
         if (pane.List.SelectedItem is not FileEntry selected)
         {
-            GlobalStatus.Text = "Select a file or folder to view its properties.";
+            SetStatus("Select a file or folder to view its properties.", StatusSeverity.Warning);
             return;
         }
 
@@ -677,7 +699,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not read properties · " + ex.Message;
+            SetStatus("Could not read properties · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -709,7 +731,7 @@ public sealed partial class MainWindow : Window
         var selection = GetSelectedEntries(pane);
         if (selection.Count == 0)
         {
-            GlobalStatus.Text = "Select a file or folder to delete.";
+            SetStatus("Select a file or folder to delete.", StatusSeverity.Warning);
             return;
         }
 
@@ -743,6 +765,7 @@ public sealed partial class MainWindow : Window
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        ClearPinnedError();
         var deletedCount = 0;
         try
         {
@@ -756,16 +779,16 @@ public sealed partial class MainWindow : Window
             }
 
             await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = selection.Count == 1
+            SetStatus(selection.Count == 1
                 ? $"Moved to Recycle Bin · {selection[0].Name}"
-                : $"Moved {deletedCount:N0} items to Recycle Bin";
+                : $"Moved {deletedCount:N0} items to Recycle Bin", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.ComponentModel.Win32Exception)
         {
             if (deletedCount > 0) await NavigateAsync(pane, pane.CurrentPath, addHistory: false);
-            GlobalStatus.Text = deletedCount > 0
+            SetStatus(deletedCount > 0
                 ? $"Delete stopped after {deletedCount:N0} of {selection.Count:N0} items · {ex.Message}"
-                : "Could not move item to Recycle Bin · " + ex.Message;
+                : "Could not move item to Recycle Bin · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -774,7 +797,7 @@ public sealed partial class MainWindow : Window
         var pane = _activePane;
         if (string.IsNullOrWhiteSpace(pane.CurrentPath))
         {
-            GlobalStatus.Text = "Choose a folder to profile.";
+            SetStatus("Choose a folder to profile.", StatusSeverity.Warning);
             return;
         }
 
@@ -816,7 +839,7 @@ public sealed partial class MainWindow : Window
         var selection = GetSelectedEntries(pane);
         if (selection.Count == 0)
         {
-            GlobalStatus.Text = "Select a file or folder to add to the Drop Shelf.";
+            SetStatus("Select a file or folder to add to the Drop Shelf.", StatusSeverity.Warning);
             return;
         }
         var added = 0;
@@ -828,35 +851,37 @@ public sealed partial class MainWindow : Window
                 added++;
             }
         }
-        GlobalStatus.Text = selection.Count == 1
+        var shelfAdded = selection.Count == 1 ? added == 1 : added > 0;
+        SetStatus(selection.Count == 1
             ? (added == 1 ? $"Added to Drop Shelf · {_shelfPaths.Count:N0} collected" : "This item is already on the Drop Shelf.")
             : added > 0
                 ? $"Added {added:N0} items to Drop Shelf · {_shelfPaths.Count:N0} collected"
-                : "Those items are already on the Drop Shelf.";
+                : "Those items are already on the Drop Shelf.",
+            shelfAdded ? StatusSeverity.Success : StatusSeverity.Warning);
     }
 
     private void RemoveFromShelf_Click(object sender, RoutedEventArgs e)
     {
         if (ShelfItemsBox.SelectedItem is not string selected)
         {
-            GlobalStatus.Text = "Select a Drop Shelf item to remove.";
+            SetStatus("Select a Drop Shelf item to remove.", StatusSeverity.Warning);
             return;
         }
         _dropShelf.Remove(selected);
         _shelfPaths.Remove(selected);
-        GlobalStatus.Text = $"Removed from Drop Shelf · {_shelfPaths.Count:N0} remaining";
+        SetStatus($"Removed from Drop Shelf · {_shelfPaths.Count:N0} remaining", StatusSeverity.Success);
     }
 
     private async void PreviewShelf_Click(object sender, RoutedEventArgs e)
     {
         if (_dropShelf.Paths.Count == 0)
         {
-            GlobalStatus.Text = "Add items to the Drop Shelf before previewing a batch.";
+            SetStatus("Add items to the Drop Shelf before previewing a batch.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
-            GlobalStatus.Text = "Open the intended destination folder in the active pane.";
+            SetStatus("Open the intended destination folder in the active pane.", StatusSeverity.Warning);
             return;
         }
 
@@ -893,7 +918,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not preview shelf · " + ex.Message;
+            SetStatus("Could not preview shelf · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -902,12 +927,12 @@ public sealed partial class MainWindow : Window
         if (_batchCancellation is not null || _batchPreparing) return;
         if (_dropShelf.Paths.Count == 0)
         {
-            GlobalStatus.Text = "Add files to the Drop Shelf first.";
+            SetStatus("Add files to the Drop Shelf first.", StatusSeverity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
-            GlobalStatus.Text = "Open the destination folder in the active pane.";
+            SetStatus("Open the destination folder in the active pane.", StatusSeverity.Warning);
             return;
         }
         var sources = _dropShelf.Paths.ToArray();
@@ -922,12 +947,12 @@ public sealed partial class MainWindow : Window
             var plan = await Task.Run(() => OperationPreview.PreviewCopy(sources, destination, cancellation.Token), cancellation.Token);
             if (plan.HasBlockers)
             {
-                GlobalStatus.Text = $"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.";
+                SetStatus($"Copy refused · {plan.Items.Count - plan.ReadyCount:N0} blocked. Use Preview shelf to inspect.", StatusSeverity.Error);
                 return;
             }
             var confirmation = new ContentDialog
             {
-                Title = "Confirm Drop Shelf batch copy",
+                Title = "Copy Drop Shelf items?",
                 Content = new TextBlock
                 {
                     Text = $"Copy {plan.Items.Count:N0} collected items to:\n{plan.DestinationDirectory}\n\n" +
@@ -943,18 +968,22 @@ public sealed partial class MainWindow : Window
             };
             if (await confirmation.ShowAsync() != ContentDialogResult.Primary) return;
             cancellation.Token.ThrowIfCancellationRequested();
-            GlobalStatus.Text = "Copying Drop Shelf items…";
+            ClearPinnedError();
+            SetStatus("Copying Drop Shelf items…");
                 var progress = new Progress<BatchCopy.Progress>(state =>
                 {
                     if (_batchCancellation == cancellation)
-                        GlobalStatus.Text = $"Batch copy · {state.Completed:N0}/{state.Total:N0} · {Path.GetFileName(state.CurrentSource)}";
+                        ShowOperationProgress($"Batch copy · {state.Completed:N0}/{state.Total:N0} items · {Path.GetFileName(state.CurrentSource)}",
+                            state.Total > 0 ? state.Completed * 100.0 / state.Total : 0);
                 });
                 var result = await Task.Run(() => BatchCopy.Execute(sources, destination, cancellation.Token, progress));
                 await NavigateAsync(destinationPane, destination, addHistory: false);
-                GlobalStatus.Text = result.Succeeded
-                    ? $"Drop Shelf copied · {result.CompletedTargets.Count:N0} items"
-                    : $"Batch stopped after {result.CompletedTargets.Count:N0} items · " +
-                      (result.Cancelled ? "Cancelled" : result.Failure);
+                if (result.Succeeded)
+                    SetStatus($"Copied {result.CompletedTargets.Count:N0} items to {destination}", StatusSeverity.Success);
+                else if (result.Cancelled)
+                    SetStatus($"Batch copy cancelled · {result.CompletedTargets.Count:N0} of {sources.Length:N0} items copied. Items already copied stay copied.", StatusSeverity.Warning);
+                else
+                    SetStatus($"Batch stopped after {result.CompletedTargets.Count:N0} of {sources.Length:N0} items · {result.Failure}", StatusSeverity.Error);
                 if (!result.Succeeded)
                 {
                     var details = new ContentDialog
@@ -985,17 +1014,18 @@ public sealed partial class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            GlobalStatus.Text = "Batch preparation cancelled · No copy started.";
+            SetStatus("Batch preparation cancelled · No copy started.", StatusSeverity.Warning);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
             ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Batch copy did not start · " + ex.Message;
+            SetStatus("Batch copy did not start · " + ex.Message, StatusSeverity.Error);
         }
         finally
         {
             _batchCancellation = null;
             CancelShelfButton.IsEnabled = false;
+            HideOperationProgress();
             _batchPreparing = false;
         }
     }
@@ -1007,7 +1037,7 @@ public sealed partial class MainWindow : Window
         try { await SaveCapsuleAsync(); }
         catch (InvalidOperationException ex)
         {
-            GlobalStatus.Text = "Could not open Capsule save · " + ex.Message;
+            SetStatus("Could not open Capsule save · " + ex.Message, StatusSeverity.Error);
         }
         finally
         {
@@ -1019,17 +1049,17 @@ public sealed partial class MainWindow : Window
     {
         if (_capsuleStorageUnavailable)
         {
-            GlobalStatus.Text = "Capsule saving disabled: the existing saved file could not be read. Back it up and repair it before saving.";
+            SetStatus("Capsule saving disabled: the existing saved file could not be read. Back it up and repair it before saving.", StatusSeverity.Warning);
             return;
         }
         if (_capsules.Count >= ContextCapsuleFormat.MaximumCapsules)
         {
-            GlobalStatus.Text = "Capsule limit reached. No new Capsule was saved; existing Capsules are unchanged.";
+            SetStatus("Capsule limit reached. No new Capsule was saved; existing Capsules are unchanged.", StatusSeverity.Warning);
             return;
         }
         if (_dropShelf.Paths.Count == 0)
         {
-            GlobalStatus.Text = "Add files or folders to the Drop Shelf before saving a Capsule.";
+            SetStatus("Add files or folders to the Drop Shelf before saving a Capsule.", StatusSeverity.Warning);
             return;
         }
 
@@ -1039,10 +1069,17 @@ public sealed partial class MainWindow : Window
             Text = $"Task {_capsules.Count + 1}",
             MaxLength = ContextCapsule.MaximumNameLength
         };
+        var capsuleContent = new StackPanel { Spacing = 8 };
+        capsuleContent.Children.Add(new TextBlock
+        {
+            Text = "A Capsule saves the current Drop Shelf paths as references only — file contents are not copied. You can review saved Capsules at any time with View Capsules.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        capsuleContent.Children.Add(nameBox);
         var dialog = new ContentDialog
         {
-            Title = "Save read-only Context Capsule",
-            Content = nameBox,
+            Title = "Save a Context Capsule",
+            Content = capsuleContent,
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -1056,11 +1093,11 @@ public sealed partial class MainWindow : Window
             await _capsuleStore.SaveAsync(updated);
             _capsules.Add(capsule);
             var available = capsule.Inspect().Count(item => item.State == ContextCapsule.Presence.Present);
-            GlobalStatus.Text = $"Capsule '{capsule.Name}' saved locally · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.";
+            SetStatus($"Capsule '{capsule.Name}' saved locally · {available}/{capsule.Paths.Count} paths currently available. Paths are references only.", StatusSeverity.Success);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            GlobalStatus.Text = "Could not save Capsule · " + ex.Message;
+            SetStatus("Could not save Capsule · " + ex.Message, StatusSeverity.Error);
         }
     }
 
@@ -1101,61 +1138,62 @@ public sealed partial class MainWindow : Window
     private void CancelShelf_Click(object sender, RoutedEventArgs e)
     {
         _batchCancellation?.Cancel();
-        GlobalStatus.Text = "Cancelling batch copy…";
+        SetStatus("Cancelling batch copy…");
     }
 
     private void PruneShelf_Click(object sender, RoutedEventArgs e)
     {
         if (_batchCancellation is not null || _batchPreparing)
         {
-            GlobalStatus.Text = "Wait until the batch copy is finished before pruning the shelf.";
+            SetStatus("Wait until the batch copy is finished before pruning the shelf.", StatusSeverity.Warning);
             return;
         }
         var removed = _dropShelf.RemoveMissing();
         _shelfPaths.Clear();
         foreach (var path in _dropShelf.Paths) _shelfPaths.Add(path);
-        GlobalStatus.Text = removed == 0
+        SetStatus(removed == 0
             ? "Drop Shelf · No missing references found."
-            : $"Drop Shelf · Removed {removed:N0} missing references; no files were deleted.";
+            : $"Drop Shelf · Removed {removed:N0} missing references; no files were deleted.",
+            removed == 0 ? StatusSeverity.Info : StatusSeverity.Success);
     }
 
     private void ClearShelf_Click(object sender, RoutedEventArgs e)
     {
         _dropShelf.Clear();
         _shelfPaths.Clear();
-        GlobalStatus.Text = "Drop Shelf cleared · No files were changed.";
+        SetStatus("Drop Shelf cleared · No files were changed.", StatusSeverity.Success);
     }
 
     private async void ShowShelfLocation_Click(object sender, RoutedEventArgs e)
     {
         if (ShelfItemsBox.SelectedItem is not string selected)
         {
-            GlobalStatus.Text = "Select a Drop Shelf item first.";
+            SetStatus("Select a Drop Shelf item first.", StatusSeverity.Warning);
             return;
         }
         if (!File.Exists(selected) && !Directory.Exists(selected))
         {
-            GlobalStatus.Text = "Shelf item is missing · Nothing was changed.";
+            SetStatus("Shelf item is missing · Nothing was changed.", StatusSeverity.Warning);
             return;
         }
         var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(selected));
         if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
         {
-            GlobalStatus.Text = "The selected item's parent folder is unavailable.";
+            SetStatus("The selected item's parent folder is unavailable.", StatusSeverity.Warning);
             return;
         }
         await NavigateAsync(_activePane, parent);
         var match = _activePane.Items.FirstOrDefault(item =>
             string.Equals(item.FullPath, selected, StringComparison.OrdinalIgnoreCase));
         if (match is not null) _activePane.List.SelectedItem = match;
-        GlobalStatus.Text = $"Showing Drop Shelf item · {Path.GetFileName(selected)}";
+        SetStatus($"Showing Drop Shelf item · {Path.GetFileName(selected)}");
     }
 
     private void CancelCopy_Click(object sender, RoutedEventArgs e)
     {
         if (_copyCancellation is null) return;
         _copyCancellation.Cancel();
-        GlobalStatus.Text = "Cancelling copy…";
+        SetStatus("Cancelling copy…");
     }
 
     private async void RefreshShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -1170,7 +1208,7 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
         SetActivePane(ReferenceEquals(_activePane, _left) ? _right : _left);
         _activePane.List.Focus(FocusState.Programmatic);
-        GlobalStatus.Text = $"Active pane · {_activePane.Name}";
+        SetStatus($"Active pane · {_activePane.Name}");
     }
 
     private void FocusActivePathShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -1207,6 +1245,66 @@ public sealed partial class MainWindow : Window
 
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
 
+    // All global status messages go through SetStatus so severity styling and error
+    // pinning behave identically everywhere. An error stays visible until the user
+    // dismisses it or a new operation starts; routine messages never overwrite it.
+    private void SetStatus(string message, StatusSeverity severity = StatusSeverity.Info)
+    {
+        if (_pinnedError is not null && severity != StatusSeverity.Error) return;
+        ApplyStatus(message, severity);
+        _pinnedError = severity == StatusSeverity.Error ? message : null;
+        DismissStatusButton.Visibility = _pinnedError is not null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ApplyStatus(string message, StatusSeverity severity)
+    {
+        var (glyph, brushKey) = severity switch
+        {
+            StatusSeverity.Success => ("\uE73E", "MeridianSuccessBrush"),
+            StatusSeverity.Warning => ("\uE7BA", "MeridianWarningBrush"),
+            StatusSeverity.Error => ("\uE783", "MeridianErrorBrush"),
+            _ => ("\uE946", "MeridianTextSecondaryBrush"),
+        };
+        StatusIcon.Glyph = glyph;
+        StatusIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[brushKey];
+        GlobalStatus.Text = message;
+        GlobalStatus.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+            severity is StatusSeverity.Warning or StatusSeverity.Error ? brushKey : "MeridianTextSecondaryBrush"];
+    }
+
+    private void ClearPinnedError()
+    {
+        _pinnedError = null;
+        DismissStatusButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void DismissStatus_Click(object sender, RoutedEventArgs e)
+    {
+        ClearPinnedError();
+        ApplyStatus("Ready · Local-only · No telemetry", StatusSeverity.Info);
+    }
+
+    private void ShowOperationProgress(string label, double? percent)
+    {
+        OperationProgressPanel.Visibility = Visibility.Visible;
+        OperationProgressLabel.Text = label;
+        if (percent is { } value)
+        {
+            OperationProgressBar.IsIndeterminate = false;
+            OperationProgressBar.Value = Math.Clamp(value, 0, 100);
+        }
+        else
+        {
+            OperationProgressBar.IsIndeterminate = true;
+        }
+    }
+
+    private void HideOperationProgress()
+    {
+        OperationProgressPanel.Visibility = Visibility.Collapsed;
+        OperationProgressBar.IsIndeterminate = false;
+    }
+
     private static List<FileEntry> GetSelectedEntries(PaneState pane) =>
         pane.List.SelectedItems.OfType<FileEntry>().ToList();
 
@@ -1216,10 +1314,22 @@ public sealed partial class MainWindow : Window
     // Mirrors the counts ApplyFilter writes, without rebuilding the item list.
     private void UpdateSelectionStatus(PaneState pane)
     {
-        var count = pane.List.SelectedItems.Count;
-        if (count > 1)
+        var selected = GetSelectedEntries(pane);
+        if (selected.Count > 0)
         {
-            SetPaneStatus(pane, $"{count:N0} selected");
+            // FileEntry.SizeBytes is the file length for files and 0 for folders,
+            // so folders count as selected items without adding to the size total.
+            long totalBytes = 0;
+            var hasFile = false;
+            foreach (var entry in selected)
+            {
+                if (entry.IsDirectory) continue;
+                hasFile = true;
+                totalBytes += entry.SizeBytes;
+            }
+            SetPaneStatus(pane, hasFile
+                ? $"{selected.Count:N0} selected · {DirectoryReader.FormatSize(totalBytes)}"
+                : $"{selected.Count:N0} selected");
             return;
         }
         var query = pane.FilterBox.Text.Trim();
@@ -1253,7 +1363,7 @@ public sealed partial class MainWindow : Window
             case VirtualKey.F2:
                 e.Handled = true;
                 if (pane.List.SelectedItems.Count == 1) await RenameSelectedAsync(pane);
-                else if (pane.List.SelectedItems.Count > 1) GlobalStatus.Text = "Select a single item to rename.";
+                else if (pane.List.SelectedItems.Count > 1) SetStatus("Select a single item to rename.", StatusSeverity.Warning);
                 break;
             case VirtualKey.Enter:
                 e.Handled = true;
@@ -1379,7 +1489,7 @@ public sealed partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath)) return;
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{_activePane.CurrentPath}\"", UseShellExecute = true }); }
-        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception) { GlobalStatus.Text = "Could not open Explorer · " + ex.Message; }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception) { SetStatus("Could not open Explorer · " + ex.Message, StatusSeverity.Error); }
     }
     private async void LeftItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_left);
     private async void RightItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_right);
@@ -1387,6 +1497,8 @@ public sealed partial class MainWindow : Window
     private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
 
     private enum OrganizeSection { None, Bookmarks, Shelf }
+
+    private enum StatusSeverity { Info, Success, Warning, Error }
 
     private sealed class WorkspaceTab(string name, string leftPath, string rightPath)
     {

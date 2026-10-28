@@ -192,9 +192,16 @@
         <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>
-    <Grid Grid.Row="5" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*" Background="{ThemeResource MeridianPanelBrush}">
-      <Ellipse Width="7" Height="7" Fill="{ThemeResource MeridianSuccessBrush}" VerticalAlignment="Center" />
-      <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" ToolTipService.ToolTip="Meridian · Preview build — early development" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" />
+    <Grid Grid.Row="5" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*,Auto,Auto" Background="{ThemeResource MeridianPanelBrush}">
+      <FontIcon x:Name="StatusIcon" Glyph="&#xE946;" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" ToolTipService.ToolTip="Meridian · Preview build — early development" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      <StackPanel x:Name="OperationProgressPanel" Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+        <TextBlock x:Name="OperationProgressLabel" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300" />
+        <ProgressBar x:Name="OperationProgressBar" Width="160" VerticalAlignment="Center" />
+      </StackPanel>
+      <Button x:Name="DismissStatusButton" Grid.Column="3" Margin="8,0,0,0" Padding="4" Background="Transparent" BorderThickness="0" Visibility="Collapsed" Click="DismissStatus_Click" ToolTipService.ToolTip="Dismiss message" VerticalAlignment="Center">
+        <SymbolIcon Symbol="Cancel" />
+      </Button>
     </Grid>
   </Grid>
 </Window>
