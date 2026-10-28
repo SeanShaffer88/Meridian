@@ -14,15 +14,13 @@
       <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="ForwardShortcut_Invoked" />
       <KeyboardAccelerator Key="Up" Modifiers="Menu" Invoked="UpShortcut_Invoked" />
     </Grid.KeyboardAccelerators>
-    <Grid Grid.Row="0" Margin="18,14" ColumnDefinitions="Auto,*,Auto" Background="{ThemeResource MeridianPanelBrush}">
+    <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <Border Width="32" Height="32" CornerRadius="8" Background="{ThemeResource MeridianAccentBrush}">
           <FontIcon Glyph="&#xE8A5;" FontSize="18" Foreground="{ThemeResource MeridianOnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
-        <StackPanel Spacing="0"><TextBlock Text="MERIDIAN" FontSize="16" FontWeight="SemiBold" CharacterSpacing="90" /><TextBlock Text="FILE MANAGER" FontSize="10" Foreground="{ThemeResource MeridianTextSecondaryBrush}" CharacterSpacing="100" /></StackPanel>
+        <StackPanel Spacing="0"><TextBlock Text="MERIDIAN" FontSize="16" FontWeight="SemiBold" CharacterSpacing="90" /><TextBlock Text="FILE MANAGER" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" /></StackPanel>
       </StackPanel>
-      <TextBlock Grid.Column="1" Text="Your files. Your workflow." Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" />
-      <TextBlock Grid.Column="2" Text="PREVIEW BUILD" FontSize="10" Foreground="{ThemeResource MeridianAccentBrush}" VerticalAlignment="Center" CharacterSpacing="80" />
     </Grid>
     <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="{ThemeResource MeridianChromeBrush}">
       <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
@@ -39,17 +37,17 @@
       <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" />
       <AppBarButton Icon="OpenFolder" Label="Open in Explorer" Click="OpenInExplorer_Click" />
     </CommandBar>
-    <Grid Grid.Row="2" Margin="12,4" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+    <Grid Grid.Row="2" Margin="{StaticResource MeridianChromeMargin}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled"><StackPanel x:Name="WorkspaceTabsPanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" /></ScrollViewer>
       <Button Grid.Column="1" Content="+ New tab" Click="AddWorkspaceTab_Click" />
     </Grid>
-    <Grid Grid.Row="3" Margin="12,6" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+    <Grid Grid.Row="3" Margin="{StaticResource MeridianChromeMargin}" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
       <Button Content="★ Add bookmark" Click="AddBookmark_Click" />
       <Button Grid.Column="1" Content="Remove bookmark" Click="RemoveBookmark_Click" />
-      <TextBlock Grid.Column="2" Text="SAVED LOCATIONS" FontSize="10" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="2" Text="SAVED LOCATIONS" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" VerticalAlignment="Center" />
       <ComboBox x:Name="BookmarksBox" Grid.Column="3" PlaceholderText="Jump to a saved location…" DisplayMemberPath="Name" SelectionChanged="BookmarksBox_SelectionChanged" HorizontalAlignment="Stretch" />
     </Grid>
-    <Grid Grid.Row="4" Margin="12,2" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
+    <Grid Grid.Row="4" Margin="{StaticResource MeridianChromeMargin}" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
       <Button Content="＋ Shelf selected" Click="AddToShelf_Click" ToolTipService.ToolTip="Collect the selected file or folder without moving it" />
       <Button Grid.Column="1" Content="Remove from shelf" Click="RemoveFromShelf_Click" />
       <Button Grid.Column="2" Content="Clear shelf" Click="ClearShelf_Click" />
@@ -62,14 +60,14 @@
       <Button Grid.Column="9" Content="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review locally saved task references, including unavailable paths" />
       <ComboBox x:Name="ShelfItemsBox" Grid.Column="10" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" />
     </Grid>
-    <Grid Grid.Row="5" Margin="12" ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
+    <Grid Grid.Row="5" Margin="{StaticResource MeridianWorkAreaMargin}" ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
       <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="{ThemeResource MeridianPanelBrush}" PointerPressed="LeftPane_PointerPressed">
-        <Grid Margin="12,10" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="01" Foreground="{ThemeResource MeridianAccentBrush}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="SOURCE PANE" FontSize="11" CharacterSpacing="100" Foreground="{ThemeResource MeridianTextSecondaryBrush}" /></Grid>
-        <Grid Grid.Row="1" Margin="10,0,10,10" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
+        <Grid Margin="{StaticResource MeridianPaneHeaderMargin}" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="01" Foreground="{ThemeResource MeridianAccentBrush}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="SOURCE PANE" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" /></Grid>
+        <Grid Grid.Row="1" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
           <Button Content="←" Click="LeftBack_Click" MinWidth="32" /><Button Grid.Column="1" Content="→" Click="LeftForward_Click" MinWidth="32" /><Button Grid.Column="2" Content="↑" Click="LeftUp_Click" MinWidth="32" />
           <TextBox x:Name="LeftPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="LeftPath_KeyDown" />
         </Grid>
-        <Grid Grid.Row="2" Margin="10,0,10,8" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+        <Grid Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
           <TextBox x:Name="LeftFilter" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" />
           <ComboBox x:Name="LeftSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="LeftSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
@@ -78,15 +76,15 @@
         </Grid>
         <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Single" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
-            <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
-              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianAccentBrush}" />
-              <TextBlock Grid.Column="1" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
+              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianTextSecondaryBrush}" />
+              <TextBlock Grid.Column="1" Text="{x:Bind Name}" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
               <TextBlock Grid.Column="2" Text="{x:Bind SizeLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
               <TextBlock Grid.Column="3" Text="{x:Bind ModifiedLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
-        <TextBlock x:Name="LeftStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="12,8" />
+        <TextBlock x:Name="LeftStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
       <Grid Grid.Column="1" Width="36" VerticalAlignment="Center" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
         <Button Grid.Row="0" Content="→" ToolTipService.ToolTip="Copy selected item to right pane" Click="CopyLeftToRight_Click" />
@@ -94,12 +92,12 @@
         <TextBlock Grid.Row="2" Text="COPY" FontSize="9" Foreground="{ThemeResource MeridianTextSecondaryBrush}" HorizontalAlignment="Center" />
       </Grid>
       <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="{ThemeResource MeridianPanelBrush}" PointerPressed="RightPane_PointerPressed">
-        <Grid Margin="12,10" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="02" Foreground="{ThemeResource MeridianAccentBrush}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="DESTINATION PANE" FontSize="11" CharacterSpacing="100" Foreground="{ThemeResource MeridianTextSecondaryBrush}" /></Grid>
-        <Grid Grid.Row="1" Margin="10,0,10,10" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
+        <Grid Margin="{StaticResource MeridianPaneHeaderMargin}" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="02" Foreground="{ThemeResource MeridianAccentBrush}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="DESTINATION PANE" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" /></Grid>
+        <Grid Grid.Row="1" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
           <Button Content="←" Click="RightBack_Click" MinWidth="32" /><Button Grid.Column="1" Content="→" Click="RightForward_Click" MinWidth="32" /><Button Grid.Column="2" Content="↑" Click="RightUp_Click" MinWidth="32" />
           <TextBox x:Name="RightPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="RightPath_KeyDown" />
         </Grid>
-        <Grid Grid.Row="2" Margin="10,0,10,8" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+        <Grid Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
           <TextBox x:Name="RightFilter" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" />
           <ComboBox x:Name="RightSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="RightSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
@@ -108,21 +106,20 @@
         </Grid>
         <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Single" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
-            <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
-              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianAccentBrush}" />
-              <TextBlock Grid.Column="1" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
+              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianTextSecondaryBrush}" />
+              <TextBlock Grid.Column="1" Text="{x:Bind Name}" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
               <TextBlock Grid.Column="2" Text="{x:Bind SizeLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
               <TextBlock Grid.Column="3" Text="{x:Bind ModifiedLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
-        <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="12,8" />
+        <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>
-    <Grid Grid.Row="6" Margin="14,9" ColumnDefinitions="Auto,*,Auto" Background="{ThemeResource MeridianPanelBrush}">
+    <Grid Grid.Row="6" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*" Background="{ThemeResource MeridianPanelBrush}">
       <Ellipse Width="7" Height="7" Fill="{ThemeResource MeridianSuccessBrush}" VerticalAlignment="Center" />
-      <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" />
-      <TextBlock Grid.Column="2" Text="MERIDIAN · EARLY DEVELOPMENT" FontSize="10" Foreground="{ThemeResource MeridianTextTertiaryBrush}" CharacterSpacing="70" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" ToolTipService.ToolTip="Meridian · Preview build — early development" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" />
     </Grid>
   </Grid>
 </Window>
