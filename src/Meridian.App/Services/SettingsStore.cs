@@ -86,6 +86,8 @@ internal sealed class SettingsStore
 /// written before the accent choice existed carry only FollowWindowsAccent,
 /// which AccentPalette.ParseMode still honours; the flag is kept in sync on
 /// save so an older build reading the file keeps the follow-Windows choice.
+/// DetailsStripVisible records whether the details strip under the panes is
+/// shown; files written before it existed read as hidden.
 /// </summary>
 internal sealed record SettingsSnapshot(
     string? Theme = null,
@@ -95,4 +97,5 @@ internal sealed record SettingsSnapshot(
     string? OrganizeSection = null,
     string? AccentMode = null,
     string? AccentPreset = null,
-    string? AccentCustomColor = null);
+    string? AccentCustomColor = null,
+    bool DetailsStripVisible = false);
