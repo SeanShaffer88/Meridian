@@ -5,7 +5,7 @@
     xmlns:models="using:Meridian.Models"
     xmlns:services="using:Meridian.Services"
     Title="Meridian">
-  <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+  <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,*,Auto">
     <Grid.Resources>
       <DataTemplate x:Key="ColumnItemTemplate" x:DataType="models:FileEntry">
         <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" AutomationProperties.Name="{x:Bind Name}">
@@ -100,7 +100,7 @@
       <KeyboardAccelerator Key="V" Modifiers="Control,Shift" Invoked="LayoutShortcut_Invoked" />
       <KeyboardAccelerator Key="Escape" Invoked="CancelCopyShortcut_Invoked" />
     </Grid.KeyboardAccelerators>
-    <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+    <Grid x:Name="AppTitleBar" Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
       <Button Width="36" Height="36" Padding="0" VerticalAlignment="Center" Click="SidebarToggle_Click" ToolTipService.ToolTip="Show or hide the navigation sidebar" AutomationProperties.Name="Toggle navigation sidebar"><SymbolIcon Symbol="GlobalNavigationButton" /></Button>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <Border Width="32" Height="32" CornerRadius="{StaticResource MeridianCardCornerRadius}" Background="{ThemeResource MeridianAccentBrush}">
@@ -108,74 +108,70 @@
         </Border>
         <StackPanel Spacing="0"><TextBlock Text="MERIDIAN" FontSize="16" FontWeight="SemiBold" CharacterSpacing="90" /><TextBlock Text="FILE MANAGER" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" /></StackPanel>
       </StackPanel>
-    </Grid>
-    <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="{ThemeResource MeridianChromeBrush}">
-      <AppBarElementContainer>
-        <SplitButton Click="CopyActivePane_Click" AutomationProperties.Name="Copy" ToolTipService.ToolTip="Copy the selected items from the active pane to the other pane (Ctrl+Shift+C)">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <SymbolIcon Symbol="Copy" />
-            <TextBlock Text="Copy" VerticalAlignment="Center" />
-          </StackPanel>
-          <SplitButton.Flyout>
+      <CommandBar Grid.Column="2" DefaultLabelPosition="Right" Background="Transparent" VerticalAlignment="Center">
+        <AppBarElementContainer>
+          <SplitButton Click="CopyActivePane_Click" AutomationProperties.Name="Copy" ToolTipService.ToolTip="Copy the selected items from the active pane to the other pane (Ctrl+Shift+C)">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <SymbolIcon Symbol="Copy" />
+              <TextBlock Text="Copy" VerticalAlignment="Center" />
+            </StackPanel>
+            <SplitButton.Flyout>
+              <MenuFlyout>
+                <MenuFlyoutItem Text="Copy left \u2192 right" Click="CopyLeftToRight_Click" />
+                <MenuFlyoutItem Text="Copy right \u2192 left" Click="CopyRightToLeft_Click" />
+              </MenuFlyout>
+            </SplitButton.Flyout>
+          </SplitButton>
+        </AppBarElementContainer>
+        <AppBarElementContainer>
+          <SplitButton Click="MoveActivePane_Click" AutomationProperties.Name="Move" ToolTipService.ToolTip="Move the selected items from the active pane to the other pane (Ctrl+Shift+M)">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <SymbolIcon Symbol="MoveToFolder" />
+              <TextBlock Text="Move" VerticalAlignment="Center" />
+            </StackPanel>
+            <SplitButton.Flyout>
+              <MenuFlyout>
+                <MenuFlyoutItem Text="Move left \u2192 right" Click="MoveLeftToRight_Click" />
+                <MenuFlyoutItem Text="Move right \u2192 left" Click="MoveRightToLeft_Click" />
+              </MenuFlyout>
+            </SplitButton.Flyout>
+          </SplitButton>
+        </AppBarElementContainer>
+        <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" ToolTipService.ToolTip="Create a new folder in the active pane (Ctrl+Shift+N)" />
+        <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" ToolTipService.ToolTip="Rename the selected item (F2)" />
+        <AppBarButton Icon="View" Label="Preview" Click="PreviewSelected_Click" ToolTipService.ToolTip="Read-only viewer and integrated media player" />
+        <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" ToolTipService.ToolTip="View properties of the selected item (Alt+Enter)" />
+        <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
+        <AppBarButton Icon="View" Label="Inspect Archive" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP, TAR, or TGZ contents" />
+        <AppBarButton Icon="Save" Label="Create Archive" Click="CreateZip_Click" ToolTipService.ToolTip="Create ZIP, TAR, or TAR.GZ from selected files and folders" />
+        <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active archive creation" />
+        <AppBarButton Icon="Folder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
+        <AppBarButton Icon="Cancel" Label="Cancel Extract" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active archive extraction" />
+        <AppBarButton Icon="Setting" Label="Tools">
+          <AppBarButton.Flyout>
             <MenuFlyout>
-              <MenuFlyoutItem Text="Copy left \u2192 right" Click="CopyLeftToRight_Click" />
-              <MenuFlyoutItem Text="Copy right \u2192 left" Click="CopyRightToLeft_Click" />
+              <MenuFlyoutItem Text="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
+              <MenuFlyoutItem Text="Operation Simulator" Click="PreviewShelf_Click" ToolTipService.ToolTip="Inspect all collected items against the active folder without copying anything" />
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem Text="Save Capsule" Click="SaveCapsule_Click" ToolTipService.ToolTip="Save current shelf path references locally; file contents are not copied" />
+              <MenuFlyoutItem Text="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review locally saved task references, including unavailable paths" />
+              <MenuFlyoutSeparator />
+              <ToggleMenuFlyoutItem x:Name="DetailsStripMenuItem" Text="Details panel" Click="DetailsStripMenuItem_Click" ToolTipService.ToolTip="Show or hide the details panel beside the panes (Ctrl+Shift+D)" />
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem Text="Settings" Click="Settings_Click" ToolTipService.ToolTip="Theme, density, and accent color preferences">
+                <MenuFlyoutItem.Icon><SymbolIcon Symbol="Setting" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
             </MenuFlyout>
-          </SplitButton.Flyout>
-        </SplitButton>
-      </AppBarElementContainer>
-      <AppBarElementContainer>
-        <SplitButton Click="MoveActivePane_Click" AutomationProperties.Name="Move" ToolTipService.ToolTip="Move the selected items from the active pane to the other pane (Ctrl+Shift+M)">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <SymbolIcon Symbol="MoveToFolder" />
-            <TextBlock Text="Move" VerticalAlignment="Center" />
-          </StackPanel>
-          <SplitButton.Flyout>
-            <MenuFlyout>
-              <MenuFlyoutItem Text="Move left \u2192 right" Click="MoveLeftToRight_Click" />
-              <MenuFlyoutItem Text="Move right \u2192 left" Click="MoveRightToLeft_Click" />
-            </MenuFlyout>
-          </SplitButton.Flyout>
-        </SplitButton>
-      </AppBarElementContainer>
-      <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" ToolTipService.ToolTip="Create a new folder in the active pane (Ctrl+Shift+N)" />
-      <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" ToolTipService.ToolTip="Rename the selected item (F2)" />
-      <AppBarButton Icon="View" Label="Preview" Click="PreviewSelected_Click" ToolTipService.ToolTip="Read-only viewer and integrated media player" />
-      <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" ToolTipService.ToolTip="View properties of the selected item (Alt+Enter)" />
-      <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
-      <AppBarButton Icon="View" Label="Inspect Archive" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP, TAR, or TGZ contents" />
-      <AppBarButton Icon="Save" Label="Create Archive" Click="CreateZip_Click" ToolTipService.ToolTip="Create ZIP, TAR, or TAR.GZ from selected files and folders" />
-      <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active archive creation" />
-      <AppBarButton Icon="Folder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
-      <AppBarButton Icon="Cancel" Label="Cancel Extract" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active archive extraction" />
-      <AppBarButton Icon="Setting" Label="Tools">
-        <AppBarButton.Flyout>
-          <MenuFlyout>
-            <MenuFlyoutItem Text="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
-            <MenuFlyoutItem Text="Operation Simulator" Click="PreviewShelf_Click" ToolTipService.ToolTip="Inspect all collected items against the active folder without copying anything" />
-            <MenuFlyoutSeparator />
-            <MenuFlyoutItem Text="Save Capsule" Click="SaveCapsule_Click" ToolTipService.ToolTip="Save current shelf path references locally; file contents are not copied" />
-            <MenuFlyoutItem Text="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review locally saved task references, including unavailable paths" />
-            <MenuFlyoutSeparator />
-            <ToggleMenuFlyoutItem x:Name="DetailsStripMenuItem" Text="Details panel" Click="DetailsStripMenuItem_Click" ToolTipService.ToolTip="Show or hide the details panel beside the panes (Ctrl+Shift+D)" />
-            <MenuFlyoutSeparator />
-            <MenuFlyoutItem Text="Settings" Click="Settings_Click" ToolTipService.ToolTip="Theme, density, and accent color preferences">
-              <MenuFlyoutItem.Icon><SymbolIcon Symbol="Setting" /></MenuFlyoutItem.Icon>
-            </MenuFlyoutItem>
-          </MenuFlyout>
-        </AppBarButton.Flyout>
-      </AppBarButton>
-      <AppBarButton Icon="Delete" Label="Delete" Click="DeleteSelected_Click" ToolTipService.ToolTip="Move the selected items to the Recycle Bin (Delete)" />
-      <AppBarSeparator />
-      <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" ToolTipService.ToolTip="Cancel the copy in progress (Esc)" />
-      <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" ToolTipService.ToolTip="Refresh both panes (F5)" />
-      <AppBarButton Icon="OpenLocal" Label="Open in Explorer" Click="OpenInExplorer_Click" ToolTipService.ToolTip="Open the active pane's folder in Explorer (Ctrl+Shift+E)" />
-    </CommandBar>
-    <Grid Grid.Row="2" Margin="{StaticResource MeridianChromeMargin}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled"><StackPanel x:Name="WorkspaceTabsPanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" /></ScrollViewer>
-      <Button Grid.Column="1" Content="+ New tab" Click="AddWorkspaceTab_Click" />
+          </AppBarButton.Flyout>
+        </AppBarButton>
+        <AppBarButton Icon="Delete" Label="Delete" Click="DeleteSelected_Click" ToolTipService.ToolTip="Move the selected items to the Recycle Bin (Delete)" />
+        <AppBarSeparator />
+        <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" ToolTipService.ToolTip="Cancel the copy in progress (Esc)" />
+        <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" ToolTipService.ToolTip="Refresh both panes (F5)" />
+        <AppBarButton Icon="OpenLocal" Label="Open in Explorer" Click="OpenInExplorer_Click" ToolTipService.ToolTip="Open the active pane's folder in Explorer (Ctrl+Shift+E)" />
+      </CommandBar>
     </Grid>
-    <Grid Grid.Row="3" Margin="{StaticResource MeridianChromeMargin}" RowDefinitions="Auto,Auto">
+    <Grid Grid.Row="1" Margin="{StaticResource MeridianChromeMargin}" RowDefinitions="Auto,Auto">
       <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="8">
         <TextBlock Text="ORGANIZE" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" VerticalAlignment="Center" />
         <ToggleButton x:Name="BookmarksSectionToggle" Grid.Column="1" Content="Bookmarks" Click="OrganizeSection_Click" ToolTipService.ToolTip="Show or hide saved locations" />
@@ -199,7 +195,7 @@
         <ComboBox x:Name="ShelfItemsBox" Grid.Column="8" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" AutomationProperties.Name="Drop Shelf items" />
       </Grid>
     </Grid>
-    <Grid Grid.Row="4" ColumnDefinitions="Auto,*,Auto">
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto">
       <Grid x:Name="SidebarPanel" Grid.Column="0" Width="212" Background="{ThemeResource MeridianPanelBrush}" BorderBrush="{ThemeResource MeridianBorderBrush}" BorderThickness="0,0,1,0" RowDefinitions="*,Auto">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel x:Name="SidebarContent" Spacing="2" Padding="8" />
@@ -285,9 +281,6 @@
         <ScrollViewer x:Name="LeftColumnsView" Grid.Row="3" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, left pane">
           <StackPanel x:Name="LeftColumnsPanel" Orientation="Horizontal" />
         </ScrollViewer>
-        <ScrollViewer x:Name="RightHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, right pane">
-          <StackPanel x:Name="RightHomePanel" Spacing="10" Padding="10" />
-        </ScrollViewer>
         <ScrollViewer x:Name="LeftHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, left pane">
           <StackPanel x:Name="LeftHomePanel" Spacing="10" Padding="10" />
         </ScrollViewer>
@@ -369,6 +362,9 @@
         <ScrollViewer x:Name="RightColumnsView" Grid.Row="3" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, right pane">
           <StackPanel x:Name="RightColumnsPanel" Orientation="Horizontal" />
         </ScrollViewer>
+        <ScrollViewer x:Name="RightHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, right pane">
+          <StackPanel x:Name="RightHomePanel" Spacing="10" Padding="10" />
+        </ScrollViewer>
         <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>
@@ -427,7 +423,7 @@
         </ScrollViewer>
       </Grid>
     </Grid>
-    <Grid Grid.Row="5" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*,Auto,Auto" Background="{ThemeResource MeridianPanelBrush}">
+    <Grid Grid.Row="3" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*,Auto,Auto" Background="{ThemeResource MeridianPanelBrush}">
       <FontIcon x:Name="StatusIcon" Glyph="&#xE946;" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" AutomationProperties.Name="Status: information" />
       <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" ToolTipService.ToolTip="Meridian · Preview build — early development" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
       <StackPanel x:Name="OperationProgressPanel" Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
@@ -438,7 +434,7 @@
         <SymbolIcon Symbol="Cancel" />
       </Button>
     </Grid>
-    <Grid x:Name="QuickPreviewOverlay" Grid.Row="0" Grid.RowSpan="6" Visibility="Collapsed" IsTabStop="True" KeyDown="QuickPreviewOverlay_KeyDown">
+    <Grid x:Name="QuickPreviewOverlay" Grid.Row="0" Grid.RowSpan="4" Visibility="Collapsed" IsTabStop="True" KeyDown="QuickPreviewOverlay_KeyDown">
       <Border Background="{ThemeResource MeridianSurfaceBrush}" Opacity="0.88" />
       <Border MaxWidth="920" MaxHeight="660" Margin="40" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{ThemeResource MeridianPanelBrush}" BorderBrush="{ThemeResource MeridianBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource MeridianCardCornerRadius}">
         <Grid RowDefinitions="Auto,*,Auto" Padding="16" RowSpacing="10">

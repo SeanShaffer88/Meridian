@@ -4,7 +4,7 @@
 
 ### Beyond File Management.
 
-**An offline-first Windows 11 file manager with dual-pane browsing, workspace tabs, Folder DNA, and safer copy previews.**
+**An offline-first Windows 11 file manager with dual-pane browsing, Folder DNA, and safer copy previews.**
 
 Free · Open source · Offline-first · Windows 11
 
@@ -55,7 +55,7 @@ These features are **implemented on the main development branch**. They are not 
 | Experience | What it does |
 | --- | --- |
 | **Two-pane workspace** | Browse two folders side by side, navigate history, open items, and refresh without arranging multiple windows. |
-| **Paired workspace tabs** | Keep two locations together in a tab; restore saved sessions and bookmarks where paths are available. |
+| **Session restore** | The two panes reopen where you left them; bookmarks are restored where paths are available. |
 | **Instant filtering** | Filter either pane's current listing by filename or type, independently and without scanning the whole drive. The reusable core filter can also match full paths, but the pane UI deliberately excludes that option. |
 | **Independent sorting** | Sort each pane by name, type, size, or modified date, ascending or descending. |
 | **Keyboard-first navigation** | Switch panes, focus location or filter fields, refresh, and navigate history with shortcuts. |
@@ -104,7 +104,7 @@ The [Universal Viewer](docs/UNIVERSAL_VIEWER.md) includes bounded text/hex previ
   └────────────────────┘            └────────────────────┘
      Filter · Sort                     Filter · Sort
 
-        Bookmarks + paired workspace tabs
+        Bookmarks + restored session
 ```
 
 *Conceptual text diagram, not a screenshot of the running application.*
