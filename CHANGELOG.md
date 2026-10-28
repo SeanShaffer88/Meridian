@@ -2,9 +2,14 @@
 
 ## Unreleased
 
-## 0.2.1
+## 0.3.0
 
-- Fix: the program failed to open (an invalid toolbar icon name in the main window). The toolbar now uses a valid icon, and a test checks every icon name in the program against the valid set.
+- New look: a blue-gray Fluent shell with a left sidebar (Favorites, This PC, Drives, Settings), a Home page with drive cards showing free space and a recent-folders list, and the details strip reshaped into a right-side panel with file facts, EXIF summary, metadata editing and a permission viewer.
+- The default accent colour is now blue (Sky); the accent setting keeps eight presets plus a custom colour, and any colour saved before still applies exactly as saved.
+- Miller Columns layout: folders cascade into the next column as you browse, and selecting a file shows it in a preview column. Each pane switches between the standard list and Columns (Ctrl+Shift+V), and the choice is remembered per workspace tab.
+- Grid and Tiles view modes with thumbnails (video files show a poster frame). The Details view gains an Age column with relative times, folder sizes measured in the background and cached, columns that adapt to the pane's width, and optional grouping by type, date or size.
+- Every folder remembers its own layout, view mode, sort and grouping.
+- Fix: the program failed to open in 0.2.0 (an invalid toolbar icon name in the main window). The toolbar now uses a valid icon, and a test checks every icon name in the program against the valid set.
 
 ## 0.2.0
 
