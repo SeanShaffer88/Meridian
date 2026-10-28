@@ -3,9 +3,11 @@ using Meridian.Models;
 using Meridian.Services;
 using Microsoft.VisualBasic.FileIO;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 
 namespace Meridian;
@@ -15,6 +17,18 @@ public sealed partial class MainWindow : Window
     private readonly PaneState _left;
     private readonly PaneState _right;
     private readonly WorkspaceStore _workspaceStore = new();
+    private readonly SettingsStore _settingsStore = new();
+    private readonly Windows.UI.ViewManagement.UISettings _uiSettings = new();
+    private ThemePreference _themePreference = ThemePreference.Dark;
+    private DensityPreference _densityPreference = DensityPreference.Comfortable;
+    private bool _followWindowsAccent;
+    private double _paneSplitFraction = 0.5;
+    private Microsoft.UI.Windowing.AppWindow? _appWindow;
+    private double _rasterizationScale = 1.0;
+    private bool _enforcingMinimumWindowSize;
+    private bool _splitDragging;
+    private double _splitDragStartX;
+    private double _splitDragStartFraction;
     private readonly DropShelf _dropShelf = new();
     private readonly List<ContextCapsule> _capsules = [];
     private readonly ContextCapsuleStore _capsuleStore = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meridian", "capsules.json"));
@@ -37,6 +51,11 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(
+            Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)));
+        _appWindow.Changed += AppWindow_Changed;
+        if (Content is FrameworkElement rootElement) rootElement.Loaded += RootElement_Loaded;
+        _uiSettings.ColorValuesChanged += UiSettings_ColorValuesChanged;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus);
@@ -54,6 +73,18 @@ public sealed partial class MainWindow : Window
 
     private async Task InitializeAsync(string documents, string downloads)
     {
+        var settings = await _settingsStore.LoadAsync();
+        if (settings is not null)
+        {
+            _themePreference = ParseThemePreference(settings.Theme);
+            _densityPreference = ParseDensityPreference(settings.Density);
+            _followWindowsAccent = settings.FollowWindowsAccent;
+            _paneSplitFraction = Math.Clamp(settings.PaneSplitFraction, 0.25, 0.75);
+            ApplyThemePreference();
+            ApplyDensityPreference();
+            ApplyPaneSplit();
+            SetOrganizeSection(ParseOrganizeSection(settings.OrganizeSection));
+        }
         try
         {
             _capsules.AddRange(await _capsuleStore.LoadAsync());
@@ -121,6 +152,41 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async Task PersistSettingsAsync()
+    {
+        try
+        {
+            await _settingsStore.SaveAsync(new SettingsSnapshot(
+                _themePreference.ToString(),
+                _densityPreference.ToString(),
+                _followWindowsAccent,
+                _paneSplitFraction,
+                _openOrganizeSection.ToString()));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            // Settings persistence is a convenience; file browsing must continue if it fails.
+            SetStatus("Settings could not be saved · " + ex.Message, StatusSeverity.Error);
+        }
+    }
+
+    private static ThemePreference ParseThemePreference(string? value) => value switch
+    {
+        nameof(ThemePreference.Light) => ThemePreference.Light,
+        nameof(ThemePreference.System) => ThemePreference.System,
+        _ => ThemePreference.Dark
+    };
+
+    private static DensityPreference ParseDensityPreference(string? value) =>
+        value == nameof(DensityPreference.Compact) ? DensityPreference.Compact : DensityPreference.Comfortable;
+
+    private static OrganizeSection ParseOrganizeSection(string? value) => value switch
+    {
+        nameof(OrganizeSection.Bookmarks) => OrganizeSection.Bookmarks,
+        nameof(OrganizeSection.Shelf) => OrganizeSection.Shelf,
+        _ => OrganizeSection.None
+    };
+
     private string NextWorkspaceTabName()
     {
         string name;
@@ -150,6 +216,7 @@ public sealed partial class MainWindow : Window
                 MinWidth = 110,
                 Padding = new Thickness(10, 4, 10, 4)
             };
+            AutomationProperties.SetName(tabButton, (i == _activeWorkspaceTabIndex ? "Active workspace tab: " : "Workspace tab: ") + tab.Name);
             tabButton.Click += WorkspaceTab_Click;
             WorkspaceTabsPanel.Children.Add(tabButton);
             if (_workspaceTabs.Count > 1)
@@ -162,6 +229,7 @@ public sealed partial class MainWindow : Window
                     Height = 28,
                     Padding = new Thickness(0)
                 };
+                AutomationProperties.SetName(closeButton, "Close workspace tab: " + tab.Name);
                 ToolTipService.SetToolTip(closeButton, "Close " + tab.Name);
                 closeButton.Click += CloseWorkspaceTab_Click;
                 WorkspaceTabsPanel.Children.Add(closeButton);
@@ -549,7 +617,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void NewFolder_Click(object sender, RoutedEventArgs e)
+    private async void NewFolder_Click(object sender, RoutedEventArgs e) => await CreateNewFolderAsync();
+
+    private async Task CreateNewFolderAsync()
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath))
         {
@@ -558,6 +628,7 @@ public sealed partial class MainWindow : Window
         }
 
         var nameBox = new TextBox { PlaceholderText = "Folder name", MinWidth = 280 };
+        AutomationProperties.SetName(nameBox, "Folder name");
         var newFolderContent = new StackPanel { Spacing = 8 };
         newFolderContent.Children.Add(new TextBlock
         {
@@ -619,6 +690,7 @@ public sealed partial class MainWindow : Window
         }
 
         var nameBox = new TextBox { Text = selected.Name, MinWidth = 280, SelectionStart = 0, SelectionLength = selected.Name.Length };
+        AutomationProperties.SetName(nameBox, "New name");
         var renameContent = new StackPanel { Spacing = 8 };
         renameContent.Children.Add(new TextBlock
         {
@@ -703,10 +775,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static void AddPropertyRow(StackPanel panel, string label, string value)
+    private void AddPropertyRow(StackPanel panel, string label, string value)
     {
         var row = new StackPanel { Spacing = 2 };
-        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["MeridianDialogLabelBrush"] });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = ThemeBrush("MeridianDialogLabelBrush") });
         row.Children.Add(new TextBlock { Text = value, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap });
         panel.Children.Add(row);
     }
@@ -1243,6 +1315,297 @@ public sealed partial class MainWindow : Window
         await NavigateUpAsync(_activePane);
     }
 
+    private async void NewFolderShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await CreateNewFolderAsync();
+    }
+
+    private async void CopyShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (ReferenceEquals(_activePane, _left)) await CopySelectedAsync(_left, _right);
+        else await CopySelectedAsync(_right, _left);
+    }
+
+    private async void MoveShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (ReferenceEquals(_activePane, _left)) await MoveSelectedAsync(_left, _right);
+        else await MoveSelectedAsync(_right, _left);
+    }
+
+    private void OpenInExplorerShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        OpenActivePaneInExplorer();
+    }
+
+    private async void PropertiesShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await PropertiesSelectedAsync(_activePane);
+    }
+
+    private async void RenameShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // When a file list has focus, its own F2 handling (Slice 4) renames and
+        // this accelerator must not claim the key, or rename would run twice.
+        if (IsFocusInPaneList()) return;
+        args.Handled = true;
+        await RenameSelectedAsync(_activePane);
+    }
+
+    private void CancelCopyShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // Esc only means "cancel copy" while a copy is actually running; every
+        // other Esc press keeps its normal behavior (closing flyouts, etc.).
+        if (_copyCancellation is null) return;
+        args.Handled = true;
+        CancelCopy_Click(this, new RoutedEventArgs());
+    }
+
+    private bool IsFocusInPaneList()
+    {
+        var focused = FocusManager.GetFocusedElement(Content.XamlRoot);
+        for (DependencyObject? current = focused as DependencyObject; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (ReferenceEquals(current, LeftItems) || ReferenceEquals(current, RightItems)) return true;
+        }
+        return false;
+    }
+
+    // Theme resources live in the application theme dictionaries; the window's
+    // current theme (not the application's startup theme) decides which
+    // dictionary a code-side lookup must read.
+    private Brush ThemeBrush(string key)
+    {
+        var themeKey = RootGrid.ActualTheme == ElementTheme.Light ? "Light" : "Dark";
+        if (Application.Current.Resources.ThemeDictionaries.TryGetValue(themeKey, out var themeDictionary) &&
+            themeDictionary is ResourceDictionary dictionary &&
+            dictionary.TryGetValue(key, out var value) &&
+            value is Brush brush)
+            return brush;
+        return (Brush)Application.Current.Resources[key];
+    }
+
+    private void ApplyThemePreference()
+    {
+        RootGrid.RequestedTheme = _themePreference switch
+        {
+            ThemePreference.Dark => ElementTheme.Dark,
+            ThemePreference.Light => ElementTheme.Light,
+            // System: follow the Windows app theme, detected from the system
+            // background color and refreshed when Windows changes it.
+            _ => IsSystemDarkTheme() ? ElementTheme.Dark : ElementTheme.Light
+        };
+        ApplyAccentBrushes();
+        UpdateActivePaneVisuals();
+    }
+
+    private static bool IsSystemDarkTheme()
+    {
+        try
+        {
+            var background = new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Background);
+            return 0.299 * background.R + 0.587 * background.G + 0.114 * background.B < 128;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return true;
+        }
+    }
+
+    private void UiSettings_ColorValuesChanged(Windows.UI.ViewManagement.UISettings sender, object args)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_themePreference == ThemePreference.System) ApplyThemePreference();
+            else if (_followWindowsAccent) ApplyAccentBrushes();
+        });
+    }
+
+    private void ApplyAccentBrushes()
+    {
+        Windows.UI.Color? systemAccent = null;
+        if (_followWindowsAccent)
+        {
+            try { systemAccent = _uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent); }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) { systemAccent = null; }
+        }
+        // Mutate the shared brush objects in both theme dictionaries so every
+        // ThemeResource consumer and code-side lookup sees the same accent.
+        foreach (var entry in Application.Current.Resources.ThemeDictionaries)
+        {
+            if (entry.Value is not ResourceDictionary dictionary) continue;
+            var brandAccent = string.Equals(entry.Key?.ToString(), "Light", StringComparison.OrdinalIgnoreCase)
+                ? Windows.UI.Color.FromArgb(0xFF, 0xD9, 0x2B, 0x2B)
+                : Windows.UI.Color.FromArgb(0xFF, 0xF0, 0x44, 0x44);
+            var accent = systemAccent ?? brandAccent;
+            SetBrushColor(dictionary, "MeridianAccentBrush", accent);
+            SetBrushColor(dictionary, "MeridianActivePaneBorderBrush", accent);
+            SetBrushColor(dictionary, "MeridianSelectionBackgroundBrush", Windows.UI.Color.FromArgb(0x33, accent.R, accent.G, accent.B));
+        }
+    }
+
+    private static void SetBrushColor(ResourceDictionary dictionary, string key, Windows.UI.Color color)
+    {
+        if (dictionary.TryGetValue(key, out var value) && value is SolidColorBrush brush)
+            brush.Color = color;
+    }
+
+    private void ApplyDensityPreference()
+    {
+        var vertical = _densityPreference == DensityPreference.Compact ? 2 : 4;
+        Application.Current.Resources["MeridianListItemMargin"] = new Thickness(8, vertical, 8, vertical);
+        // Reassigning the item sources forces both lists to rebuild their item
+        // containers, so the template picks up the new margin immediately.
+        if (LeftItems.ItemsSource is not null) { LeftItems.ItemsSource = null; LeftItems.ItemsSource = _left.Items; }
+        if (RightItems.ItemsSource is not null) { RightItems.ItemsSource = null; RightItems.ItemsSource = _right.Items; }
+    }
+
+    private void ApplyPaneSplit()
+    {
+        LeftPaneColumn.Width = new GridLength(_paneSplitFraction, GridUnitType.Star);
+        RightPaneColumn.Width = new GridLength(1 - _paneSplitFraction, GridUnitType.Star);
+    }
+
+    private void SplitGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _splitDragging = true;
+        _splitDragStartFraction = _paneSplitFraction;
+        _splitDragStartX = e.GetCurrentPoint(WorkAreaGrid).Position.X;
+        (sender as UIElement)?.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void SplitGrip_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_splitDragging) return;
+        var width = WorkAreaGrid.ActualWidth;
+        if (width <= 0) return;
+        var x = e.GetCurrentPoint(WorkAreaGrid).Position.X;
+        _paneSplitFraction = Math.Clamp(_splitDragStartFraction + (x - _splitDragStartX) / width, 0.25, 0.75);
+        ApplyPaneSplit();
+    }
+
+    private void SplitGrip_PointerReleased(object sender, PointerRoutedEventArgs e) => EndSplitDrag();
+
+    private void SplitGrip_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndSplitDrag();
+
+    private void EndSplitDrag()
+    {
+        if (!_splitDragging) return;
+        _splitDragging = false;
+        _ = PersistSettingsAsync();
+    }
+
+    private void RootElement_Loaded(object sender, RoutedEventArgs e) => EnforceMinimumWindowSize();
+
+    private void AppWindow_Changed(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
+    {
+        if (args.DidSizeChange) EnforceMinimumWindowSize();
+    }
+
+    private void EnforceMinimumWindowSize()
+    {
+        // The WinUI presenter exposes no minimum size, so the ≈900×600 floor
+        // (in device-independent units) is enforced by clamping: once at
+        // startup and again whenever the window is resized below it.
+        if (_appWindow is null || _enforcingMinimumWindowSize) return;
+        if (Content.XamlRoot is not null) _rasterizationScale = Content.XamlRoot.RasterizationScale;
+        var minimumWidth = (int)Math.Round(900 * _rasterizationScale);
+        var minimumHeight = (int)Math.Round(600 * _rasterizationScale);
+        var size = _appWindow.Size;
+        if (size.Width >= minimumWidth && size.Height >= minimumHeight) return;
+        _enforcingMinimumWindowSize = true;
+        try
+        {
+            _appWindow.Resize(new Windows.Graphics.SizeInt32(Math.Max(size.Width, minimumWidth), Math.Max(size.Height, minimumHeight)));
+        }
+        finally
+        {
+            _enforcingMinimumWindowSize = false;
+        }
+    }
+
+    private async void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var themeButtons = new RadioButtons { Header = "Theme", MaxColumns = 3 };
+        themeButtons.Items.Add("Dark");
+        themeButtons.Items.Add("Light");
+        themeButtons.Items.Add("System");
+        themeButtons.SelectedIndex = _themePreference switch
+        {
+            ThemePreference.Dark => 0,
+            ThemePreference.Light => 1,
+            _ => 2
+        };
+        AutomationProperties.SetName(themeButtons, "Theme");
+        var densityButtons = new RadioButtons { Header = "Density", MaxColumns = 2 };
+        densityButtons.Items.Add("Comfortable");
+        densityButtons.Items.Add("Compact");
+        densityButtons.SelectedIndex = _densityPreference == DensityPreference.Compact ? 1 : 0;
+        AutomationProperties.SetName(densityButtons, "Density");
+        var accentToggle = new ToggleSwitch
+        {
+            Header = "Accent color",
+            IsOn = _followWindowsAccent,
+            OnContent = "Windows accent color",
+            OffContent = "Meridian brand red"
+        };
+        AutomationProperties.SetName(accentToggle, "Follow Windows accent color");
+        var settingsContent = new StackPanel { Spacing = 16, MinWidth = 340 };
+        settingsContent.Children.Add(new TextBlock
+        {
+            Text = "Changes apply immediately and are saved on this PC. System theme follows the Windows app theme and updates when Windows changes it.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        settingsContent.Children.Add(themeButtons);
+        settingsContent.Children.Add(densityButtons);
+        settingsContent.Children.Add(accentToggle);
+
+        themeButtons.SelectionChanged += (s, args) =>
+        {
+            var preference = themeButtons.SelectedIndex switch
+            {
+                0 => ThemePreference.Dark,
+                1 => ThemePreference.Light,
+                _ => ThemePreference.System
+            };
+            if (preference == _themePreference) return;
+            _themePreference = preference;
+            ApplyThemePreference();
+            _ = PersistSettingsAsync();
+        };
+        densityButtons.SelectionChanged += (s, args) =>
+        {
+            var preference = densityButtons.SelectedIndex == 1 ? DensityPreference.Compact : DensityPreference.Comfortable;
+            if (preference == _densityPreference) return;
+            _densityPreference = preference;
+            ApplyDensityPreference();
+            _ = PersistSettingsAsync();
+        };
+        accentToggle.Toggled += (s, args) =>
+        {
+            if (accentToggle.IsOn == _followWindowsAccent) return;
+            _followWindowsAccent = accentToggle.IsOn;
+            ApplyAccentBrushes();
+            _ = PersistSettingsAsync();
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Settings",
+            Content = settingsContent,
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+            RequestedTheme = RootGrid.RequestedTheme
+        };
+        await dialog.ShowAsync();
+    }
+
     private static void SetPaneStatus(PaneState pane, string message) => pane.Status.Text = message;
 
     // All global status messages go through SetStatus so severity styling and error
@@ -1266,10 +1629,17 @@ public sealed partial class MainWindow : Window
             _ => ("\uE946", "MeridianTextSecondaryBrush"),
         };
         StatusIcon.Glyph = glyph;
-        StatusIcon.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[brushKey];
+        StatusIcon.Foreground = ThemeBrush(brushKey);
+        AutomationProperties.SetName(StatusIcon, severity switch
+        {
+            StatusSeverity.Success => "Status: success",
+            StatusSeverity.Warning => "Status: warning",
+            StatusSeverity.Error => "Status: error",
+            _ => "Status: information"
+        });
         GlobalStatus.Text = message;
-        GlobalStatus.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
-            severity is StatusSeverity.Warning or StatusSeverity.Error ? brushKey : "MeridianTextSecondaryBrush"];
+        GlobalStatus.Foreground = ThemeBrush(
+            severity is StatusSeverity.Warning or StatusSeverity.Error ? brushKey : "MeridianTextSecondaryBrush");
     }
 
     private void ClearPinnedError()
@@ -1422,15 +1792,25 @@ public sealed partial class MainWindow : Window
     {
         SetPaneActiveVisual(LeftPaneRoot, LeftPaneHeader, ReferenceEquals(_activePane, _left));
         SetPaneActiveVisual(RightPaneRoot, RightPaneHeader, ReferenceEquals(_activePane, _right));
+        UpdatePaneHeaderAutomation();
     }
 
-    private static void SetPaneActiveVisual(Grid paneRoot, Grid paneHeader, bool isActive)
+    private void SetPaneActiveVisual(Grid paneRoot, Grid paneHeader, bool isActive)
     {
-        paneRoot.BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[isActive ? "MeridianActivePaneBorderBrush" : "MeridianBorderBrush"];
+        paneRoot.BorderBrush = ThemeBrush(isActive ? "MeridianActivePaneBorderBrush" : "MeridianBorderBrush");
         paneHeader.Background = isActive
-            ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["MeridianActivePaneBackgroundBrush"]
+            ? ThemeBrush("MeridianActivePaneBackgroundBrush")
             : null;
     }
+
+    private void UpdatePaneHeaderAutomation()
+    {
+        AutomationProperties.SetName(LeftPaneHeader, PaneHeaderAutomationName(_left, LeftFolderName.Text));
+        AutomationProperties.SetName(RightPaneHeader, PaneHeaderAutomationName(_right, RightFolderName.Text));
+    }
+
+    private string PaneHeaderAutomationName(PaneState pane, string folderName) =>
+        $"{pane.Name} pane: {folderName}" + (ReferenceEquals(_activePane, pane) ? " (active pane)" : string.Empty);
 
     private void UpdatePaneHeader(PaneState pane)
     {
@@ -1442,6 +1822,7 @@ public sealed partial class MainWindow : Window
         nameBlock.Text = name;
         pathBlock.Text = path;
         if (!string.IsNullOrWhiteSpace(path)) ToolTipService.SetToolTip(pathBlock, path);
+        UpdatePaneHeaderAutomation();
     }
 
     private async void CopyActivePane_Click(SplitButton sender, SplitButtonClickEventArgs args)
@@ -1460,6 +1841,7 @@ public sealed partial class MainWindow : Window
     {
         var target = ReferenceEquals(sender, BookmarksSectionToggle) ? OrganizeSection.Bookmarks : OrganizeSection.Shelf;
         SetOrganizeSection(_openOrganizeSection == target ? OrganizeSection.None : target);
+        _ = PersistSettingsAsync();
     }
 
     private void SetOrganizeSection(OrganizeSection section)
@@ -1485,7 +1867,9 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_left.CurrentPath)) await NavigateAsync(_left, _left.CurrentPath, addHistory: false);
         if (!string.IsNullOrWhiteSpace(_right.CurrentPath)) await NavigateAsync(_right, _right.CurrentPath, addHistory: false);
     }
-    private void OpenInExplorer_Click(object sender, RoutedEventArgs e)
+    private void OpenInExplorer_Click(object sender, RoutedEventArgs e) => OpenActivePaneInExplorer();
+
+    private void OpenActivePaneInExplorer()
     {
         if (string.IsNullOrWhiteSpace(_activePane.CurrentPath)) return;
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{_activePane.CurrentPath}\"", UseShellExecute = true }); }

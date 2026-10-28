@@ -11,7 +11,7 @@
           <SolidColorBrush x:Key="MeridianMutedBrush" Color="#9CA3AF" />
           <SolidColorBrush x:Key="MeridianTextPrimaryBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#9CA3AF" />
-          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#8A919C" />
           <SolidColorBrush x:Key="MeridianDialogLabelBrush" Color="#808080" />
           <SolidColorBrush x:Key="MeridianOnAccentBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#4ADE80" />
@@ -33,7 +33,7 @@
           <SolidColorBrush x:Key="MeridianMutedBrush" Color="#6B7280" />
           <SolidColorBrush x:Key="MeridianTextPrimaryBrush" Color="#17191D" />
           <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#6B7280" />
-          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#9CA3AF" />
+          <SolidColorBrush x:Key="MeridianTextTertiaryBrush" Color="#6B7280" />
           <SolidColorBrush x:Key="MeridianDialogLabelBrush" Color="#6B7280" />
           <SolidColorBrush x:Key="MeridianOnAccentBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#16A34A" />
