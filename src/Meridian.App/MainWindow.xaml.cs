@@ -1708,8 +1708,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ApplyFilter(PaneState pane)
+    private void ApplyFilter(PaneState? pane)
     {
+        if (pane is null) return;
         if (pane.IsHome) return;
         var query = pane.FilterBox.Text.Trim();
         if (pane.Layout == PaneLayout.Columns)
@@ -1757,8 +1758,9 @@ public sealed partial class MainWindow : Window
     private void LeftGroup_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateGrouping(_left, LeftGroup);
     private void RightGroup_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateGrouping(_right, RightGroup);
 
-    private void UpdateGrouping(PaneState pane, ComboBox groupBox)
+    private void UpdateGrouping(PaneState? pane, ComboBox? groupBox)
     {
+        if (pane is null || groupBox is null) return;
         if (_applyingViewState) return; // control sync while a remembered view is being applied
         var mode = (GroupMode)Math.Clamp(groupBox.SelectedIndex, 0, 3);
         if (pane.Grouping == mode) return;

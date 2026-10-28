@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: the program failed to open in 0.3.0 — a grouping control reported its starting value while the window was still being built, before the panes existed. The grouping and filter paths now guard against that, and a test checks every control that can report during window construction.
+
 ## 0.3.0
 
 - New look: a blue-gray Fluent shell with a left sidebar (Favorites, This PC, Drives, Settings), a Home page with drive cards showing free space and a recent-folders list, and the details strip reshaped into a right-side panel with file facts, EXIF summary, metadata editing and a permission viewer.
