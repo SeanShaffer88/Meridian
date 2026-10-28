@@ -21,12 +21,12 @@ public sealed class WorkspaceSessionMigrationTests
         // leaves the right path to the top-level fallback.
         var json = $$"""
             {
-              "LeftPath": "{{fixture.Root}}",
-              "RightPath": "{{fixture.Root}}",
+              "LeftPath": "{{fixture.RootJson}}",
+              "RightPath": "{{fixture.RootJson}}",
               "Bookmarks": [],
               "Tabs": [
                 { "Name": "First", "LeftPath": null, "RightPath": null, "LeftLayout": "Columns", "RightLayout": "Standard" },
-                { "Name": "Active", "LeftPath": "{{fixture.Root}}", "RightPath": null, "LeftLayout": "Standard", "RightLayout": "Columns" },
+                { "Name": "Active", "LeftPath": "{{fixture.RootJson}}", "RightPath": null, "LeftLayout": "Standard", "RightLayout": "Columns" },
                 { "Name": "Last", "LeftPath": null, "RightPath": null, "LeftLayout": "Columns", "RightLayout": "Columns" }
               ],
               "ActiveTabIndex": 1
@@ -110,6 +110,7 @@ public sealed class WorkspaceSessionMigrationTests
     private sealed class Fixture : IDisposable
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "meridian-state-" + Guid.NewGuid().ToString("N"));
+        public string RootJson => Root.Replace("\\", "\\\\");
         public string File => Path.Combine(Root, "workspace.json");
         public WorkspaceStore Store { get; }
         public Fixture()
