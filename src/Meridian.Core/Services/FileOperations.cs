@@ -194,26 +194,31 @@ public static class FileOperations
         var stagingPath = Path.Combine(destinationRoot, $".meridian-{Guid.NewGuid():N}.partial");
         var reporting = progress is null ? null : new CopyProgressState(progress);
         byte[]? buffer = null;
+        var ownsStaging = false;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(CopyBufferSize);
             if (Directory.Exists(source))
             {
+                if (File.Exists(stagingPath) || Directory.Exists(stagingPath))
+                    throw new IOException("The staging path is already occupied; refusing to use it.");
                 Directory.CreateDirectory(stagingPath);
+                ownsStaging = true;
                 CopyDirectoryContents(source, stagingPath, buffer, cancellationToken, reporting, outputFactory);
                 cancellationToken.ThrowIfCancellationRequested();
                 Directory.Move(stagingPath, finalPath);
             }
             else
             {
-                CopyFileWithCancellation(source, stagingPath, buffer, cancellationToken, reporting, outputFactory);
+                CopyFileWithCancellation(source, stagingPath, buffer, cancellationToken, reporting, outputFactory,
+                    () => ownsStaging = true);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(stagingPath, finalPath);
             }
             return finalPath;
         }
-        catch { TryDeleteStaging(stagingPath); throw; }
+        catch { if (ownsStaging) TryDeleteStaging(stagingPath); throw; }
         finally
         {
             if (buffer is not null) System.Buffers.ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
@@ -239,7 +244,8 @@ public static class FileOperations
     }
 
     private static void CopyFileWithCancellation(string source, string destination, byte[] buffer,
-        CancellationToken cancellationToken, CopyProgressState? reporting, Func<string, Stream> outputFactory)
+        CancellationToken cancellationToken, CopyProgressState? reporting, Func<string, Stream> outputFactory,
+        Action? onCreated = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var creationTime = File.GetCreationTimeUtc(source);
@@ -250,6 +256,7 @@ public static class FileOperations
         using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
         using (var output = outputFactory(destination))
         {
+            onCreated?.Invoke();
             int read;
             while ((read = input.Read(buffer, 0, CopyBufferSize)) > 0)
             {

@@ -1,13 +1,13 @@
 # Performance Plan
 
-No performance claims are made yet; measurements have not been collected.
+No representative device-level performance measurements have been recorded in this document. Automated builds and tests are not performance evidence.
 
 The [verified x64 startup smoke](VERIFICATION_REPORT.md) checks survival for ten seconds and presence of a main window. It does not measure startup-to-interactive latency or establish any budget. The proposed limits and bounded algorithms in feature documents are resource policies, not benchmark results.
 
 ## Metrics to capture on Windows 11
 - Cold startup to interactive window.
 - Navigation latency for folders with 1k, 10k, and 100k entries.
-- UI responsiveness during enumeration and file copies.
+- UI responsiveness during enumeration, live name/type filtering and file copies.
 - Idle and active CPU usage, working set, and private bytes.
 - Copy throughput for small files, large files, and mixed trees.
 - Cancellation responsiveness and memory growth over repeated navigation.

@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:Meridian.Models"
     Title="Meridian">
-  <Grid Background="#17191D" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
+  <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
     <Grid.KeyboardAccelerators>
       <KeyboardAccelerator Key="F5" Invoked="RefreshShortcut_Invoked" />
       <KeyboardAccelerator Key="F6" Invoked="SwitchPaneShortcut_Invoked" />
@@ -13,121 +13,221 @@
       <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="BackShortcut_Invoked" />
       <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="ForwardShortcut_Invoked" />
       <KeyboardAccelerator Key="Up" Modifiers="Menu" Invoked="UpShortcut_Invoked" />
+      <KeyboardAccelerator Key="N" Modifiers="Control,Shift" Invoked="NewFolderShortcut_Invoked" />
+      <KeyboardAccelerator Key="C" Modifiers="Control,Shift" Invoked="CopyShortcut_Invoked" />
+      <KeyboardAccelerator Key="M" Modifiers="Control,Shift" Invoked="MoveShortcut_Invoked" />
+      <KeyboardAccelerator Key="E" Modifiers="Control,Shift" Invoked="OpenInExplorerShortcut_Invoked" />
+      <KeyboardAccelerator Key="Enter" Modifiers="Menu" Invoked="PropertiesShortcut_Invoked" />
+      <KeyboardAccelerator Key="F2" Invoked="RenameShortcut_Invoked" />
+      <KeyboardAccelerator Key="Escape" Invoked="CancelCopyShortcut_Invoked" />
     </Grid.KeyboardAccelerators>
-    <Grid Grid.Row="0" Margin="18,14" ColumnDefinitions="Auto,*,Auto" Background="#202329">
+    <Grid Grid.Row="0" Margin="{StaticResource MeridianHeaderMargin}" Background="{ThemeResource MeridianPanelBrush}">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-        <Border Width="32" Height="32" CornerRadius="8" Background="#F04444">
-          <FontIcon Glyph="&#xE8A5;" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Border Width="32" Height="32" CornerRadius="8" Background="{ThemeResource MeridianAccentBrush}">
+          <FontIcon Glyph="&#xE8A5;" FontSize="18" Foreground="{ThemeResource MeridianOnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
-        <StackPanel Spacing="0"><TextBlock Text="MERIDIAN" FontSize="16" FontWeight="SemiBold" CharacterSpacing="90" /><TextBlock Text="FILE MANAGER" FontSize="10" Foreground="#9CA3AF" CharacterSpacing="100" /></StackPanel>
+        <StackPanel Spacing="0"><TextBlock Text="MERIDIAN" FontSize="16" FontWeight="SemiBold" CharacterSpacing="90" /><TextBlock Text="FILE MANAGER" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" /></StackPanel>
       </StackPanel>
-      <TextBlock Grid.Column="1" Text="Your files. Your workflow." Foreground="#9CA3AF" VerticalAlignment="Center" HorizontalAlignment="Center" />
-      <TextBlock Grid.Column="2" Text="PREVIEW BUILD" FontSize="10" Foreground="#F04444" VerticalAlignment="Center" CharacterSpacing="80" />
     </Grid>
-    <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="#1B1D22">
-      <AppBarButton Icon="Copy" Label="Copy L → R" Click="CopyLeftToRight_Click" />
-      <AppBarButton Icon="Copy" Label="Copy R → L" Click="CopyRightToLeft_Click" />
-      <AppBarButton Icon="MoveToFolder" Label="Move L → R" Click="MoveLeftToRight_Click" />
-      <AppBarButton Icon="MoveToFolder" Label="Move R → L" Click="MoveRightToLeft_Click" />
-      <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" />
-      <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" />
+    <CommandBar Grid.Row="1" DefaultLabelPosition="Right" Background="{ThemeResource MeridianChromeBrush}">
+      <AppBarElementContainer>
+        <SplitButton Click="CopyActivePane_Click" AutomationProperties.Name="Copy" ToolTipService.ToolTip="Copy the selected items from the active pane to the other pane (Ctrl+Shift+C)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <SymbolIcon Symbol="Copy" />
+            <TextBlock Text="Copy" VerticalAlignment="Center" />
+          </StackPanel>
+          <SplitButton.Flyout>
+            <MenuFlyout>
+              <MenuFlyoutItem Text="Copy left \u2192 right" Click="CopyLeftToRight_Click" />
+              <MenuFlyoutItem Text="Copy right \u2192 left" Click="CopyRightToLeft_Click" />
+            </MenuFlyout>
+          </SplitButton.Flyout>
+        </SplitButton>
+      </AppBarElementContainer>
+      <AppBarElementContainer>
+        <SplitButton Click="MoveActivePane_Click" AutomationProperties.Name="Move" ToolTipService.ToolTip="Move the selected items from the active pane to the other pane (Ctrl+Shift+M)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <SymbolIcon Symbol="MoveToFolder" />
+            <TextBlock Text="Move" VerticalAlignment="Center" />
+          </StackPanel>
+          <SplitButton.Flyout>
+            <MenuFlyout>
+              <MenuFlyoutItem Text="Move left \u2192 right" Click="MoveLeftToRight_Click" />
+              <MenuFlyoutItem Text="Move right \u2192 left" Click="MoveRightToLeft_Click" />
+            </MenuFlyout>
+          </SplitButton.Flyout>
+        </SplitButton>
+      </AppBarElementContainer>
+      <AppBarButton Icon="Add" Label="New folder" Click="NewFolder_Click" ToolTipService.ToolTip="Create a new folder in the active pane (Ctrl+Shift+N)" />
+      <AppBarButton Icon="Rename" Label="Rename" Click="RenameSelected_Click" ToolTipService.ToolTip="Rename the selected item (F2)" />
       <AppBarButton Icon="View" Label="Preview" Click="PreviewSelected_Click" ToolTipService.ToolTip="Read-only viewer and integrated media player" />
+      <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" ToolTipService.ToolTip="View properties of the selected item (Alt+Enter)" />
+      <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
       <AppBarButton Icon="View" Label="Inspect Archive" Click="InspectZip_Click" ToolTipService.ToolTip="Read-only ZIP, TAR, or TGZ contents" />
       <AppBarButton Icon="Save" Label="Create Archive" Click="CreateZip_Click" ToolTipService.ToolTip="Create ZIP, TAR, or TAR.GZ from selected files and folders" />
       <AppBarButton Icon="Cancel" Label="Cancel Create" Click="CancelZipCreation_Click" ToolTipService.ToolTip="Request cancellation of active archive creation" />
       <AppBarButton Icon="Folder" Label="Extract Archive" Click="ExtractZip_Click" ToolTipService.ToolTip="Confirm extraction into a new no-overwrite folder" />
       <AppBarButton Icon="Cancel" Label="Cancel Extract" Click="CancelZipExtraction_Click" ToolTipService.ToolTip="Request cancellation of active archive extraction" />
-      <AppBarButton Icon="View" Label="Properties" Click="PropertiesSelected_Click" />
-      <AppBarButton Icon="Calendar" Label="TimeVault" Click="TimeVault_Click" ToolTipService.ToolTip="Discover existing Windows shadow copies (read-only)" />
-      <AppBarButton Icon="View" Label="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
-      <AppBarButton Icon="Delete" Label="Delete" Click="DeleteSelected_Click" />
+      <AppBarButton Icon="Setting" Label="Tools">
+        <AppBarButton.Flyout>
+          <MenuFlyout>
+            <MenuFlyoutItem Text="Folder DNA" Click="FolderDna_Click" ToolTipService.ToolTip="Profile the current folder without scanning subfolders" />
+            <MenuFlyoutItem Text="Operation Simulator" Click="PreviewShelf_Click" ToolTipService.ToolTip="Inspect all collected items against the active folder without copying anything" />
+            <MenuFlyoutSeparator />
+            <MenuFlyoutItem Text="Save Capsule" Click="SaveCapsule_Click" ToolTipService.ToolTip="Save current shelf path references locally; file contents are not copied" />
+            <MenuFlyoutItem Text="View Capsules" Click="ViewCapsules_Click" ToolTipService.ToolTip="Review locally saved task references, including unavailable paths" />
+            <MenuFlyoutSeparator />
+            <MenuFlyoutItem Text="Settings" Click="Settings_Click" ToolTipService.ToolTip="Theme, density, and accent color preferences">
+              <MenuFlyoutItem.Icon><SymbolIcon Symbol="Setting" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+          </MenuFlyout>
+        </AppBarButton.Flyout>
+      </AppBarButton>
+      <AppBarButton Icon="Delete" Label="Delete" Click="DeleteSelected_Click" ToolTipService.ToolTip="Move the selected items to the Recycle Bin (Delete)" />
       <AppBarSeparator />
-      <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" />
-      <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" />
-      <AppBarButton Icon="Folder" Label="Open in Explorer" Click="OpenInExplorer_Click" />
+      <AppBarButton x:Name="CancelCopyButton" Icon="Cancel" Label="Cancel copy" IsEnabled="False" Click="CancelCopy_Click" ToolTipService.ToolTip="Cancel the copy in progress (Esc)" />
+      <AppBarButton Icon="Refresh" Label="Refresh both" Click="RefreshBoth_Click" ToolTipService.ToolTip="Refresh both panes (F5)" />
+      <AppBarButton Icon="OpenFolder" Label="Open in Explorer" Click="OpenInExplorer_Click" ToolTipService.ToolTip="Open the active pane's folder in Explorer (Ctrl+Shift+E)" />
     </CommandBar>
-    <Grid Grid.Row="2" Margin="12,4" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+    <Grid Grid.Row="2" Margin="{StaticResource MeridianChromeMargin}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled"><StackPanel x:Name="WorkspaceTabsPanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" /></ScrollViewer>
       <Button Grid.Column="1" Content="+ New tab" Click="AddWorkspaceTab_Click" />
     </Grid>
-    <Grid Grid.Row="3" Margin="12,6" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
-      <Button Content="★ Add bookmark" Click="AddBookmark_Click" />
-      <Button Grid.Column="1" Content="Remove bookmark" Click="RemoveBookmark_Click" />
-      <TextBlock Grid.Column="2" Text="SAVED LOCATIONS" FontSize="10" Foreground="#9CA3AF" VerticalAlignment="Center" />
-      <ComboBox x:Name="BookmarksBox" Grid.Column="3" PlaceholderText="Jump to a saved location…" DisplayMemberPath="Name" SelectionChanged="BookmarksBox_SelectionChanged" HorizontalAlignment="Stretch" />
+    <Grid Grid.Row="3" Margin="{StaticResource MeridianChromeMargin}" RowDefinitions="Auto,Auto">
+      <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="8">
+        <TextBlock Text="ORGANIZE" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" VerticalAlignment="Center" />
+        <ToggleButton x:Name="BookmarksSectionToggle" Grid.Column="1" Content="Bookmarks" Click="OrganizeSection_Click" ToolTipService.ToolTip="Show or hide saved locations" />
+        <ToggleButton x:Name="ShelfSectionToggle" Grid.Column="2" Content="Drop Shelf" Click="OrganizeSection_Click" ToolTipService.ToolTip="Show or hide the Drop Shelf tools" />
+      </Grid>
+      <Grid x:Name="BookmarksSection" Grid.Row="1" Visibility="Collapsed" Margin="0,6,0,0" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+        <Button Content="★ Add bookmark" Click="AddBookmark_Click" />
+        <Button Grid.Column="1" Content="Remove bookmark" Click="RemoveBookmark_Click" />
+        <TextBlock Grid.Column="2" Text="SAVED LOCATIONS" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextTertiaryBrush}" VerticalAlignment="Center" />
+        <ComboBox x:Name="BookmarksBox" Grid.Column="3" PlaceholderText="Jump to a saved location…" DisplayMemberPath="Name" SelectionChanged="BookmarksBox_SelectionChanged" HorizontalAlignment="Stretch" AutomationProperties.Name="Saved locations" />
+      </Grid>
+      <Grid x:Name="ShelfSection" Grid.Row="1" Visibility="Collapsed" Margin="0,6,0,0" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
+        <Button Content="＋ Shelf selected" Click="AddToShelf_Click" ToolTipService.ToolTip="Collect the selected file or folder without moving it" />
+        <Button Grid.Column="1" Content="Remove from shelf" Click="RemoveFromShelf_Click" />
+        <Button Grid.Column="2" Content="Clear shelf" Click="ClearShelf_Click" />
+        <Button Grid.Column="3" Content="Prune missing" Click="PruneShelf_Click" ToolTipService.ToolTip="Remove missing paths from the shelf without deleting files" />
+        <Button Grid.Column="4" Content="Show location" Click="ShowShelfLocation_Click" />
+        <Button Grid.Column="5" Content="Preview shelf → active folder" Click="PreviewShelf_Click" ToolTipService.ToolTip="Inspect all collected items against the active folder without copying anything" />
+        <Button Grid.Column="6" Content="Copy shelf…" Click="CopyShelf_Click" ToolTipService.ToolTip="Preview and confirm a no-overwrite batch copy" />
+        <Button x:Name="CancelShelfButton" Grid.Column="7" Content="Cancel batch" Click="CancelShelf_Click" IsEnabled="False" />
+        <ComboBox x:Name="ShelfItemsBox" Grid.Column="8" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" AutomationProperties.Name="Drop Shelf items" />
+      </Grid>
     </Grid>
-    <Grid Grid.Row="4" Margin="12,2" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
-      <Button Content="＋ Shelf selected" Click="AddToShelf_Click" ToolTipService.ToolTip="Collect the selected file or folder without moving it" />
-      <Button Grid.Column="1" Content="Remove from shelf" Click="RemoveFromShelf_Click" />
-      <Button Grid.Column="2" Content="Clear shelf" Click="ClearShelf_Click" />
-      <Button Grid.Column="3" Content="Prune missing" Click="PruneShelf_Click" ToolTipService.ToolTip="Remove missing paths from the shelf without deleting files" />
-      <Button Grid.Column="4" Content="Show location" Click="ShowShelfLocation_Click" />
-      <Button Grid.Column="5" Content="Preview shelf → active folder" Click="PreviewShelf_Click" ToolTipService.ToolTip="Inspect all collected items against the active folder without copying anything" />
-      <Button Grid.Column="6" Content="Copy shelf…" Click="CopyShelf_Click" ToolTipService.ToolTip="Preview and confirm a no-overwrite batch copy" />
-      <Button x:Name="CancelShelfButton" Grid.Column="7" Content="Cancel batch" Click="CancelShelf_Click" IsEnabled="False" />
-      <ComboBox x:Name="ShelfItemsBox" Grid.Column="8" PlaceholderText="Drop Shelf · collect items from any folder" HorizontalAlignment="Stretch" />
-    </Grid>
-    <Grid Grid.Row="5" Margin="12" ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
-      <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="#202329" PointerPressed="LeftPane_PointerPressed">
-        <Grid Margin="12,10" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="01" Foreground="#F04444" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="SOURCE PANE" FontSize="11" CharacterSpacing="100" Foreground="#9CA3AF" /></Grid>
-        <Grid Grid.Row="1" Margin="10,0,10,10" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
-          <Button Content="←" Click="LeftBack_Click" MinWidth="32" /><Button Grid.Column="1" Content="→" Click="LeftForward_Click" MinWidth="32" /><Button Grid.Column="2" Content="↑" Click="LeftUp_Click" MinWidth="32" />
-          <TextBox x:Name="LeftPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="LeftPath_KeyDown" />
+    <Grid x:Name="WorkAreaGrid" Grid.Row="4" Margin="{StaticResource MeridianWorkAreaMargin}" ColumnSpacing="10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition x:Name="LeftPaneColumn" Width="*" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition x:Name="RightPaneColumn" Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid x:Name="LeftPaneRoot" Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="{ThemeResource MeridianPanelBrush}" BorderThickness="0,2,0,0" BorderBrush="{ThemeResource MeridianBorderBrush}" PointerPressed="LeftPane_PointerPressed">
+        <Grid x:Name="LeftPaneHeader" Padding="{StaticResource MeridianPaneHeaderMargin}" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+          <TextBlock Text="01" Foreground="{ThemeResource MeridianTextTertiaryBrush}" FontWeight="SemiBold" />
+          <StackPanel Grid.Column="1" Spacing="0">
+            <TextBlock x:Name="LeftFolderName" Text="Source pane" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="LeftFolderPath" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
         </Grid>
-        <Grid Grid.Row="2" Margin="10,0,10,8" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-          <TextBox x:Name="LeftFilter" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" />
-          <ComboBox x:Name="LeftSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="LeftSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane">
+        <Grid Grid.Row="1" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
+          <Button Click="LeftBack_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Back" AutomationProperties.Name="Back, left pane"><SymbolIcon Symbol="Back" /></Button><Button Grid.Column="1" Click="LeftForward_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Forward, left pane"><SymbolIcon Symbol="Forward" /></Button><Button Grid.Column="2" Click="LeftUp_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Up" AutomationProperties.Name="Up, left pane"><SymbolIcon Symbol="Up" /></Button>
+          <TextBox x:Name="LeftPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="LeftPath_KeyDown" AutomationProperties.Name="Folder path, left pane" />
+        </Grid>
+        <Grid Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+          <TextBox x:Name="LeftFilter" PlaceholderText="Filter files and folders…" TextChanged="LeftFilter_TextChanged" AutomationProperties.Name="Filter, left pane" />
+          <ComboBox x:Name="LeftSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="LeftSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane" AutomationProperties.Name="Sort, left pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
           </ComboBox>
-          <ToggleButton x:Name="LeftSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" Checked="LeftSortDirection_Changed" Unchecked="LeftSortDirection_Changed" />
+          <ToggleButton x:Name="LeftSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" AutomationProperties.Name="Descending sort, left pane" Checked="LeftSortDirection_Changed" Unchecked="LeftSortDirection_Changed" />
         </Grid>
-        <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
+        <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" KeyDown="LeftItems_KeyDown" SelectionChanged="LeftItems_SelectionChanged" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, left pane">
+          <ListView.ContextFlyout>
+            <MenuFlyout Opening="LeftContextMenu_Opening">
+              <MenuFlyoutItem x:Name="LeftCopyMenuItem" Text="Copy to right pane" Click="CopyLeftToRight_Click" />
+              <MenuFlyoutItem x:Name="LeftMoveMenuItem" Text="Move to right pane" Click="MoveLeftToRight_Click" />
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem x:Name="LeftRenameMenuItem" Text="Rename" Click="RenameFromLeft_Click" />
+              <MenuFlyoutItem x:Name="LeftPropertiesMenuItem" Text="Properties" Click="PropertiesFromLeft_Click" />
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem x:Name="LeftShelfMenuItem" Text="Add to Drop Shelf" Click="AddToShelfFromLeft_Click" />
+              <MenuFlyoutItem x:Name="LeftDeleteMenuItem" Text="Delete (Recycle Bin)" Click="DeleteFromLeft_Click" />
+            </MenuFlyout>
+          </ListView.ContextFlyout>
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
-            <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
-              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="#F04444" />
-              <TextBlock Grid.Column="1" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-              <TextBlock Grid.Column="2" Text="{x:Bind SizeLabel}" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
-              <TextBlock Grid.Column="3" Text="{x:Bind ModifiedLabel}" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
+            <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10" AutomationProperties.Name="{x:Bind Name}">
+              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianTextSecondaryBrush}" />
+              <TextBlock Grid.Column="1" Text="{x:Bind Name}" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Text="{x:Bind SizeLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
+              <TextBlock Grid.Column="3" Text="{x:Bind ModifiedLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
-        <TextBlock x:Name="LeftStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="#9CA3AF" Margin="12,8" />
+        <TextBlock x:Name="LeftStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
-      <Grid Grid.Column="1" Width="36" VerticalAlignment="Center" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-        <Button Grid.Row="0" Content="→" ToolTipService.ToolTip="Copy selected item to right pane" Click="CopyLeftToRight_Click" />
-        <Button Grid.Row="1" Content="←" ToolTipService.ToolTip="Copy selected item to left pane" Click="CopyRightToLeft_Click" />
-        <TextBlock Grid.Row="2" Text="COPY" FontSize="9" Foreground="#9CA3AF" HorizontalAlignment="Center" />
+      <Grid Grid.Column="1" Width="36" VerticalAlignment="Center" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
+        <Button Grid.Row="0" Content="→" ToolTipService.ToolTip="Copy selected item to right pane" AutomationProperties.Name="Copy to right pane" Click="CopyLeftToRight_Click" />
+        <Button Grid.Row="1" Content="←" ToolTipService.ToolTip="Copy selected item to left pane" AutomationProperties.Name="Copy to left pane" Click="CopyRightToLeft_Click" />
+        <TextBlock Grid.Row="2" Text="COPY" FontSize="9" Foreground="{ThemeResource MeridianTextSecondaryBrush}" HorizontalAlignment="Center" />
+        <Border Grid.Row="3" Height="24" Background="Transparent" ToolTipService.ToolTip="Drag to resize the panes" AutomationProperties.Name="Resize panes" PointerPressed="SplitGrip_PointerPressed" PointerMoved="SplitGrip_PointerMoved" PointerReleased="SplitGrip_PointerReleased" PointerCaptureLost="SplitGrip_PointerCaptureLost">
+          <TextBlock Text="↔" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
       </Grid>
-      <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="#202329" PointerPressed="RightPane_PointerPressed">
-        <Grid Margin="12,10" ColumnDefinitions="Auto,*" ColumnSpacing="8"><TextBlock Text="02" Foreground="#F04444" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="DESTINATION PANE" FontSize="11" CharacterSpacing="100" Foreground="#9CA3AF" /></Grid>
-        <Grid Grid.Row="1" Margin="10,0,10,10" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
-          <Button Content="←" Click="RightBack_Click" MinWidth="32" /><Button Grid.Column="1" Content="→" Click="RightForward_Click" MinWidth="32" /><Button Grid.Column="2" Content="↑" Click="RightUp_Click" MinWidth="32" />
-          <TextBox x:Name="RightPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="RightPath_KeyDown" />
+      <Grid x:Name="RightPaneRoot" Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto" Background="{ThemeResource MeridianPanelBrush}" BorderThickness="0,2,0,0" BorderBrush="{ThemeResource MeridianBorderBrush}" PointerPressed="RightPane_PointerPressed">
+        <Grid x:Name="RightPaneHeader" Padding="{StaticResource MeridianPaneHeaderMargin}" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+          <TextBlock Text="02" Foreground="{ThemeResource MeridianTextTertiaryBrush}" FontWeight="SemiBold" />
+          <StackPanel Grid.Column="1" Spacing="0">
+            <TextBlock x:Name="RightFolderName" Text="Destination pane" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="RightFolderPath" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
         </Grid>
-        <Grid Grid.Row="2" Margin="10,0,10,8" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-          <TextBox x:Name="RightFilter" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" />
-          <ComboBox x:Name="RightSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="RightSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane">
+        <Grid Grid.Row="1" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
+          <Button Click="RightBack_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Back" AutomationProperties.Name="Back, right pane"><SymbolIcon Symbol="Back" /></Button><Button Grid.Column="1" Click="RightForward_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Forward, right pane"><SymbolIcon Symbol="Forward" /></Button><Button Grid.Column="2" Click="RightUp_Click" Width="32" Height="32" Padding="0" ToolTipService.ToolTip="Up" AutomationProperties.Name="Up, right pane"><SymbolIcon Symbol="Up" /></Button>
+          <TextBox x:Name="RightPath" Grid.Column="3" PlaceholderText="Enter a folder path…" KeyDown="RightPath_KeyDown" AutomationProperties.Name="Folder path, right pane" />
+        </Grid>
+        <Grid Grid.Row="2" Margin="{StaticResource MeridianPaneRowMargin}" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+          <TextBox x:Name="RightFilter" PlaceholderText="Filter files and folders…" TextChanged="RightFilter_TextChanged" AutomationProperties.Name="Filter, right pane" />
+          <ComboBox x:Name="RightSort" Grid.Column="1" MinWidth="110" SelectedIndex="0" SelectionChanged="RightSort_SelectionChanged" ToolTipService.ToolTip="Sort this pane" AutomationProperties.Name="Sort, right pane">
             <ComboBoxItem Content="Name" /><ComboBoxItem Content="Type" /><ComboBoxItem Content="Size" /><ComboBoxItem Content="Modified" />
           </ComboBox>
-          <ToggleButton x:Name="RightSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" Checked="RightSortDirection_Changed" Unchecked="RightSortDirection_Changed" />
+          <ToggleButton x:Name="RightSortDescending" Grid.Column="2" Content="↓" ToolTipService.ToolTip="Descending sort" AutomationProperties.Name="Descending sort, right pane" Checked="RightSortDirection_Changed" Unchecked="RightSortDirection_Changed" />
         </Grid>
-        <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" Background="Transparent" BorderThickness="0" Margin="4,0">
+        <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Extended" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" KeyDown="RightItems_KeyDown" SelectionChanged="RightItems_SelectionChanged" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, right pane">
+          <ListView.ContextFlyout>
+            <MenuFlyout Opening="RightContextMenu_Opening">
+              <MenuFlyoutItem x:Name="RightCopyMenuItem" Text="Copy to left pane" Click="CopyRightToLeft_Click" />
+              <MenuFlyoutItem x:Name="RightMoveMenuItem" Text="Move to left pane" Click="MoveRightToLeft_Click" />
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem x:Name="RightRenameMenuItem" Text="Rename" Click="RenameFromRight_Click" />
+              <MenuFlyoutItem x:Name="RightPropertiesMenuItem" Text="Properties" Click="PropertiesFromRight_Click" />
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem x:Name="RightShelfMenuItem" Text="Add to Drop Shelf" Click="AddToShelfFromRight_Click" />
+              <MenuFlyoutItem x:Name="RightDeleteMenuItem" Text="Delete (Recycle Bin)" Click="DeleteFromRight_Click" />
+            </MenuFlyout>
+          </ListView.ContextFlyout>
           <ListView.ItemTemplate><DataTemplate x:DataType="models:FileEntry">
-            <Grid Margin="8,7" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10">
-              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="#F04444" />
-              <TextBlock Grid.Column="1" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-              <TextBlock Grid.Column="2" Text="{x:Bind SizeLabel}" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
-              <TextBlock Grid.Column="3" Text="{x:Bind ModifiedLabel}" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
+            <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,100,130" ColumnSpacing="10" AutomationProperties.Name="{x:Bind Name}">
+              <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianTextSecondaryBrush}" />
+              <TextBlock Grid.Column="1" Text="{x:Bind Name}" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Text="{x:Bind SizeLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
+              <TextBlock Grid.Column="3" Text="{x:Bind ModifiedLabel}" Foreground="{ThemeResource MeridianTextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
             </Grid>
           </DataTemplate></ListView.ItemTemplate>
         </ListView>
-        <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="#9CA3AF" Margin="12,8" />
+        <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>
-    <Grid Grid.Row="6" Margin="14,9" ColumnDefinitions="Auto,*,Auto" Background="#202329">
-      <Ellipse Width="7" Height="7" Fill="#4ADE80" VerticalAlignment="Center" />
-      <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" FontSize="11" Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" />
-      <TextBlock Grid.Column="2" Text="MERIDIAN · EARLY DEVELOPMENT" FontSize="10" Foreground="#6B7280" CharacterSpacing="70" VerticalAlignment="Center" />
+    <Grid Grid.Row="5" Margin="{StaticResource MeridianStatusBarMargin}" ColumnDefinitions="Auto,*,Auto,Auto" Background="{ThemeResource MeridianPanelBrush}">
+      <FontIcon x:Name="StatusIcon" Glyph="&#xE946;" FontSize="12" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" AutomationProperties.Name="Status: information" />
+      <TextBlock Grid.Column="1" x:Name="GlobalStatus" Text="Ready · Local-only · No telemetry" ToolTipService.ToolTip="Meridian · Preview build — early development" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      <StackPanel x:Name="OperationProgressPanel" Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+        <TextBlock x:Name="OperationProgressLabel" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="300" />
+        <ProgressBar x:Name="OperationProgressBar" Width="160" VerticalAlignment="Center" AutomationProperties.Name="Operation progress" />
+      </StackPanel>
+      <Button x:Name="DismissStatusButton" Grid.Column="3" Margin="8,0,0,0" Padding="4" Background="Transparent" BorderThickness="0" Visibility="Collapsed" Click="DismissStatus_Click" ToolTipService.ToolTip="Dismiss message" AutomationProperties.Name="Dismiss message" VerticalAlignment="Center">
+        <SymbolIcon Symbol="Cancel" />
+      </Button>
     </Grid>
   </Grid>
 </Window>

@@ -26,6 +26,8 @@ Copy stages files/trees in the destination directory and publishes by no-overwri
 
 Drop Shelf copies sequentially and reports completed items and stopping errors/cancellation. Earlier outputs remain; its transient result is not a durable journal. Consequence Engine contracts do not govern every operation. Archive trees and creation outputs are staged; full ZIP extraction verifies length/CRC. Catalogs and prefix reads have different integrity guarantees; see [Archive Engine](ARCHIVE_ENGINE.md). Preview ancestor checks do not establish race-free handle identity; see [threat model](THREAT_MODEL.md).
 
+Workspace tabs are paired left/right folder locations; switching tabs refreshes both panes. Tab reordering, locking, pinning, and layout restoration are not implemented yet.
+
 ## Persistence and diagnostics
 
 `src/Meridian.App/Services/WorkspaceStore.cs` stores `%LOCALAPPDATA%\Meridian\workspace.json`: left/right locations, bookmark names/paths, paired tab names/locations and active-tab index. Drop Shelf, sort/filter settings, durable operation history and alternate layouts are not included. Installed and portable copies share this per-user location.

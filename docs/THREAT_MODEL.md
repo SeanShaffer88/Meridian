@@ -6,6 +6,14 @@ Scope: [development baseline](STATUS.md). This is a threat inventory, not an ind
 
 Protect user source/destination files, historical data, workspace paths, diagnostics and application integrity. Names, metadata, archives, media, JSON references and preferences can be malformed, changing or attacker-controlled. Meridian uses current-user permissions with no automatic elevation.
 
+## Known risks and gaps
+- Copy is not a transactional filesystem operation; crashes or disk errors may leave staging files.
+- UI exposes cancellation during individual copy and batch execution, but not a general pause/resume operation queue. The initial batch preflight is not cancellable from its UI button.
+- File launching may invoke arbitrary handlers configured by the user or system.
+- Archive parsing and richer viewers are implemented with bounded, in-process parsers; they are not isolated or formally reviewed. There is a read-only copy Operation Simulator preview; scripting/plugins are not implemented.
+- Race conditions remain possible between path checks and use.
+- No formal security review has been completed.
+
 Normal file opening delegates to Windows shell associations and can execute code. Preview is separate and does not shell-launch selected content. UNC paths can access network filesystems; Windows and external handlers have their own behavior. No Meridian telemetry, remote provider, mandatory account, AI model or runtime codec downloader is implemented. This is a code inventory, not a completed observed-network privacy audit.
 
 ## Controls and residual risks

@@ -45,6 +45,8 @@ The separate [Windows validation workflow](.github/workflows/windows-validation.
 
 The `meridian-distribution-win-x64` and `meridian-distribution-win-arm64` artifacts each contain the installer, a portable ZIP and `SHA256SUMS-win-<architecture>.txt`. CI creates the ZIP from the complete publish folder, including hidden files, and verifies both file hashes before upload. Keep the extracted distribution files together and run `./scripts/verify-checksums.ps1 -ManifestPath <distribution-folder>/SHA256SUMS-win-x64.txt` (or `win-arm64`) before use. The verifier rejects malformed/duplicate entries, missing files and mismatched bytes. Checksums establish agreement with the supplied manifest, not publisher authenticity; signing and trusted distribution remain separate requirements. `./scripts/test-packaging.ps1` exercises packaging and rejection paths with disposable fixtures retained under ignored `TestResults/`.
 
+For file-operation changes, also document tests on disposable folders covering collisions, cancellation, permissions and reparse points. CI is not a substitute for launch, installer, or assistive-technology testing.
+
 ## Documentation and review
 
 Update [STATUS](docs/STATUS.md), [verification](docs/VERIFICATION_REPORT.md), [changelog](CHANGELOG.md), user instructions and affected feature documents when behavior changes. Distinguish backend APIs, UI integration, CI checks and hands-on verification. Keep planned design requirements unchecked until their full scope has evidence. Check relative links/anchors and do not add screenshot links before captures exist.

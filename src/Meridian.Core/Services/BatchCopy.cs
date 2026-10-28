@@ -25,7 +25,15 @@ public static class BatchCopy
         var sources = sourcePaths.ToArray();
         if (sources.Length == 0)
             throw new InvalidOperationException("Batch copy refused: the source collection is empty.");
-        var plan = OperationPreview.PreviewCopy(sources, destinationDirectory, cancellationToken);
+        OperationPreview.Plan plan;
+        try
+        {
+            plan = OperationPreview.PreviewCopy(sources, destinationDirectory, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new Result(Array.Empty<string>(), sources[0], null, Cancelled: true);
+        }
         if (plan.HasBlockers)
             throw new InvalidOperationException(
                 "Batch copy refused: preflight found one or more blocked items. No files were copied.");

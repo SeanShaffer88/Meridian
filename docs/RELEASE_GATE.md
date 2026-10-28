@@ -1,6 +1,8 @@
 # Release Gate
 
-Do not publish a stable release until every applicable item has evidence.
+Do not publish a stable release until every applicable item has evidence. CI cross-publishing is not a substitute for native ARM64 testing; installer build success is not an installation or uninstallation test.
+
+See [verification status](VERIFICATION_REPORT.md), [threat model](THREAT_MODEL.md), and [performance measurement plan](PERFORMANCE.md).
 
 ## Current evidence versus gate completion
 
@@ -39,4 +41,4 @@ The [Safety Contract](SAFETY_CONTRACT.md) applies to every mutating capability. 
 
 ## Engineering quality requirements
 
-Release readiness also requires satisfying [Engineering Quality Gates](ENGINEERING_QUALITY_GATES.md), including clean x64/ARM64 builds, verified playback, measured performance, accessibility checks and clean-install testing. Unverified items remain blockers.
+Release readiness also requires satisfying [Engineering Quality Gates](QUALITY-GATES.md), including clean x64/ARM64 builds, verified playback, measured performance, accessibility checks and clean-install testing. Unverified items remain blockers.

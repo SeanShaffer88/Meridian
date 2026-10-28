@@ -7,7 +7,7 @@ For current capabilities and evidence, start with [Implementation status](STATUS
 - [User guide and troubleshooting](USER_GUIDE.md)
 - [Implementation status](STATUS.md)
 - [Verification report](VERIFICATION_REPORT.md)
-- [Release gate](RELEASE_GATE.md) and [engineering quality gates](ENGINEERING_QUALITY_GATES.md)
+- [Release gate](RELEASE_GATE.md) and [engineering quality gates](QUALITY-GATES.md)
 - [Performance measurement plan](PERFORMANCE.md)
 - [Screenshot capture standards](SCREENSHOTS.md)
 - [Contributing/build instructions](../CONTRIBUTING.md), [changelog](../CHANGELOG.md), [security reporting](../SECURITY.md) and [dependency credits](../CREDITS.md)

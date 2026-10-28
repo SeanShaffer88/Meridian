@@ -8,7 +8,7 @@
 2. **Parallelize independent work:** use separate branches or worktrees for Core/Filesystem, Windows UI, Advanced Features, and Quality/Release. Establish shared API contracts first. Avoid simultaneous edits to the same files. A single integration owner resolves conflicts and verifies behavior.
 3. **Fast local feedback:** run format/lint/static analysis and impacted unit tests on each workstream; run full core tests and Windows app compilation before integration. Never interpret a targeted pass as release readiness.
 4. **Integration gate:** require review, complete core regression suite, Windows x64 and ARM64 builds, package integrity checks, and CI success at the exact candidate commit before merging. No bypass for schedule pressure. Security-sensitive changes additionally require adversarial and cancellation/failure-path tests.
-5. **Release gate:** retain all requirements in [ENGINEERING_QUALITY_GATES.md](ENGINEERING_QUALITY_GATES.md) and [RELEASE_GATE.md](RELEASE_GATE.md). CI success does not replace manual UI/accessibility, clean-machine, ARM64 runtime, security, or performance verification.
+5. **Release gate:** retain all requirements in [QUALITY-GATES.md](QUALITY-GATES.md) and [RELEASE_GATE.md](RELEASE_GATE.md). CI success does not replace manual UI/accessibility, clean-machine, ARM64 runtime, security, or performance verification.
 
 ## Workstream boundaries
 

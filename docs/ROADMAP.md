@@ -118,7 +118,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [x] Background directory enumeration
 - [x] Conservative copy path that refuses overwrite
 - [x] Core unit-test source
-- [ ] Build and run on Windows 11 x64 and ARM64; resolve compiler/runtime issues and record actual CI results
+- [ ] Complete both CI builds and native runtime validation on Windows 11 x64 and ARM64; record evidence separately (cross-publishing is not native execution)
 - [x] Cover nested directory copy, destination collisions, self/descendant prevention, and cancellation before a copy starts
 - [ ] Test cancellation during an active copy and staging cleanup, disappearing sources, access-denied cases, and reparse-point edge cases
 - [ ] Establish operation contracts, structured error reporting, cancellation semantics, and path/reparse-point safety
@@ -132,7 +132,7 @@ Avoid starting large Phase 2/3 experiments until these release blockers are reso
 - [ ] Named workspace collections, alternate pane layouts and complete focus/layout restoration
 - [ ] Folder tree sidebar, with shared focus-synchronized or independent per-pane trees
 - [ ] Core view modes: icon sizes, list, compact list, tiles, content, and details/grid
-- [x] Live case-insensitive filtering and independent name/type/size/modified sorting in each pane; F5/F6, Ctrl+L/Ctrl+F and Alt history/up shortcuts
+- [x] Live case-insensitive filtering (optional full-path matching remains available to core API callers) and independent name/type/size/modified sorting in each pane; F5/F6, Ctrl+L/Ctrl+F and Alt history/up shortcuts
 - [ ] Type-ahead selection, configurable shortcuts and expanded command navigation
 - [ ] Central transfer queue with progress, pause/cancel, safe collision policies, and background I/O
 - [x] New folder creation with name validation and duplicate checks
