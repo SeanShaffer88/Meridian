@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The dark theme is darker: the window background, panels and raised areas are now near-black tones, still one visible step apart so the sidebar, panes and header stay distinct. The light theme is unchanged.
+- Red is the default accent colour again. If your accent was still the previous Sky default, it switches to red once; Sky blue remains available in Settings, and any accent you picked yourself is kept exactly.
+- The selection highlight is now a dark red-gray (a pale red-gray in the light theme). It no longer follows the accent colour, so changing the accent never changes how selected files look.
+- Meridian now has its own app icon — two panes forming an M around a red meridian line — shown on the taskbar, on shortcuts and in Settings instead of the generic program icon, and the same mark appears in the title bar.
+
 ## 0.4.0
 
 - The window now uses a custom title bar: the header row is the title bar, with the minimize, maximize and close buttons at its top-right corner, and the operations toolbar (Copy, Move, New folder, Rename, and the archive and view actions) sits in the header beside the Meridian wordmark. On narrow windows the toolbar's extra actions move into its "…" menu instead of crowding the header.

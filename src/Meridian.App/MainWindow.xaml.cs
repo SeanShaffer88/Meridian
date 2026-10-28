@@ -203,7 +203,11 @@ public sealed partial class MainWindow : Window
                 _accentCustomColor,
                 _detailsStripVisible,
                 _sidebarVisible,
-                _columnWidth));
+                _columnWidth,
+                // LoadAsync has already applied the one-time accent-default
+                // migration to the values above; every save records that, so
+                // an accent picked deliberately later is never re-migrated.
+                AccentDefaultMigrated: true));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -3099,7 +3103,10 @@ public sealed partial class MainWindow : Window
         // Resolve per theme dictionary (the light theme uses the derived
         // variant of preset and custom colours), then mutate the shared brush
         // objects so every ThemeResource consumer and code-side lookup sees
-        // the same accent, applied live with no restart.
+        // the same accent, applied live with no restart. The selection
+        // brushes are deliberately NOT touched here: selection is a fixed
+        // red-gray token in each theme dictionary and never follows the
+        // accent colour.
         foreach (var entry in Application.Current.Resources.ThemeDictionaries)
         {
             if (entry.Value is not ResourceDictionary dictionary) continue;
@@ -3108,7 +3115,6 @@ public sealed partial class MainWindow : Window
             var accent = Windows.UI.Color.FromArgb(0xFF, resolved.R, resolved.G, resolved.B);
             SetBrushColor(dictionary, "MeridianAccentBrush", accent);
             SetBrushColor(dictionary, "MeridianActivePaneBorderBrush", accent);
-            SetBrushColor(dictionary, "MeridianSelectionBackgroundBrush", Windows.UI.Color.FromArgb(0x33, accent.R, accent.G, accent.B));
         }
     }
 
@@ -3313,7 +3319,7 @@ public sealed partial class MainWindow : Window
             Text = _accentCustomColor ?? string.Empty
         };
         AutomationProperties.SetName(customHexBox, "Custom accent color, hex value");
-        ToolTipService.SetToolTip(customHexBox, "Type a hex color such as #4CC2FF");
+        ToolTipService.SetToolTip(customHexBox, "Type a hex color such as #F04444");
         var applyCustomButton = new Button { Content = "Use custom color" };
         ToolTipService.SetToolTip(applyCustomButton, "Apply the hex color as the accent");
         AutomationProperties.SetName(applyCustomButton, "Use custom color");
@@ -3326,7 +3332,7 @@ public sealed partial class MainWindow : Window
         var customPanel = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
         customPanel.Children.Add(new TextBlock
         {
-            Text = "Type a hex color such as #4CC2FF. It applies everywhere immediately. In the light theme it is darkened automatically so text stays readable.",
+            Text = "Type a hex color such as #F04444. It applies everywhere immediately. In the light theme it is darkened automatically so text stays readable.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = ThemeBrush("MeridianTextSecondaryBrush")
         });
@@ -3390,7 +3396,7 @@ public sealed partial class MainWindow : Window
         {
             if (!AccentColor.TryParse(customHexBox.Text, out var custom))
             {
-                customError.Text = "That is not a valid hex color. Use six hex digits, like #4CC2FF.";
+                customError.Text = "That is not a valid hex color. Use six hex digits, like #F04444.";
                 customError.Visibility = Visibility.Visible;
                 return;
             }

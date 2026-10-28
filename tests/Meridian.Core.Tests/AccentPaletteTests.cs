@@ -5,36 +5,36 @@ namespace Meridian.Core.Tests;
 public sealed class AccentPaletteTests
 {
     [Fact]
-    public void Presets_AreTheDocumentedRow_WithSkyDefaultFirst()
+    public void Presets_AreTheDocumentedRow_WithRedDefaultFirst()
     {
         Assert.Equal(9, AccentPalette.Presets.Count);
         Assert.Equal(AccentPalette.Presets.Count, AccentPalette.Presets.Select(preset => preset.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         var first = AccentPalette.Presets[0];
         Assert.Equal(AccentPalette.DefaultPresetId, first.Id);
-        Assert.Equal("Sky", first.Name);
-        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF), first.Color);
+        Assert.Equal("Red", first.Name);
+        Assert.Equal(new AccentColor(0xF0, 0x44, 0x44), first.Color);
         Assert.Equal(first.Color, AccentPalette.DefaultColor);
         // The previous default stays available as an ordinary preset, so a
-        // saved "Red" choice keeps meaning exactly what it meant before.
-        var red = AccentPalette.FindPreset("Red");
-        Assert.NotNull(red);
-        Assert.Equal(new AccentColor(0xF0, 0x44, 0x44), red.Color);
-        // The older blue preset also keeps its colour; the new sky blue is a
-        // separate preset, not a redefinition of a saved choice.
+        // saved "Sky" choice keeps meaning exactly what it meant before.
+        var sky = AccentPalette.FindPreset("Sky");
+        Assert.NotNull(sky);
+        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF), sky.Color);
+        Assert.Equal(sky.Color, AccentPalette.PreviousDefaultColor);
+        // The older blue preset also keeps its colour.
         var blue = AccentPalette.FindPreset("Blue");
         Assert.NotNull(blue);
         Assert.Equal(new AccentColor(0x3D, 0x9B, 0xE9), blue.Color);
     }
 
     [Fact]
-    public void Resolve_NoSavedChoice_UsesTheSkyDefault()
+    public void Resolve_NoSavedChoice_UsesTheRedDefault()
     {
         // A user who never picked an accent (no preset id stored) gets the
-        // shipped sky-blue default in the dark theme and its derived variant
+        // shipped red default in the dark theme and its derived variant
         // in the light theme.
-        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF),
+        Assert.Equal(new AccentColor(0xF0, 0x44, 0x44),
             AccentPalette.Resolve(AccentMode.Preset, null, null, lightTheme: false, windowsAccent: null));
-        Assert.Equal(AccentPalette.DeriveLightVariant(new AccentColor(0x4C, 0xC2, 0xFF)),
+        Assert.Equal(AccentPalette.DeriveLightVariant(new AccentColor(0xF0, 0x44, 0x44)),
             AccentPalette.Resolve(AccentMode.Preset, null, null, lightTheme: true, windowsAccent: null));
     }
 
@@ -152,11 +152,94 @@ public sealed class AccentPaletteTests
     }
 
     [Fact]
-    public void DeriveLightVariant_DefaultSky_MatchesTheLightThemeDictionaryValue()
+    public void DeriveLightVariant_DefaultRed_MatchesTheLightThemeDictionaryValue()
     {
         // App.xaml's Light dictionary carries this same derived value; the two
         // must not drift apart.
-        Assert.Equal(new AccentColor(0x00, 0x4D, 0x75), AccentPalette.DeriveLightVariant(AccentPalette.DefaultColor));
+        Assert.Equal(new AccentColor(0x99, 0x0C, 0x0C), AccentPalette.DeriveLightVariant(AccentPalette.DefaultColor));
+    }
+
+    [Fact]
+    public void Migrate_PresetSky_BecomesTheRedPreset()
+    {
+        var (mode, presetId, customHex) = AccentPalette.MigrateLegacyDefaultAccent("Preset", "Sky", null);
+        Assert.Equal("Preset", mode);
+        Assert.Equal("Red", presetId);
+        Assert.Null(customHex);
+    }
+
+    [Fact]
+    public void Migrate_NullModeWithSkyPreset_BecomesTheRedPreset()
+    {
+        // Files written before the mode existed carry only a preset id; a
+        // stored "Sky" there is what the program itself saved while Sky was
+        // the default, not a deliberate choice. The rest of the record is
+        // carried through untouched.
+        var (mode, presetId, customHex) = AccentPalette.MigrateLegacyDefaultAccent(null, "Sky", "#112233");
+        Assert.Null(mode);
+        Assert.Equal("Red", presetId);
+        Assert.Equal("#112233", customHex);
+    }
+
+    [Theory]
+    [InlineData("#4CC2FF")]
+    [InlineData("#4cc2ff")]
+    [InlineData("4CC2FF")]
+    public void Migrate_CustomSkyHex_BecomesTheRedPreset(string storedHex)
+    {
+        // A stored custom colour equal to the old sky-blue default becomes
+        // the Red preset and the hex is dropped, whatever letter case or "#"
+        // form was saved, so the migrated state matches a fresh install.
+        var (mode, presetId, customHex) = AccentPalette.MigrateLegacyDefaultAccent("Custom", "Blue", storedHex);
+        Assert.Equal("Preset", mode);
+        Assert.Equal("Red", presetId);
+        Assert.Null(customHex);
+    }
+
+    [Fact]
+    public void Migrate_AnyOtherStoredChoice_IsReturnedUnchanged()
+    {
+        // Another preset is a deliberate choice and is kept exactly.
+        Assert.Equal(("Preset", "Blue", (string?)null),
+            AccentPalette.MigrateLegacyDefaultAccent("Preset", "Blue", null));
+        // Another custom colour is kept, and so is one a single step away
+        // from the old default: only an exact match reads as "never changed".
+        Assert.Equal(("Custom", (string?)null, "#112233"),
+            AccentPalette.MigrateLegacyDefaultAccent("Custom", null, "#112233"));
+        Assert.Equal(("Custom", (string?)null, "#4CC2FE"),
+            AccentPalette.MigrateLegacyDefaultAccent("Custom", null, "#4CC2FE"));
+        // Follow Windows is never rewritten, whatever else is stored.
+        Assert.Equal(("FollowWindows", "Sky", "#4CC2FF"),
+            AccentPalette.MigrateLegacyDefaultAccent("FollowWindows", "Sky", "#4CC2FF"));
+        // Malformed or missing values pass through untouched.
+        Assert.Equal(("Garbage", "Sky", (string?)null),
+            AccentPalette.MigrateLegacyDefaultAccent("Garbage", "Sky", null));
+        Assert.Equal(("Custom", (string?)null, "not-a-color"),
+            AccentPalette.MigrateLegacyDefaultAccent("Custom", null, "not-a-color"));
+        Assert.Equal(((string?)null, (string?)null, (string?)null),
+            AccentPalette.MigrateLegacyDefaultAccent(null, null, null));
+    }
+
+    [Fact]
+    public void Resolve_PresetSky_ReturnsSkyInBothThemes()
+    {
+        // Resolve is pure: after the one-time load migration, a stored "Sky"
+        // preset id is a deliberate choice and means Sky in both themes.
+        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF),
+            AccentPalette.Resolve(AccentMode.Preset, "Sky", null, lightTheme: false, windowsAccent: null));
+        Assert.Equal(AccentPalette.DeriveLightVariant(new AccentColor(0x4C, 0xC2, 0xFF)),
+            AccentPalette.Resolve(AccentMode.Preset, "Sky", null, lightTheme: true, windowsAccent: null));
+    }
+
+    [Fact]
+    public void Resolve_CustomSkyHex_ReturnsThatColourExactly()
+    {
+        // The same holds for a custom colour equal to the old default: it is
+        // a usable colour like any other, never rewritten at resolve time.
+        Assert.Equal(new AccentColor(0x4C, 0xC2, 0xFF),
+            AccentPalette.Resolve(AccentMode.Custom, null, "#4CC2FF", lightTheme: false, windowsAccent: null));
+        Assert.Equal(AccentPalette.DeriveLightVariant(new AccentColor(0x4C, 0xC2, 0xFF)),
+            AccentPalette.Resolve(AccentMode.Custom, null, "#4cc2ff", lightTheme: true, windowsAccent: null));
     }
 
     [Fact]

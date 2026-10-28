@@ -5,35 +5,44 @@
         <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
       </ResourceDictionary.MergedDictionaries>
       <!--
-        Theme tokens. The Dark dictionary is the authored source: blue-gray
-        layered surfaces in the Files Hub character (#2A2D31 surface,
-        #32353A chrome, #383B40 panels), white primary text with light
-        blue-gray tiers, and the sky-blue accent (#4CC2FF) that
-        AccentPalette ships as its default preset. Every text tier holds
-        WCAG AA contrast (4.5:1 or better) on every surface it can sit on;
-        the dark error red (#FF8A80) is lightened from the old #F04444
-        because that red falls to about 3:1 on the new, lighter panels.
-        OnAccent is black in the dark theme: the sky accent is light, so
-        white content on it would sit near 2:1, while black holds 4.5:1 or
-        better on every preset. In the light theme the derived accents are
-        dark colours, so OnAccent stays white there.
-        The Light dictionary is DERIVED from the same keys by rule, never
-        hand-tuned per token: neutral colours invert their channels (the
-        HSL-lightness inversion the neutral values follow); chromatic
-        colours (accent, success, warning, error) keep hue and saturation
-        and lower lightness in 0.02 steps until they reach 4.75:1 contrast
-        against the light panel (#C7C4BF) — the same rule AccentPalette
-        applies at runtime to preset and custom accents, so the static
-        Light accent below (#004D75) is exactly the derived sky blue.
-        Alpha overlays swap white for black at the same strengths.
+        Theme tokens. The values below are the App.xaml copy of the Core
+        ThemeTokens values; the test suite parses this file and asserts the
+        two never drift apart.
+        The Dark dictionary is the authored source: near-black layered
+        surfaces, one visible step apart (#101215 window background,
+        #17191D panels and sidebar, #1E2126 raised areas such as the header,
+        pane headers and input fields, #2C3038 border — one further subtle
+        step above the raised tone so panel edges stay visible), white
+        primary text with light blue-gray tiers, and the red accent
+        (#F04444) that AccentPalette ships as its default preset. Every text
+        tier holds WCAG AA contrast (4.5:1 or better) on every surface it
+        can sit on; the dark error red (#FF8A80) is lightened from #F04444
+        because that red falls to about 3.7:1 for white text and reads as a
+        text-tier colour, while the accent itself is a surface colour.
+        OnAccent is black in the dark theme: black holds 5.6:1 on the red
+        accent, while white would sit at 3.7:1. In the light theme the
+        derived accents are dark colours, so OnAccent stays white there.
+        Selection is a dark red-gray (#4B363B) in the dark theme and a pale
+        red-gray (#EAD9DC, dark text) in the light theme. It is independent
+        of the accent colour: the selection brushes are fixed tokens and the
+        accent-applying code never touches them. The ListViewItem /
+        GridViewItem / TreeViewItem BackgroundSelected entries below point
+        the built-in item templates at the same colours (pointer-over uses
+        the lighter step, pressed the same, disabled the dimmer inactive
+        step), so every list in the app selects in the same red-gray.
+        The Light dictionary's surfaces keep their previous values; its
+        accent (#990C0C) is exactly AccentPalette's derived light variant of
+        the red default, the same derivation the palette applies at runtime
+        to preset and custom accents. Alpha overlays swap white for black at
+        the same strengths.
       -->
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="MeridianAccentBrush" Color="#4CC2FF" />
-          <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#2A2D31" />
-          <SolidColorBrush x:Key="MeridianPanelBrush" Color="#383B40" />
-          <SolidColorBrush x:Key="MeridianChromeBrush" Color="#32353A" />
-          <SolidColorBrush x:Key="MeridianBorderBrush" Color="#474C54" />
+          <SolidColorBrush x:Key="MeridianAccentBrush" Color="#F04444" />
+          <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#101215" />
+          <SolidColorBrush x:Key="MeridianPanelBrush" Color="#17191D" />
+          <SolidColorBrush x:Key="MeridianChromeBrush" Color="#1E2126" />
+          <SolidColorBrush x:Key="MeridianBorderBrush" Color="#2C3038" />
           <SolidColorBrush x:Key="MeridianMutedBrush" Color="#C9CDD4" />
           <SolidColorBrush x:Key="MeridianTextPrimaryBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianTextSecondaryBrush" Color="#C9CDD4" />
@@ -43,15 +52,29 @@
           <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#4ADE80" />
           <SolidColorBrush x:Key="MeridianWarningBrush" Color="#F5C044" />
           <SolidColorBrush x:Key="MeridianErrorBrush" Color="#FF8A80" />
-          <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#4CC2FF" />
-          <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#40444B" />
-          <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#334CC2FF" />
+          <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#F04444" />
+          <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#21252C" />
+          <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#4B363B" />
+          <SolidColorBrush x:Key="MeridianSelectionPointerOverBrush" Color="#5C434A" />
+          <SolidColorBrush x:Key="MeridianSelectionInactiveBrush" Color="#3A2C30" />
           <SolidColorBrush x:Key="MeridianSelectionForegroundBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="MeridianHoverBackgroundBrush" Color="#1AFFFFFF" />
           <SolidColorBrush x:Key="MeridianPressedBackgroundBrush" Color="#29FFFFFF" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#4B363B" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#5C434A" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#5C434A" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelectedDisabled" Color="#3A2C30" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="#4B363B" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="#5C434A" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="#5C434A" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelectedDisabled" Color="#3A2C30" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#4B363B" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#5C434A" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#5C434A" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedDisabled" Color="#3A2C30" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
-          <SolidColorBrush x:Key="MeridianAccentBrush" Color="#004D75" />
+          <SolidColorBrush x:Key="MeridianAccentBrush" Color="#990C0C" />
           <SolidColorBrush x:Key="MeridianSurfaceBrush" Color="#D5D2CE" />
           <SolidColorBrush x:Key="MeridianPanelBrush" Color="#C7C4BF" />
           <SolidColorBrush x:Key="MeridianChromeBrush" Color="#CDCAC5" />
@@ -65,12 +88,26 @@
           <SolidColorBrush x:Key="MeridianSuccessBrush" Color="#10562A" />
           <SolidColorBrush x:Key="MeridianWarningBrush" Color="#5E4305" />
           <SolidColorBrush x:Key="MeridianErrorBrush" Color="#9F0C00" />
-          <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#004D75" />
+          <SolidColorBrush x:Key="MeridianActivePaneBorderBrush" Color="#990C0C" />
           <SolidColorBrush x:Key="MeridianActivePaneBackgroundBrush" Color="#BFBBB4" />
-          <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#33004D75" />
+          <SolidColorBrush x:Key="MeridianSelectionBackgroundBrush" Color="#EAD9DC" />
+          <SolidColorBrush x:Key="MeridianSelectionPointerOverBrush" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="MeridianSelectionInactiveBrush" Color="#F2E4E6" />
           <SolidColorBrush x:Key="MeridianSelectionForegroundBrush" Color="#000000" />
           <SolidColorBrush x:Key="MeridianHoverBackgroundBrush" Color="#14000000" />
           <SolidColorBrush x:Key="MeridianPressedBackgroundBrush" Color="#24000000" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#EAD9DC" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="ListViewItemBackgroundSelectedDisabled" Color="#F2E4E6" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="#EAD9DC" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="GridViewItemBackgroundSelectedDisabled" Color="#F2E4E6" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#EAD9DC" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#DFC6CB" />
+          <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedDisabled" Color="#F2E4E6" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
       <CornerRadius x:Key="MeridianCardCornerRadius">8</CornerRadius>
