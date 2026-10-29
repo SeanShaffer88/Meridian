@@ -58,6 +58,14 @@ public sealed partial class MainWindow : Window
     private bool _capsuleSaving;
     private readonly ObservableCollection<string> _shelfPaths = [];
     private readonly ObservableCollection<BookmarkSnapshot> _bookmarks = [];
+
+    /// <summary>The favorites-group organization over <see cref="_bookmarks"/>:
+    /// which bookmark paths are filed under which named group. Rebuilt from
+    /// the saved group data at startup (files written before groups existed
+    /// reconcile to no groups — every bookmark ungrouped) and written back on
+    /// every session save.</summary>
+    private BookmarkGroupSet _bookmarkGroups = BookmarkGroupSet.Reconcile([], null);
+    private readonly IDriveEjectService _driveEject = new WindowsDriveEjectService();
     private PaneState _activePane;
     private OrganizeSection _openOrganizeSection = OrganizeSection.None;
     private bool _restoringSession;
@@ -94,8 +102,8 @@ public sealed partial class MainWindow : Window
         Activated += MainWindow_Activated;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
-        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle, LeftDetailsViewToggle, LeftGridViewToggle, LeftTilesViewToggle, LeftGroup);
-        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle, RightDetailsViewToggle, RightGridViewToggle, RightTilesViewToggle, RightGroup);
+        _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle, LeftDetailsViewToggle, LeftGridViewToggle, LeftTilesViewToggle, LeftGroup, LeftFolderTree, LeftFolderTreeToggle);
+        _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle, RightDetailsViewToggle, RightGridViewToggle, RightTilesViewToggle, RightGroup, RightFolderTree, RightFolderTreeToggle);
         _activePane = _left;
         InitializeTransfers();
         UpdateActivePaneVisuals();
@@ -150,6 +158,12 @@ public sealed partial class MainWindow : Window
         var saved = await _workspaceStore.LoadAsync();
         _bookmarks.Clear();
         foreach (var bookmark in saved?.Bookmarks ?? []) _bookmarks.Add(bookmark);
+        // Favorites groups ride along in the same file. A file written before
+        // groups existed has none: Reconcile yields no groups and every
+        // bookmark reads as ungrouped — nothing is lost or reshuffled.
+        _bookmarkGroups = BookmarkGroupSet.Reconcile(
+            _bookmarks.Select(bookmark => bookmark.Path),
+            saved?.BookmarkGroups?.Select(group => new BookmarkGroup(group.Name, group.Collapsed, group.Paths ?? [])));
 
         // One session only. A file written while the app had workspace tabs
         // resolves to the tab that was active; its other tabs are ignored.
@@ -158,6 +172,8 @@ public sealed partial class MainWindow : Window
         var rightPath = session?.RightPath is { Length: > 0 } savedRight && Directory.Exists(savedRight) ? savedRight : downloads;
         _left.Layout = ParsePaneLayout(session?.LeftLayout);
         _right.Layout = ParsePaneLayout(session?.RightLayout);
+        _left.FolderTreeVisible = session?.LeftFolderTreeVisible ?? false;
+        _right.FolderTreeVisible = session?.RightFolderTreeVisible ?? false;
         await _folderViewStore.LoadAsync();
         _folderViewsLoaded = true;
         await _recentsStore.LoadAsync();
@@ -185,7 +201,9 @@ public sealed partial class MainWindow : Window
             await _workspaceStore.SaveAsync(new WorkspaceSnapshot(
                 _left.CurrentPath, _right.CurrentPath, _bookmarks.ToArray(),
                 Tabs: null, ActiveTabIndex: 0,
-                _left.Layout.ToString(), _right.Layout.ToString()));
+                _left.Layout.ToString(), _right.Layout.ToString(),
+                _bookmarkGroups.Groups.Select(group => new BookmarkGroupSnapshot(group.Name, group.BookmarkPaths.ToArray(), group.Collapsed)).ToArray(),
+                _left.FolderTreeVisible, _right.FolderTreeVisible));
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
@@ -268,6 +286,7 @@ public sealed partial class MainWindow : Window
         var name = Path.GetFileName(trimmed);
         if (string.IsNullOrWhiteSpace(name)) name = path;
         _bookmarks.Add(new BookmarkSnapshot(name, path));
+        _bookmarkGroups.AddBookmark(path);
         BuildSidebar();
         await PersistSessionAsync();
         SetStatus($"Bookmarked · {name}", StatusSeverity.Success);
@@ -284,6 +303,7 @@ public sealed partial class MainWindow : Window
         }
 
         _bookmarks.Remove(selected);
+        _bookmarkGroups.RemoveBookmark(selected.Path);
         BuildSidebar();
         BookmarksBox.SelectedItem = null;
         await PersistSessionAsync();
@@ -438,7 +458,226 @@ public sealed partial class MainWindow : Window
         pane.GridViewToggle.IsEnabled = viewControlsEnabled;
         pane.TilesViewToggle.IsEnabled = viewControlsEnabled;
         pane.GroupBox.IsEnabled = viewControlsEnabled;
+        pane.FolderTreeToggle.IsEnabled = !home;
         ApplyViewMode(pane);
+        ApplyFolderTreeVisibility(pane);
+    }
+
+    /// <summary>Shows or hides a pane's folder tree to match its saved on/off
+    /// state. The tree also hides at Home, which has no drive root to show;
+    /// when it appears over a real folder it is synced to that folder. Runs
+    /// from ApplyPaneMode, so every navigation (path box, sidebar,
+    /// back/forward, tree pick) keeps the tree following the pane.</summary>
+    private void ApplyFolderTreeVisibility(PaneState pane)
+    {
+        var show = pane.FolderTreeVisible && !pane.IsHome;
+        pane.FolderTree.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        pane.FolderTreeToggle.IsChecked = pane.FolderTreeVisible;
+        if (show && !string.IsNullOrWhiteSpace(pane.CurrentPath)) _ = SyncFolderTreeAsync(pane);
+    }
+
+    private async void FolderTreeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        var pane = sender is ToggleButton toggle && ReferenceEquals(toggle, _right.FolderTreeToggle) ? _right : _left;
+        pane.FolderTreeVisible = pane.FolderTreeToggle.IsChecked == true;
+        ApplyFolderTreeVisibility(pane);
+        await PersistSessionAsync();
+    }
+
+    // ----- Per-pane folder tree -----
+
+    /// <summary>Which pane owns a tree control — or null when the event fired
+    /// before the pane states exist (the handlers are wired in XAML and can
+    /// be raised during construction) or from an unknown tree.</summary>
+    private PaneState? PaneForTree(object? sender)
+    {
+        if (sender is not TreeView tree) return null;
+        if (_left is not null && ReferenceEquals(tree, _left.FolderTree)) return _left;
+        if (_right is not null && ReferenceEquals(tree, _right.FolderTree)) return _right;
+        return null;
+    }
+
+    /// <summary>
+    /// Points a pane's folder tree at the pane's current folder: the tree is
+    /// rooted at the folder's drive root, then the ancestor chain is
+    /// expanded level by level (loading each level lazily) and the folder's
+    /// own node is selected. Safe to call redundantly — child loads are
+    /// cached per node and a generation counter drops stale walks.
+    /// </summary>
+    private async Task SyncFolderTreeAsync(PaneState pane)
+    {
+        if (!pane.FolderTreeVisible || pane.IsHome) return;
+        var current = pane.CurrentPath;
+        var rootPath = FolderTree.RootOf(current);
+        if (rootPath is null) return;
+        var generation = ++pane.FolderTreeGeneration;
+        if (!string.Equals(pane.FolderTreeRootPath, rootPath, StringComparison.OrdinalIgnoreCase) ||
+            pane.FolderTreeRootItem is null)
+        {
+            pane.FolderTree.RootNodes.Clear();
+            pane.FolderTreeLoadedItems.Clear();
+            var rootNode = new TreeViewNode
+            {
+                Content = new FolderTreeItem { Name = FolderTreeDisplayName(rootPath), FullPath = rootPath },
+                HasUnrealizedChildren = true
+            };
+            pane.FolderTree.RootNodes.Add(rootNode);
+            pane.FolderTreeRootPath = rootPath;
+            pane.FolderTreeRootItem = rootNode;
+        }
+
+        var chain = FolderTree.AncestorChain(current);
+        TreeViewNode? node = pane.FolderTreeRootItem;
+        pane.SyncingFolderTree = true;
+        try
+        {
+            // chain[0] is the root itself; load and expand each level on the
+            // way down so the next level's node exists to descend into.
+            for (var depth = 1; depth < chain.Count && node is not null; depth++)
+            {
+                await LoadFolderTreeChildrenAsync(pane, node);
+                if (generation != pane.FolderTreeGeneration) return;
+                node.IsExpanded = true;
+                node = FindFolderTreeChild(node, chain[depth]);
+            }
+            if (node is not null && generation == pane.FolderTreeGeneration)
+            {
+                pane.FolderTree.SelectedNode = node;
+                if (pane.FolderTree.ContainerFromNode(node) is TreeViewItem container)
+                    container.StartBringIntoView();
+            }
+        }
+        finally
+        {
+            if (generation == pane.FolderTreeGeneration) pane.SyncingFolderTree = false;
+        }
+    }
+
+    private static string FolderTreeDisplayName(string path)
+    {
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return string.IsNullOrWhiteSpace(name) ? path : name;
+    }
+
+    private static TreeViewNode? FindFolderTreeChild(TreeViewNode parent, string path)
+    {
+        foreach (var child in parent.Children)
+            if (child.Content is FolderTreeItem item &&
+                string.Equals(item.FullPath, path, StringComparison.OrdinalIgnoreCase))
+                return child;
+        return null;
+    }
+
+    /// <summary>
+    /// Loads one node's folder children on first use. The children are
+    /// computed off the UI thread (the folder read plus the has-children
+    /// probes that decide which nodes show an expand arrow); a node whose
+    /// folder cannot be read simply ends up childless. The node is marked
+    /// loaded only once its children are actually in place — marking it
+    /// before the await would let a superseded load (a newer navigation
+    /// bumped the generation) leave the node permanently empty. Overlapping
+    /// loads of the same node are harmless instead: each population runs
+    /// whole on the UI thread and replaces the children outright.
+    /// </summary>
+    private async Task LoadFolderTreeChildrenAsync(PaneState pane, TreeViewNode node)
+    {
+        if (pane.FolderTreeLoadedItems.Contains(node)) return;
+        if (node.Content is not FolderTreeItem item) return;
+        var generation = pane.FolderTreeGeneration;
+        IReadOnlyList<(string Name, string FullPath, bool HasChildren)> children;
+        try
+        {
+            children = await Task.Run(() =>
+            {
+                var result = new List<(string Name, string FullPath, bool HasChildren)>();
+                foreach (var entry in FolderTree.ChildFolders(item.FullPath))
+                    result.Add((entry.Name, entry.FullPath, FolderTree.HasChildFolders(entry.FullPath)));
+                return result;
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            children = [];
+        }
+        if (generation != pane.FolderTreeGeneration) return;
+        node.Children.Clear();
+        foreach (var (name, fullPath, hasChildren) in children)
+            node.Children.Add(new TreeViewNode
+            {
+                Content = new FolderTreeItem { Name = name, FullPath = fullPath },
+                HasUnrealizedChildren = hasChildren
+            });
+        node.HasUnrealizedChildren = false;
+        pane.FolderTreeLoadedItems.Add(node);
+    }
+
+    private async void FolderTree_Expanding(TreeView sender, TreeViewExpandingEventArgs args)
+    {
+        if (PaneForTree(sender) is not { } pane) return;
+        await LoadFolderTreeChildrenAsync(pane, args.Node);
+    }
+
+    private async void FolderTree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
+    {
+        // Wired in XAML, so this can fire during construction before the
+        // pane states exist — PaneForTree returns null then and the event
+        // is ignored. Programmatic follow-sync selections are ignored via
+        // SyncingFolderTree; a pick of the folder already shown is a no-op.
+        if (PaneForTree(sender) is not { } pane) return;
+        if (pane.SyncingFolderTree) return;
+        if (sender.SelectedNode?.Content is not FolderTreeItem item) return;
+        if (string.Equals(item.FullPath, pane.CurrentPath, StringComparison.OrdinalIgnoreCase)) return;
+        await NavigateAsync(pane, item.FullPath);
+    }
+
+    private void FolderTree_DragOver(object sender, DragEventArgs e)
+    {
+        if (PaneForTree(sender) is not { } pane)
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+            return;
+        }
+        if (TryHitFolderTreeNode(pane, e) is { } destination)
+            HandleDropTargetDragOver(e, destination, list: null);
+        else
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+            e.DragUIOverride.Caption = "Drop on a folder in the tree";
+            e.DragUIOverride.IsCaptionVisible = true;
+        }
+    }
+
+    private void FolderTree_Drop(object sender, DragEventArgs e)
+    {
+        if (PaneForTree(sender) is not { } pane) return;
+        if (TryHitFolderTreeNode(pane, e) is { } destination)
+            _ = HandleDropAsync(e, destination, list: null);
+    }
+
+    /// <summary>
+    /// The folder path of the tree node under the pointer, found by walking
+    /// the realized containers of the expanded branches (the same hit-test
+    /// shape as the pane lists' row test). Nodes on collapsed branches have
+    /// no container and cannot be hit — correct, since they are not visible.
+    /// </summary>
+    private string? TryHitFolderTreeNode(PaneState pane, DragEventArgs e)
+    {
+        if (pane.FolderTreeRootItem is null) return null;
+        return HitFolderTreeNode(pane, pane.FolderTreeRootItem, e.GetPosition(pane.FolderTree));
+    }
+
+    private string? HitFolderTreeNode(PaneState pane, TreeViewNode node, Windows.Foundation.Point position)
+    {
+        if (pane.FolderTree.ContainerFromNode(node) is TreeViewItem container)
+        {
+            var bounds = container.TransformToVisual(pane.FolderTree)
+                .TransformBounds(new Windows.Foundation.Rect(0, 0, container.ActualWidth, container.ActualHeight));
+            if (bounds.Contains(position) && node.Content is FolderTreeItem item) return item.FullPath;
+        }
+        if (!node.IsExpanded) return null;
+        foreach (var child in node.Children)
+            if (HitFolderTreeNode(pane, child, position) is { } hit) return hit;
+        return null;
     }
 
     // ----- Miller columns -----
@@ -1298,8 +1537,19 @@ public sealed partial class MainWindow : Window
         _sidebarNavButtons.Clear();
         AddSidebarSection("FAVORITES");
         AddSidebarItem(Symbol.Home, "Home", HomePath, "Show the Home page in the active pane");
-        foreach (var bookmark in _bookmarks)
-            AddSidebarItem(Symbol.Folder, bookmark.Name, bookmark.Path, $"Open {bookmark.Path} in the active pane");
+        // Ungrouped favorites first (in saved order, exactly as the flat
+        // list always showed them), then each group under its header.
+        foreach (var path in _bookmarkGroups.UngroupedPaths)
+            if (BookmarkByPath(path) is { } ungrouped)
+                AddSidebarItem(Symbol.Folder, ungrouped.Name, ungrouped.Path, $"Open {ungrouped.Path} in the active pane", BuildBookmarkContextFlyout(ungrouped, groupName: null));
+        foreach (var group in _bookmarkGroups.Groups)
+        {
+            AddSidebarGroupHeader(group);
+            if (group.Collapsed) continue;
+            foreach (var path in group.BookmarkPaths)
+                if (BookmarkByPath(path) is { } bookmark)
+                    AddSidebarItem(Symbol.Folder, bookmark.Name, bookmark.Path, $"Open {bookmark.Path} in the active pane", BuildBookmarkContextFlyout(bookmark, group.Name), indent: true);
+        }
         AddSidebarSection("THIS PC");
         AddSidebarItem(Symbol.Folder, "Desktop", KnownFolderPath(Environment.SpecialFolder.Desktop), "Open the Desktop folder in the active pane");
         AddSidebarItem(Symbol.Document, "Documents", KnownFolderPath(Environment.SpecialFolder.MyDocuments), "Open the Documents folder in the active pane");
@@ -1309,8 +1559,245 @@ public sealed partial class MainWindow : Window
         AddSidebarItem(Symbol.Video, "Videos", KnownFolderPath(Environment.SpecialFolder.MyVideos), "Open the Videos folder in the active pane");
         AddSidebarSection("DRIVES");
         foreach (var drive in EnumerateDrives())
-            AddSidebarItem(Symbol.MapDrive, drive.Label, drive.RootPath, drive.ToolTip);
+            AddSidebarItem(Symbol.MapDrive, drive.Label, drive.RootPath, drive.ToolTip, BuildDriveContextFlyout(drive));
         RefreshSidebarSelection();
+    }
+
+    private BookmarkSnapshot? BookmarkByPath(string path) =>
+        _bookmarks.FirstOrDefault(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A favorites group header: name + collapse chevron. Clicking
+    /// toggles the group open or closed (persisted with the session); the
+    /// right-click menu carries the group's create/rename/delete actions.</summary>
+    private void AddSidebarGroupHeader(BookmarkGroup group)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        row.Children.Add(new SymbolIcon { Symbol = group.Collapsed ? Symbol.ChevronRight : Symbol.ChevronDown, Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = group.Name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+        var button = new Button
+        {
+            Content = row,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(10, 4, 10, 4),
+            Tag = group.Name
+        };
+        ToolTipService.SetToolTip(button, group.Collapsed ? $"Expand the {group.Name} group" : $"Collapse the {group.Name} group");
+        AutomationProperties.SetName(button, $"Favorites group {group.Name}");
+        button.Click += SidebarGroupHeader_Click;
+        button.ContextFlyout = BuildGroupContextFlyout(group.Name);
+        SidebarContent.Children.Add(button);
+    }
+
+    private async void SidebarGroupHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string name }) return;
+        var group = _bookmarkGroups.Groups.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (group is null) return;
+        _bookmarkGroups.SetGroupCollapsed(name, !group.Collapsed);
+        BuildSidebar();
+        await PersistSessionAsync();
+    }
+
+    private MenuFlyout BuildGroupContextFlyout(string groupName)
+    {
+        var flyout = new MenuFlyout();
+        var newItem = new MenuFlyoutItem { Text = "New group" };
+        ToolTipService.SetToolTip(newItem, "Create a new favorites group");
+        newItem.Click += async (s, e) => await NewBookmarkGroupAsync();
+        flyout.Items.Add(newItem);
+        var renameItem = new MenuFlyoutItem { Text = "Rename group…" };
+        ToolTipService.SetToolTip(renameItem, $"Rename the {groupName} group. Its favorites stay in the group");
+        renameItem.Click += async (s, e) => await RenameBookmarkGroupAsync(groupName);
+        flyout.Items.Add(renameItem);
+        var deleteItem = new MenuFlyoutItem { Text = "Delete group" };
+        ToolTipService.SetToolTip(deleteItem, $"Delete the {groupName} group. Its favorites are not deleted — they move back to the ungrouped favorites");
+        deleteItem.Click += async (s, e) => await DeleteBookmarkGroupAsync(groupName);
+        flyout.Items.Add(deleteItem);
+        return flyout;
+    }
+
+    /// <summary>A bookmark's right-click menu: "Move to group" with one entry
+    /// per group (the current one disabled), "New group…", and "No group"
+    /// when the bookmark is currently filed under one.</summary>
+    private MenuFlyout BuildBookmarkContextFlyout(BookmarkSnapshot bookmark, string? groupName)
+    {
+        var flyout = new MenuFlyout();
+        var moveSub = new MenuFlyoutSubItem { Text = "Move to group" };
+        ToolTipService.SetToolTip(moveSub, "File this favorite under a group, or move it back to the ungrouped favorites");
+        foreach (var group in _bookmarkGroups.Groups)
+        {
+            var target = group.Name;
+            var item = new MenuFlyoutItem
+            {
+                Text = target,
+                IsEnabled = !string.Equals(target, groupName, StringComparison.OrdinalIgnoreCase)
+            };
+            ToolTipService.SetToolTip(item, $"Move {bookmark.Name} into the {target} group");
+            item.Click += async (s, e) => await MoveBookmarkToGroupAsync(bookmark.Path, target);
+            moveSub.Items.Add(item);
+        }
+        if (_bookmarkGroups.Groups.Count > 0) moveSub.Items.Add(new MenuFlyoutSeparator());
+        var newGroupItem = new MenuFlyoutItem { Text = "New group…" };
+        ToolTipService.SetToolTip(newGroupItem, "Create a new favorites group and move this favorite into it");
+        newGroupItem.Click += async (s, e) => await NewBookmarkGroupAsync(bookmark.Path);
+        moveSub.Items.Add(newGroupItem);
+        if (groupName is not null)
+        {
+            moveSub.Items.Add(new MenuFlyoutSeparator());
+            var noGroupItem = new MenuFlyoutItem { Text = "No group" };
+            ToolTipService.SetToolTip(noGroupItem, $"Move {bookmark.Name} back to the ungrouped favorites");
+            noGroupItem.Click += async (s, e) => await MoveBookmarkToGroupAsync(bookmark.Path, null);
+            moveSub.Items.Add(noGroupItem);
+        }
+        flyout.Items.Add(moveSub);
+        return flyout;
+    }
+
+    private async Task MoveBookmarkToGroupAsync(string path, string? groupName)
+    {
+        if (!_bookmarkGroups.MoveBookmark(path, groupName)) return;
+        BuildSidebar();
+        await PersistSessionAsync();
+    }
+
+    private async Task<string?> PromptGroupNameAsync(string title, string? initial, string explanation)
+    {
+        var nameBox = new TextBox { Text = initial ?? string.Empty, MinWidth = 280, PlaceholderText = "Group name" };
+        AutomationProperties.SetName(nameBox, "Group name");
+        var content = new StackPanel { Spacing = 8 };
+        content.Children.Add(new TextBlock { Text = explanation, TextWrapping = TextWrapping.Wrap });
+        content.Children.Add(nameBox);
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = content,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
+        return nameBox.Text;
+    }
+
+    private async Task NewBookmarkGroupAsync(string? bookmarkPathToFile = null)
+    {
+        var name = await PromptGroupNameAsync("New favorites group", null,
+            "Groups collect related favorites under a heading in the sidebar. Move favorites into a group from a favorite's right-click menu.");
+        if (name is null) return;
+        if (!_bookmarkGroups.TryCreateGroup(name, out var error))
+        {
+            SetStatus(error ?? "The group could not be created.", StatusSeverity.Warning);
+            return;
+        }
+        var created = name.Trim();
+        if (bookmarkPathToFile is not null) _bookmarkGroups.MoveBookmark(bookmarkPathToFile, created);
+        BuildSidebar();
+        await PersistSessionAsync();
+        SetStatus($"Created group · {created}", StatusSeverity.Success);
+    }
+
+    private async Task RenameBookmarkGroupAsync(string groupName)
+    {
+        var name = await PromptGroupNameAsync("Rename favorites group", groupName,
+            $"Rename the {groupName} group. Its favorites stay in the group.");
+        if (name is null) return;
+        if (!_bookmarkGroups.TryRenameGroup(groupName, name, out var error))
+        {
+            SetStatus(error ?? "The group could not be renamed.", StatusSeverity.Warning);
+            return;
+        }
+        BuildSidebar();
+        await PersistSessionAsync();
+        SetStatus($"Renamed group · {name.Trim()}", StatusSeverity.Success);
+    }
+
+    private async Task DeleteBookmarkGroupAsync(string groupName)
+    {
+        var group = _bookmarkGroups.Groups.FirstOrDefault(item => string.Equals(item.Name, groupName, StringComparison.OrdinalIgnoreCase));
+        if (group is null) return;
+        var dialog = new ContentDialog
+        {
+            Title = "Delete favorites group",
+            Content = new TextBlock
+            {
+                Text = group.BookmarkPaths.Count == 0
+                    ? $"Delete the {groupName} group? The group is empty, so nothing else changes."
+                    : $"Delete the {groupName} group? Its {group.BookmarkPaths.Count} favorite(s) are not deleted — they move back to the ungrouped favorites at the top of the list.",
+                TextWrapping = TextWrapping.Wrap
+            },
+            PrimaryButtonText = "Delete group",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (!_bookmarkGroups.DeleteGroup(groupName)) return;
+        BuildSidebar();
+        await PersistSessionAsync();
+        SetStatus($"Deleted group · {groupName}. Its favorites are now ungrouped.", StatusSeverity.Success);
+    }
+
+    /// <summary>A drive's right-click menu: inspection always; eject only for
+    /// removable drives (the eject service refuses anything else as well).</summary>
+    private MenuFlyout BuildDriveContextFlyout(DriveEntry drive)
+    {
+        var flyout = new MenuFlyout();
+        var inspectItem = new MenuFlyoutItem { Text = "Inspect drive…" };
+        ToolTipService.SetToolTip(inspectItem, "See this drive's capacity, file system and free space");
+        inspectItem.Click += async (s, e) => await InspectDriveAsync(drive.RootPath);
+        flyout.Items.Add(inspectItem);
+        if (drive.Type == DriveType.Removable)
+        {
+            var ejectItem = new MenuFlyoutItem { Text = "Eject" };
+            ToolTipService.SetToolTip(ejectItem, "Safely remove this drive so it can be unplugged");
+            ejectItem.Click += async (s, e) => await EjectDriveAsync(drive.RootPath);
+            flyout.Items.Add(ejectItem);
+        }
+        return flyout;
+    }
+
+    private async Task InspectDriveAsync(string rootPath)
+    {
+        IDriveFactsSource source = new DriveInfoFactsSource();
+        var facts = await Task.Run(() => source.Read(rootPath));
+        var dialog = new ContentDialog
+        {
+            Title = $"Drive {rootPath}",
+            Content = new TextBlock
+            {
+                Text = string.Join("\n", DriveInspector.Describe(facts)),
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            },
+            CloseButtonText = "Close",
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async Task EjectDriveAsync(string rootPath)
+    {
+        SetStatus($"Ejecting {rootPath}…", StatusSeverity.Info);
+        var result = await _driveEject.EjectAsync(rootPath);
+        switch (result.Outcome)
+        {
+            case DriveEjectOutcome.Ejected:
+                SetStatus(result.Message, StatusSeverity.Success);
+                BuildSidebar();
+                if (_left.IsHome) RenderHomeView(_left);
+                if (_right.IsHome) RenderHomeView(_right);
+                break;
+            case DriveEjectOutcome.Busy:
+                SetStatus(result.Message, StatusSeverity.Warning);
+                break;
+            default:
+                SetStatus(result.Message, StatusSeverity.Error);
+                break;
+        }
     }
 
     private static string KnownFolderPath(Environment.SpecialFolder folder)
@@ -1334,7 +1821,7 @@ public sealed partial class MainWindow : Window
         Margin = new Thickness(10, 10, 0, 4)
     });
 
-    private void AddSidebarItem(Symbol glyph, string label, string targetPath, string toolTip)
+    private void AddSidebarItem(Symbol glyph, string label, string targetPath, string toolTip, MenuFlyout? contextFlyout = null, bool indent = false)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         row.Children.Add(new SymbolIcon { Symbol = glyph, Width = 16, Height = 16 });
@@ -1346,11 +1833,12 @@ public sealed partial class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
-            Padding = new Thickness(10, 6, 10, 6),
+            Padding = new Thickness(indent ? 26 : 10, 6, 10, 6),
             Tag = targetPath
         };
         ToolTipService.SetToolTip(button, toolTip);
         AutomationProperties.SetName(button, label);
+        if (contextFlyout is not null) button.ContextFlyout = contextFlyout;
         button.Click += SidebarItem_Click;
         if (!string.Equals(targetPath, HomePath, StringComparison.OrdinalIgnoreCase))
         {
@@ -1380,7 +1868,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private sealed record DriveEntry(string RootPath, string Label, string ToolTip, long TotalBytes, long FreeBytes, bool IsReady);
+    private sealed record DriveEntry(string RootPath, string Label, string ToolTip, long TotalBytes, long FreeBytes, bool IsReady, DriveType Type);
 
     /// <summary>
     /// One pass over the machine's drives for the sidebar and the Home page.
@@ -1403,15 +1891,15 @@ public sealed partial class MainWindow : Window
             {
                 if (!drive.IsReady)
                 {
-                    drives.Add(new DriveEntry(root, shortName, $"Open {root} in the active pane", 0, 0, false));
+                    drives.Add(new DriveEntry(root, shortName, $"Open {root} in the active pane", 0, 0, false, drive.DriveType));
                     continue;
                 }
                 var label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? DriveTypeLabel(drive.DriveType) : drive.VolumeLabel;
-                drives.Add(new DriveEntry(root, $"{shortName} · {label}", $"Open {root} in the active pane", drive.TotalSize, drive.AvailableFreeSpace, true));
+                drives.Add(new DriveEntry(root, $"{shortName} · {label}", $"Open {root} in the active pane", drive.TotalSize, drive.AvailableFreeSpace, true, drive.DriveType));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                drives.Add(new DriveEntry(root, shortName, $"Open {root} in the active pane", 0, 0, false));
+                drives.Add(new DriveEntry(root, shortName, $"Open {root} in the active pane", 0, 0, false, drive.DriveType));
             }
         }
         return drives;
@@ -4432,7 +4920,7 @@ public sealed partial class MainWindow : Window
         finally { _timeVaultBusy = false; }
     }
 
-    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel, ScrollViewer columnsView, StackPanel columnsPanel, ToggleButton standardLayoutToggle, ToggleButton columnsLayoutToggle, ToggleButton detailsViewToggle, ToggleButton gridViewToggle, ToggleButton tilesViewToggle, ComboBox groupBox)
+    private sealed class PaneState(string name, TextBox pathBox, TextBox filterBox, ListView list, TextBlock status, Grid filterRow, ScrollViewer homeView, StackPanel homePanel, ScrollViewer columnsView, StackPanel columnsPanel, ToggleButton standardLayoutToggle, ToggleButton columnsLayoutToggle, ToggleButton detailsViewToggle, ToggleButton gridViewToggle, ToggleButton tilesViewToggle, ComboBox groupBox, TreeView folderTree, ToggleButton folderTreeToggle)
     {
         public string Name { get; } = name;
         public TextBox PathBox { get; } = pathBox;
@@ -4464,6 +4952,33 @@ public sealed partial class MainWindow : Window
         public ToggleButton GridViewToggle { get; } = gridViewToggle;
         public ToggleButton TilesViewToggle { get; } = tilesViewToggle;
         public ComboBox GroupBox { get; } = groupBox;
+
+        // ----- Folder tree state -----
+
+        public TreeView FolderTree { get; } = folderTree;
+        public ToggleButton FolderTreeToggle { get; } = folderTreeToggle;
+
+        /// <summary>Whether the user asked for this pane's folder tree. The
+        /// tree itself also hides at Home, which has no drive root.</summary>
+        public bool FolderTreeVisible { get; set; }
+
+        /// <summary>The drive root the live tree is built from; null when no tree is built.</summary>
+        public string? FolderTreeRootPath { get; set; }
+
+        /// <summary>The root node of the live tree, or null when no tree is built.</summary>
+        public TreeViewNode? FolderTreeRootItem { get; set; }
+
+        /// <summary>Nodes whose children have been loaded (or probed empty), so
+        /// expansion and follow-sync never read the same folder twice.</summary>
+        public HashSet<TreeViewNode> FolderTreeLoadedItems { get; } = [];
+
+        /// <summary>True while the tree is being expanded and selected to follow
+        /// the pane, so those selection changes are not mistaken for user picks.</summary>
+        public bool SyncingFolderTree { get; set; }
+
+        /// <summary>Bumped whenever the tree is rebuilt, so a stale asynchronous
+        /// child load can tell it has been superseded.</summary>
+        public int FolderTreeGeneration { get; set; }
 
         // ----- View mode state (standard layout only; the columns layout is unaffected) -----
 
@@ -4553,4 +5068,13 @@ public sealed partial class MainWindow : Window
         public IReadOnlyList<FileEntry> AllItems { get; set; } = Array.Empty<FileEntry>();
         public CancellationTokenSource? ReadCancellation { get; set; }
     }
+}
+
+/// <summary>One folder shown in a pane's folder tree: its display name and
+/// full path. Expansion state and children live on the TreeViewNode that
+/// wraps it, so this stays a plain display item for the item template.</summary>
+public sealed class FolderTreeItem
+{
+    public required string Name { get; init; }
+    public required string FullPath { get; init; }
 }

@@ -145,6 +145,70 @@ public sealed class WorkspaceStoreTests
         Assert.Equal("new", Assert.Single((await fixture.Store.LoadAsync())!.Tabs!).Name);
     }
 
+    [Fact]
+    public async Task BookmarkGroupsAndFolderTreeFlagsRoundTrip()
+    {
+        using var fixture = new Fixture();
+        var snapshot = new WorkspaceSnapshot(fixture.Root, fixture.Root,
+            [new("Files", fixture.Root)],
+            BookmarkGroups: [new("Work", [fixture.Root], Collapsed: true), new("Empty")],
+            LeftFolderTreeVisible: true);
+        await fixture.Store.SaveAsync(snapshot);
+        var loaded = Assert.IsType<WorkspaceSnapshot>(await fixture.Store.LoadAsync());
+
+        Assert.NotNull(loaded.BookmarkGroups);
+        var groups = loaded.BookmarkGroups!;
+        Assert.Equal(2, groups.Length);
+        Assert.Equal("Work", groups[0].Name);
+        Assert.Equal([fixture.Root], groups[0].Paths);
+        Assert.True(groups[0].Collapsed);
+        Assert.Equal("Empty", groups[1].Name);
+        Assert.True(loaded.LeftFolderTreeVisible);
+        Assert.False(loaded.RightFolderTreeVisible);
+
+        var session = WorkspaceStore.ResolveSession(loaded);
+        Assert.True(session.LeftFolderTreeVisible);
+        Assert.False(session.RightFolderTreeVisible);
+    }
+
+    [Fact]
+    public async Task LegacyStateWithoutGroupsLoadsWithDefaults()
+    {
+        // A workspace file written before favorites groups existed: the
+        // bookmarks load unchanged, groups read as absent (all ungrouped)
+        // and both folder trees read as hidden.
+        using var fixture = new Fixture();
+        await File.WriteAllTextAsync(fixture.File, JsonSerializer.Serialize(new
+        {
+            LeftPath = fixture.Root,
+            RightPath = fixture.Root,
+            Bookmarks = new[] { new BookmarkSnapshot("Files", fixture.Root) }
+        }));
+        var loaded = Assert.IsType<WorkspaceSnapshot>(await fixture.Store.LoadAsync());
+
+        Assert.Equal([new BookmarkSnapshot("Files", fixture.Root)], loaded.Bookmarks);
+        Assert.Null(loaded.BookmarkGroups);
+        Assert.False(loaded.LeftFolderTreeVisible);
+        Assert.False(loaded.RightFolderTreeVisible);
+
+        var reconciled = BookmarkGroupSet.Reconcile(
+            loaded.Bookmarks!.Select(bookmark => bookmark.Path),
+            loaded.BookmarkGroups?.Select(group => new BookmarkGroup(group.Name, group.Collapsed, group.Paths ?? [])));
+        Assert.Empty(reconciled.Groups);
+        Assert.Equal([fixture.Root], reconciled.UngroupedPaths);
+    }
+
+    [Theory]
+    [InlineData("{\"BookmarkGroups\":[null]}")]
+    [InlineData("{\"BookmarkGroups\":[{\"Name\":\" \"}]}")]
+    [InlineData("{\"BookmarkGroups\":[{\"Name\":\"Work\",\"Paths\":[\"relative/path\"]}]}")]
+    public async Task MalformedGroupsAreNotRestored(string json)
+    {
+        using var fixture = new Fixture();
+        await File.WriteAllTextAsync(fixture.File, json);
+        Assert.Null(await fixture.Store.LoadAsync());
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "meridian-state-" + Guid.NewGuid().ToString("N"));

@@ -4,9 +4,19 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:Meridian.Models"
     xmlns:services="using:Meridian.Services"
+    xmlns:local="using:Meridian"
     Title="Meridian">
   <Grid x:Name="RootGrid" Background="{ThemeResource MeridianSurfaceBrush}" RowDefinitions="Auto,Auto,*,Auto,Auto">
     <Grid.Resources>
+      <!-- Folder tree node: folder glyph + name. The item type lives in the
+           window's code-behind; expansion state lives on the TreeViewNode,
+           not on this display item. -->
+      <DataTemplate x:Key="FolderTreeItemTemplate" x:DataType="local:FolderTreeItem">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" AutomationProperties.Name="{x:Bind Name}">
+          <FontIcon Glyph="&#xE8B7;" FontSize="15" Foreground="{ThemeResource MeridianTextSecondaryBrush}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{x:Bind Name}" Foreground="{ThemeResource MeridianTextPrimaryBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </Grid>
+      </DataTemplate>
       <DataTemplate x:Key="ColumnItemTemplate" x:DataType="models:FileEntry">
         <Grid Margin="{StaticResource MeridianListItemMargin}" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" AutomationProperties.Name="{x:Bind Name}">
           <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="{ThemeResource MeridianTextSecondaryBrush}" />
@@ -238,6 +248,9 @@
             <ToggleButton x:Name="LeftColumnsLayoutToggle" Padding="6,2" Click="LeftColumnsLayout_Click" ToolTipService.ToolTip="Columns layout (Ctrl+Shift+V switches the active pane)" AutomationProperties.Name="Columns layout, left pane">
               <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="ViewAll" /><TextBlock Text="Columns" VerticalAlignment="Center" /></StackPanel>
             </ToggleButton>
+            <ToggleButton x:Name="LeftFolderTreeToggle" Padding="6,2" Click="FolderTreeToggle_Click" ToolTipService.ToolTip="Show the folder tree for this pane" AutomationProperties.Name="Folder tree, left pane">
+              <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Folder" /><TextBlock Text="Tree" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
           </StackPanel>
           </Grid>
           <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
@@ -260,7 +273,10 @@
             </StackPanel>
           </Grid>
         </Grid>
-        <ListView x:Name="LeftItems" Grid.Row="3" SelectionMode="Extended" CanDragItems="True" DragItemsStarting="PaneList_DragItemsStarting" DragItemsCompleted="PaneList_DragItemsCompleted" AllowDrop="True" DragOver="LeftList_DragOver" Drop="LeftList_Drop" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" KeyDown="LeftItems_KeyDown" SelectionChanged="LeftItems_SelectionChanged" ContainerContentChanging="LeftItems_ContainerContentChanging" ItemTemplate="{StaticResource DetailsAllItemTemplate}" ItemsPanel="{StaticResource VerticalItemsPanel}" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, left pane">
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*">
+        <TreeView x:Name="LeftFolderTree" Width="260" Visibility="Collapsed" CanDragItems="False" AllowDrop="True" DragOver="FolderTree_DragOver" Drop="FolderTree_Drop" ItemTemplate="{StaticResource FolderTreeItemTemplate}" Expanding="FolderTree_Expanding" SelectionChanged="FolderTree_SelectionChanged" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="{ThemeResource MeridianBorderBrush}" ToolTipService.ToolTip="Folders on this drive. Select a folder to open it here; drop files on a folder to copy or move them into it" AutomationProperties.Name="Folder tree, left pane" />
+        <Grid Grid.Column="1">
+        <ListView x:Name="LeftItems" SelectionMode="Extended" CanDragItems="True" DragItemsStarting="PaneList_DragItemsStarting" DragItemsCompleted="PaneList_DragItemsCompleted" AllowDrop="True" DragOver="LeftList_DragOver" Drop="LeftList_Drop" DoubleTapped="LeftItems_DoubleTapped" PointerPressed="LeftItems_PointerPressed" KeyDown="LeftItems_KeyDown" SelectionChanged="LeftItems_SelectionChanged" ContainerContentChanging="LeftItems_ContainerContentChanging" ItemTemplate="{StaticResource DetailsAllItemTemplate}" ItemsPanel="{StaticResource VerticalItemsPanel}" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, left pane">
           <ListView.GroupStyle>
             <GroupStyle HeaderTemplate="{StaticResource PaneGroupHeaderTemplate}" HidesIfEmpty="True" />
           </ListView.GroupStyle>
@@ -277,12 +293,14 @@
             </MenuFlyout>
           </ListView.ContextFlyout>
         </ListView>
-        <ScrollViewer x:Name="LeftColumnsView" Grid.Row="3" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, left pane">
+        <ScrollViewer x:Name="LeftColumnsView" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, left pane">
           <StackPanel x:Name="LeftColumnsPanel" Orientation="Horizontal" />
         </ScrollViewer>
-        <ScrollViewer x:Name="LeftHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, left pane">
+        <ScrollViewer x:Name="LeftHomeView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, left pane">
           <StackPanel x:Name="LeftHomePanel" Spacing="10" Padding="10" />
         </ScrollViewer>
+        </Grid>
+        </Grid>
         <TextBlock x:Name="LeftStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
       <Grid Grid.Column="1" Width="36" VerticalAlignment="Center" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
@@ -319,6 +337,9 @@
             <ToggleButton x:Name="RightColumnsLayoutToggle" Padding="6,2" Click="RightColumnsLayout_Click" ToolTipService.ToolTip="Columns layout (Ctrl+Shift+V switches the active pane)" AutomationProperties.Name="Columns layout, right pane">
               <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="ViewAll" /><TextBlock Text="Columns" VerticalAlignment="Center" /></StackPanel>
             </ToggleButton>
+            <ToggleButton x:Name="RightFolderTreeToggle" Padding="6,2" Click="FolderTreeToggle_Click" ToolTipService.ToolTip="Show the folder tree for this pane" AutomationProperties.Name="Folder tree, right pane">
+              <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Folder" /><TextBlock Text="Tree" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
           </StackPanel>
           </Grid>
           <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
@@ -341,7 +362,10 @@
             </StackPanel>
           </Grid>
         </Grid>
-        <ListView x:Name="RightItems" Grid.Row="3" SelectionMode="Extended" CanDragItems="True" DragItemsStarting="PaneList_DragItemsStarting" DragItemsCompleted="PaneList_DragItemsCompleted" AllowDrop="True" DragOver="RightList_DragOver" Drop="RightList_Drop" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" KeyDown="RightItems_KeyDown" SelectionChanged="RightItems_SelectionChanged" ContainerContentChanging="RightItems_ContainerContentChanging" ItemTemplate="{StaticResource DetailsAllItemTemplate}" ItemsPanel="{StaticResource VerticalItemsPanel}" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, right pane">
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*">
+        <TreeView x:Name="RightFolderTree" Width="260" Visibility="Collapsed" CanDragItems="False" AllowDrop="True" DragOver="FolderTree_DragOver" Drop="FolderTree_Drop" ItemTemplate="{StaticResource FolderTreeItemTemplate}" Expanding="FolderTree_Expanding" SelectionChanged="FolderTree_SelectionChanged" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="{ThemeResource MeridianBorderBrush}" ToolTipService.ToolTip="Folders on this drive. Select a folder to open it here; drop files on a folder to copy or move them into it" AutomationProperties.Name="Folder tree, right pane" />
+        <Grid Grid.Column="1">
+        <ListView x:Name="RightItems" SelectionMode="Extended" CanDragItems="True" DragItemsStarting="PaneList_DragItemsStarting" DragItemsCompleted="PaneList_DragItemsCompleted" AllowDrop="True" DragOver="RightList_DragOver" Drop="RightList_Drop" DoubleTapped="RightItems_DoubleTapped" PointerPressed="RightItems_PointerPressed" KeyDown="RightItems_KeyDown" SelectionChanged="RightItems_SelectionChanged" ContainerContentChanging="RightItems_ContainerContentChanging" ItemTemplate="{StaticResource DetailsAllItemTemplate}" ItemsPanel="{StaticResource VerticalItemsPanel}" Background="Transparent" BorderThickness="0" Margin="4,0" AutomationProperties.Name="File list, right pane">
           <ListView.GroupStyle>
             <GroupStyle HeaderTemplate="{StaticResource PaneGroupHeaderTemplate}" HidesIfEmpty="True" />
           </ListView.GroupStyle>
@@ -358,12 +382,14 @@
             </MenuFlyout>
           </ListView.ContextFlyout>
         </ListView>
-        <ScrollViewer x:Name="RightColumnsView" Grid.Row="3" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, right pane">
+        <ScrollViewer x:Name="RightColumnsView" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" AutomationProperties.Name="Columns, right pane">
           <StackPanel x:Name="RightColumnsPanel" Orientation="Horizontal" />
         </ScrollViewer>
-        <ScrollViewer x:Name="RightHomeView" Grid.Row="3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, right pane">
+        <ScrollViewer x:Name="RightHomeView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Home, right pane">
           <StackPanel x:Name="RightHomePanel" Spacing="10" Padding="10" />
         </ScrollViewer>
+        </Grid>
+        </Grid>
         <TextBlock x:Name="RightStatus" Grid.Row="4" Text="Ready" FontSize="11" Foreground="{ThemeResource MeridianTextSecondaryBrush}" Margin="{StaticResource MeridianPaneStatusMargin}" />
       </Grid>
     </Grid>

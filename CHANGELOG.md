@@ -15,6 +15,9 @@
 - New Settings choices for transfers: "When a name already exists" (Ask me each time, Skip, Keep both, Replace, or Replace only if newer) and "Verify copies with a checksum (slower)", which reads each copy back and compares its SHA-256 with the original before putting it in place.
 - Drop Shelf copies run through the Transfers queue after their preview and confirmation, like other copies.
 - Every interactive control in the main window and in Settings now carries a plain-words tooltip; controls that overwrite files or cancel work say what will happen.
+- Favorites can be organized into named groups in the sidebar: right-click a favorite and choose "Move to group" to file it under a group, create a new group, or move it back to the ungrouped favorites. Group headers collapse and expand, and the collapsed state is remembered. A group header's right-click menu creates, renames, or deletes groups; deleting a group never deletes its favorites — they move back to the ungrouped list. Favorites saved by earlier versions appear ungrouped, unchanged.
+- Each pane gains an optional folder tree (the "Tree" toggle beside the layout buttons): a folders-only column rooted at the pane's current drive, loaded as you expand it. The tree follows the pane, expanding to and selecting the current folder after every navigation; selecting a folder in the tree opens it in the pane, and files can be dropped onto a tree folder to copy or move them there. Whether the tree is shown is remembered per pane.
+- Sidebar drives gain a right-click menu: "Inspect drive…" shows the drive's volume label, type, file system, capacity and free space as Windows reports them, and removable drives offer "Eject", which safely removes the drive through Windows and explains in plain words when a program is still using it.
 
 ## 0.4.0
 
