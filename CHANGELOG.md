@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0
+
 - The dark theme is darker: the window background, panels and raised areas are now near-black tones, still one visible step apart so the sidebar, panes and header stay distinct. The light theme is unchanged.
 - Red is the default accent colour again. If your accent was still the previous Sky default, it switches to red once; Sky blue remains available in Settings, and any accent you picked yourself is kept exactly.
 - The selection highlight is now a dark red-gray (a pale red-gray in the light theme). It no longer follows the accent colour, so changing the accent never changes how selected files look.

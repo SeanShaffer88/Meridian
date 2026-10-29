@@ -1,6 +1,6 @@
 #define MyAppName "Meridian"
-#define MyAppVersion "0.4.0"
-#define MyFileVersion "0.4.0.0"
+#define MyAppVersion "0.5.0"
+#define MyFileVersion "0.5.0.0"
 
 #ifndef PublishDir
   #error "Pass /DPublishDir=<published app folder>."
