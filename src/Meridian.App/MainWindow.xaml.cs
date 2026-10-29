@@ -100,6 +100,7 @@ public sealed partial class MainWindow : Window
         if (Content is FrameworkElement rootElement) rootElement.Loaded += RootElement_Loaded;
         _uiSettings.ColorValuesChanged += UiSettings_ColorValuesChanged;
         Activated += MainWindow_Activated;
+        Closed += MainWindow_Closed;
         BookmarksBox.ItemsSource = _bookmarks;
         ShelfItemsBox.ItemsSource = _shelfPaths;
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle, LeftDetailsViewToggle, LeftGridViewToggle, LeftTilesViewToggle, LeftGroup, LeftFolderTree, LeftFolderTreeToggle);
@@ -379,6 +380,7 @@ public sealed partial class MainWindow : Window
             RefreshPreviewBlock(pane);
             SetStatus("Ready · Local-only · No telemetry");
             if (!_restoringSession) await PersistSessionAsync();
+            UpdatePaneWatch(pane);
             return true;
         }
         catch (OperationCanceledException) { return false; }
@@ -425,6 +427,7 @@ public sealed partial class MainWindow : Window
         RefreshPreviewBlock(pane);
         SetStatus("Ready · Local-only · No telemetry");
         if (!_restoringSession) await PersistSessionAsync();
+        UpdatePaneWatch(pane);
         return true;
     }
 
@@ -5001,6 +5004,13 @@ public sealed partial class MainWindow : Window
         public Stack<string> ForwardHistory { get; } = new();
         public string CurrentPath { get; set; } = string.Empty;
         public CancellationTokenSource? ReadCancellation { get; set; }
+
+        /// <summary>The live WatchKit watch over the pane's current folder,
+        /// or null when watching is off — at Home (never watched), before the
+        /// first navigation, or when WatchKit is unavailable. Owned by the
+        /// window (MainWindow.Watching.cs), which restarts it on navigation
+        /// and disposes it at window close.</summary>
+        public FolderWatchService? Watch { get; set; }
 
         /// <summary>True while the pane shows the Home page instead of a folder.</summary>
         public bool IsHome => string.Equals(CurrentPath, HomePath, StringComparison.Ordinal);

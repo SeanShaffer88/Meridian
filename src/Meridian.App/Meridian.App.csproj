@@ -7,7 +7,19 @@
     <UseWinUI>true</UseWinUI><WindowsPackageType>None</WindowsPackageType><WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+    <!-- Required by the source-generated [LibraryImport] P/Invoke wrappers in Native\ (WatchKit/ThumbKit). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" /><ProjectReference Include="..\Meridian.Core\Meridian.Core.csproj" /></ItemGroup>
   <ItemGroup><Content Include="Assets\Meridian.png"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content></ItemGroup>
+  <!-- Vendored WinDevKit DLLs (see vendor\watchkit\PROVENANCE.md and vendor\thumbkit\PROVENANCE.md).
+       Both kits ship x64-only binaries, so the copies are conditioned out of the win-arm64 publish:
+       the ARM64 build simply has no DLL beside the exe, and both wrappers degrade gracefully at
+       runtime (watching off / shell thumbnails) when the DLL cannot be loaded. The publish output
+       is what packaging\Meridian.iss and the portable artifact package, so landing beside
+       Meridian.exe here is what puts them in the installer and the portable zip. -->
+  <ItemGroup>
+    <Content Include="..\..\vendor\watchkit\watch_kit.dll" Link="watch_kit.dll" Condition="'$(RuntimeIdentifier)' != 'win-arm64'"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="..\..\vendor\thumbkit\thumb_kit.dll" Link="thumb_kit.dll" Condition="'$(RuntimeIdentifier)' != 'win-arm64'"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
 </Project>
