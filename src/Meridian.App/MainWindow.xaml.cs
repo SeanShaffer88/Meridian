@@ -1572,7 +1572,7 @@ public sealed partial class MainWindow : Window
     private void AddSidebarGroupHeader(BookmarkGroup group)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        row.Children.Add(new SymbolIcon { Symbol = group.Collapsed ? Symbol.ChevronRight : Symbol.ChevronDown, Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new FontIcon { Glyph = group.Collapsed ? "\uE76C" : "\uE70D", FontSize = 12, Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center });
         row.Children.Add(new TextBlock { Text = group.Name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
         var button = new Button
         {
