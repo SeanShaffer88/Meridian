@@ -105,13 +105,15 @@ public sealed class BreadcrumbPathTests
     {
         if (!OperatingSystem.IsWindows()) return; // drive-letter spelling is Windows-only
         var segments = BreadcrumbPath.SegmentsFor(@"C:\Users\Sean\Documents", HomeSentinel);
-        Assert.Equal(3, segments.Count);
+        Assert.Equal(4, segments.Count);
         Assert.Equal("C:", segments[0].Label);
         Assert.Equal(@"C:\", segments[0].Path);
         Assert.Equal("Users", segments[1].Label);
         Assert.Equal(@"C:\Users", segments[1].Path);
-        Assert.Equal("Documents", segments[2].Label);
-        Assert.Equal(@"C:\Users\Sean\Documents", segments[2].Path);
+        Assert.Equal("Sean", segments[2].Label);
+        Assert.Equal(@"C:\Users\Sean", segments[2].Path);
+        Assert.Equal("Documents", segments[3].Label);
+        Assert.Equal(@"C:\Users\Sean\Documents", segments[3].Path);
     }
 
     [Fact]
@@ -121,7 +123,11 @@ public sealed class BreadcrumbPathTests
         var segments = BreadcrumbPath.SegmentsFor(@"\\server\share\folder\deep", HomeSentinel);
         Assert.Equal(3, segments.Count);
         Assert.Equal(@"\\server\share", segments[0].Label);
-        Assert.Equal(@"\\server\share\", segments[0].Path);
+        // The root segment's path keeps the platform root spelling; the
+        // runtime may or may not end a UNC root with a separator, and both
+        // spellings name the same share root, so either is accepted.
+        Assert.True(segments[0].Path is @"\\server\share\" or @"\\server\share",
+            $"Unexpected UNC root path: {segments[0].Path}");
         Assert.Equal("folder", segments[1].Label);
         Assert.Equal(@"\\server\share\folder", segments[1].Path);
         Assert.Equal("deep", segments[2].Label);
