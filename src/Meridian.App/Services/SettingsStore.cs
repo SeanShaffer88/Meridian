@@ -113,7 +113,15 @@ internal sealed class SettingsStore
 /// which AccentPalette.ParseMode still honours; the flag is kept in sync on
 /// save so an older build reading the file keeps the follow-Windows choice.
 /// DetailsStripVisible records whether the details inspector beside the panes is
-/// shown; files written before it existed read as hidden. SidebarVisible records
+/// shown; files written before it existed read as hidden. The inspector itself is
+/// gone — the value survives as the migration source for the per-pane preview
+/// blocks (see PreviewBlockMigration): while a pane has no saved per-pane value,
+/// this flag decides whether its block starts expanded, and saves keep writing
+/// the loaded value unchanged so the record of it is never rewritten.
+/// LeftPreviewBlockExpanded / RightPreviewBlockExpanded record whether each
+/// pane's preview/details block is expanded; they are nullable because files
+/// written before the blocks existed carry neither, which the migration reads
+/// as "not decided per pane yet" rather than as collapsed. SidebarVisible records
 /// whether the navigation sidebar is shown; it defaults to true here so files
 /// written before the sidebar existed read as shown. ColumnWidth is the shared
 /// Miller-column width in device-independent units; files written before it
@@ -143,4 +151,6 @@ internal sealed record SettingsSnapshot(
     bool AccentDefaultMigrated = false,
     bool VerifyCopiesWithChecksum = false,
     string? NameCollisionPolicy = null,
-    bool TransfersStripCollapsed = false);
+    bool TransfersStripCollapsed = false,
+    bool? LeftPreviewBlockExpanded = null,
+    bool? RightPreviewBlockExpanded = null);

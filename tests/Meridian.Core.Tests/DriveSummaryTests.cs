@@ -39,3 +39,26 @@ public sealed class DriveSummaryTests
         Assert.Equal("Size not available", DriveSummary.FreeSpaceLabel(totalBytes: 0, freeBytes: 0));
     }
 }
+
+public sealed class DriveSummaryUsedPercentTests
+{
+    [Fact]
+    public void UsedPercent_HalfFullDrive_Is50()
+    {
+        Assert.Equal(50, DriveSummary.UsedPercent(totalBytes: 1000, freeBytes: 500));
+    }
+
+    [Fact]
+    public void UsedPercent_RoundsToTheNearestWholePercent()
+    {
+        Assert.Equal(33, DriveSummary.UsedPercent(totalBytes: 300, freeBytes: 200));
+        Assert.Equal(80, DriveSummary.UsedPercent(totalBytes: 1000, freeBytes: 199));
+    }
+
+    [Fact]
+    public void UsedPercent_UnknownSizes_AreZero()
+    {
+        Assert.Equal(0, DriveSummary.UsedPercent(totalBytes: 0, freeBytes: 0));
+        Assert.Equal(0, DriveSummary.UsedPercent(totalBytes: -5, freeBytes: 0));
+    }
+}
