@@ -72,11 +72,11 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource? _batchCancellation;
     private bool _batchPreparing;
     private string? _pinnedError;
-    private bool _detailsStripVisible;
-    private FileEntry? _detailsCurrentEntry;
-    private Dictionary<MetadataProperty, string> _detailsCurrentValues = new();
-    private int _detailsStripGeneration;
-    private CancellationTokenSource? _detailsStripCancellation;
+    /// <summary>The DetailsStripVisible value the settings file carried at
+    /// load, kept only so saves write it back unchanged: the strip it named
+    /// is gone, and the per-pane preview blocks it migrated into keep their
+    /// own saved values (see PreviewBlockMigration).</summary>
+    private bool _legacyDetailsStripVisible;
     private PaneState? _quickPreviewPane;
     private FileEntry? _quickPreviewEntry;
     private PreviewMediaLease? _quickPreviewLease;
@@ -104,6 +104,12 @@ public sealed partial class MainWindow : Window
         ShelfItemsBox.ItemsSource = _shelfPaths;
         _left = new PaneState("Left", LeftPath, LeftFilter, LeftItems, LeftStatus, LeftFilterRow, LeftHomeView, LeftHomePanel, LeftColumnsView, LeftColumnsPanel, LeftStandardLayoutToggle, LeftColumnsLayoutToggle, LeftDetailsViewToggle, LeftGridViewToggle, LeftTilesViewToggle, LeftGroup, LeftFolderTree, LeftFolderTreeToggle);
         _right = new PaneState("Right", RightPath, RightFilter, RightItems, RightStatus, RightFilterRow, RightHomeView, RightHomePanel, RightColumnsView, RightColumnsPanel, RightStandardLayoutToggle, RightColumnsLayoutToggle, RightDetailsViewToggle, RightGridViewToggle, RightTilesViewToggle, RightGroup, RightFolderTree, RightFolderTreeToggle);
+        _left.BreadcrumbPanel = LeftBreadcrumbSegments;
+        _right.BreadcrumbPanel = RightBreadcrumbSegments;
+        _left.Block = new PreviewBlockControls(LeftPreviewContent, LeftPreviewTotals, LeftPreviewToggle, LeftPreviewToggleGlyph, LeftPreviewGlyph, LeftPreviewImage, LeftPreviewText, LeftPreviewName, LeftPreviewMeta, LeftPreviewExif);
+        _right.Block = new PreviewBlockControls(RightPreviewContent, RightPreviewTotals, RightPreviewToggle, RightPreviewToggleGlyph, RightPreviewGlyph, RightPreviewImage, RightPreviewText, RightPreviewName, RightPreviewMeta, RightPreviewExif);
+        WireBreadcrumbEditArea(_left, LeftBreadcrumbEditArea);
+        WireBreadcrumbEditArea(_right, RightBreadcrumbEditArea);
         _activePane = _left;
         InitializeTransfers();
         UpdateActivePaneVisuals();
@@ -136,8 +142,13 @@ public sealed partial class MainWindow : Window
             ApplyDensityPreference();
             ApplyPaneSplit();
             SetOrganizeSection(ParseOrganizeSection(settings.OrganizeSection));
-            _detailsStripVisible = settings.DetailsStripVisible;
-            ApplyDetailsStripVisibility();
+            _legacyDetailsStripVisible = settings.DetailsStripVisible;
+            var (leftBlockExpanded, rightBlockExpanded) = PreviewBlockMigration.Resolve(
+                settings.LeftPreviewBlockExpanded, settings.RightPreviewBlockExpanded, settings.DetailsStripVisible);
+            _left.PreviewBlockExpanded = leftBlockExpanded;
+            _right.PreviewBlockExpanded = rightBlockExpanded;
+            ApplyPreviewBlockVisibility(_left);
+            ApplyPreviewBlockVisibility(_right);
             _sidebarVisible = settings.SidebarVisible;
             ApplySidebarVisibility();
             _verifyCopiesWithChecksum = settings.VerifyCopiesWithChecksum;
@@ -227,7 +238,7 @@ public sealed partial class MainWindow : Window
                 _accentMode.ToString(),
                 _accentPresetId,
                 _accentCustomColor,
-                _detailsStripVisible,
+                _legacyDetailsStripVisible,
                 _sidebarVisible,
                 _columnWidth,
                 // LoadAsync has already applied the one-time accent-default
@@ -236,7 +247,9 @@ public sealed partial class MainWindow : Window
                 AccentDefaultMigrated: true,
                 VerifyCopiesWithChecksum: _verifyCopiesWithChecksum,
                 NameCollisionPolicy: _nameCollisionPolicy.ToString(),
-                TransfersStripCollapsed: _transfersStripCollapsed));
+                TransfersStripCollapsed: _transfersStripCollapsed,
+                LeftPreviewBlockExpanded: _left.PreviewBlockExpanded,
+                RightPreviewBlockExpanded: _right.PreviewBlockExpanded));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -338,7 +351,7 @@ public sealed partial class MainWindow : Window
         catch (OperationCanceledException) { return false; }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            SetPaneStatus(pane, ex.Message); SetStatus("Navigation failed · " + ex.Message, StatusSeverity.Error); pane.PathBox.Text = pane.CurrentPath; return false;
+            SetPaneStatus(pane, ex.Message); SetStatus("Navigation failed · " + ex.Message, StatusSeverity.Error); RebuildBreadcrumbs(pane); return false;
         }
         pane.ReadCancellation?.Cancel(); pane.ReadCancellation?.Dispose(); pane.ReadCancellation = new CancellationTokenSource();
         token = pane.ReadCancellation.Token;
@@ -353,7 +366,7 @@ public sealed partial class MainWindow : Window
                 pane.ForwardHistory.Clear();
             }
             pane.CurrentPath = fullPath;
-            pane.PathBox.Text = fullPath;
+            RebuildBreadcrumbs(pane);
             UpdatePaneHeader(pane);
             ApplyFolderViewState(pane);
             pane.AllItems = entries;
@@ -363,7 +376,7 @@ public sealed partial class MainWindow : Window
             else ClearColumns(pane);
             RefreshSidebarSelection();
             _ = _recentsStore.RecordAsync(fullPath, isDirectory: true);
-            RefreshDetailsStrip();
+            RefreshPreviewBlock(pane);
             SetStatus("Ready · Local-only · No telemetry");
             if (!_restoringSession) await PersistSessionAsync();
             return true;
@@ -375,7 +388,7 @@ public sealed partial class MainWindow : Window
             {
                 SetPaneStatus(pane, ex.Message);
                 SetStatus("Could not read folder · " + ex.Message, StatusSeverity.Error);
-                pane.PathBox.Text = pane.CurrentPath;
+                RebuildBreadcrumbs(pane);
             }
             return false;
         }
@@ -400,7 +413,7 @@ public sealed partial class MainWindow : Window
             pane.ForwardHistory.Clear();
         }
         pane.CurrentPath = HomePath;
-        pane.PathBox.Text = "Home";
+        RebuildBreadcrumbs(pane);
         pane.AllItems = Array.Empty<FileEntry>();
         pane.Items.Clear();
         UpdatePaneHeader(pane);
@@ -409,7 +422,7 @@ public sealed partial class MainWindow : Window
         RenderHomeView(pane);
         RefreshSidebarSelection();
         SetPaneStatus(pane, "Home · pinned folders, drives and recent items");
-        RefreshDetailsStrip();
+        RefreshPreviewBlock(pane);
         SetStatus("Ready · Local-only · No telemetry");
         if (!_restoringSession) await PersistSessionAsync();
         return true;
@@ -877,6 +890,14 @@ public sealed partial class MainWindow : Window
                     entry.FolderSizeLabel = null; // fall back to the plain dash
             }
         }
+
+        // Sizes this run landed in the cache now count toward the preview
+        // blocks' totals; refresh both panes' header lines.
+        if (!token.IsCancellationRequested)
+        {
+            UpdatePreviewBlockTotals(_left);
+            UpdatePreviewBlockTotals(_right);
+        }
     }
 
     /// <summary>
@@ -1090,7 +1111,7 @@ public sealed partial class MainWindow : Window
         if (!string.Equals(pane.CurrentPath, chain.CurrentFolderPath, StringComparison.OrdinalIgnoreCase))
         {
             pane.CurrentPath = chain.CurrentFolderPath;
-            pane.PathBox.Text = pane.CurrentPath;
+            RebuildBreadcrumbs(pane);
             UpdatePaneHeader(pane);
         }
         pane.PendingRevealPath = null;
@@ -1298,11 +1319,11 @@ public sealed partial class MainWindow : Window
             }
         }
         pane.CurrentPath = chain.CurrentFolderPath;
-        pane.PathBox.Text = pane.CurrentPath;
+        RebuildBreadcrumbs(pane);
         UpdatePaneHeader(pane);
         RefreshSidebarSelection();
         UpdateSelectionStatus(pane);
-        if (ReferenceEquals(_activePane, pane)) RefreshDetailsStrip();
+        RefreshPreviewBlock(pane);
         _ = _recentsStore.RecordAsync(chain.CurrentFolderPath, isDirectory: true);
         if (!_restoringSession) await PersistSessionAsync();
     }
@@ -1535,8 +1556,18 @@ public sealed partial class MainWindow : Window
     {
         SidebarContent.Children.Clear();
         _sidebarNavButtons.Clear();
-        AddSidebarSection("FAVORITES");
+        AddSidebarSection("Drives");
+        foreach (var drive in EnumerateDrives())
+            AddSidebarDriveItem(drive);
+        AddSidebarSection("Places");
         AddSidebarItem(Symbol.Home, "Home", HomePath, "Show the Home page in the active pane");
+        AddSidebarItem(Symbol.Folder, "Desktop", KnownFolderPath(Environment.SpecialFolder.Desktop), "Open the Desktop folder in the active pane");
+        AddSidebarItem(Symbol.Document, "Documents", KnownFolderPath(Environment.SpecialFolder.MyDocuments), "Open the Documents folder in the active pane");
+        AddSidebarItem(Symbol.Download, "Downloads", DownloadsFolderPath(), "Open the Downloads folder in the active pane");
+        AddSidebarItem(Symbol.Audio, "Music", KnownFolderPath(Environment.SpecialFolder.MyMusic), "Open the Music folder in the active pane");
+        AddSidebarItem(Symbol.Pictures, "Pictures", KnownFolderPath(Environment.SpecialFolder.MyPictures), "Open the Pictures folder in the active pane");
+        AddSidebarItem(Symbol.Video, "Videos", KnownFolderPath(Environment.SpecialFolder.MyVideos), "Open the Videos folder in the active pane");
+        AddSidebarSection("Favorites");
         // Ungrouped favorites first (in saved order, exactly as the flat
         // list always showed them), then each group under its header.
         foreach (var path in _bookmarkGroups.UngroupedPaths)
@@ -1550,17 +1581,80 @@ public sealed partial class MainWindow : Window
                 if (BookmarkByPath(path) is { } bookmark)
                     AddSidebarItem(Symbol.Folder, bookmark.Name, bookmark.Path, $"Open {bookmark.Path} in the active pane", BuildBookmarkContextFlyout(bookmark, group.Name), indent: true);
         }
-        AddSidebarSection("THIS PC");
-        AddSidebarItem(Symbol.Folder, "Desktop", KnownFolderPath(Environment.SpecialFolder.Desktop), "Open the Desktop folder in the active pane");
-        AddSidebarItem(Symbol.Document, "Documents", KnownFolderPath(Environment.SpecialFolder.MyDocuments), "Open the Documents folder in the active pane");
-        AddSidebarItem(Symbol.Download, "Downloads", DownloadsFolderPath(), "Open the Downloads folder in the active pane");
-        AddSidebarItem(Symbol.Audio, "Music", KnownFolderPath(Environment.SpecialFolder.MyMusic), "Open the Music folder in the active pane");
-        AddSidebarItem(Symbol.Pictures, "Pictures", KnownFolderPath(Environment.SpecialFolder.MyPictures), "Open the Pictures folder in the active pane");
-        AddSidebarItem(Symbol.Video, "Videos", KnownFolderPath(Environment.SpecialFolder.MyVideos), "Open the Videos folder in the active pane");
-        AddSidebarSection("DRIVES");
-        foreach (var drive in EnumerateDrives())
-            AddSidebarItem(Symbol.MapDrive, drive.Label, drive.RootPath, drive.ToolTip, BuildDriveContextFlyout(drive));
         RefreshSidebarSelection();
+    }
+
+    /// <summary>
+    /// A drive's sidebar row: name, then a slim usage bar with the
+    /// percent-used and total size beside it. The bar's fill is the accent
+    /// brush; a drive that will not answer shows "Not ready" and no bar
+    /// instead of invented numbers. Everything else about the row — the
+    /// Inspect/Eject menu, drop targeting, selection highlight — matches
+    /// the other sidebar entries.
+    /// </summary>
+    private void AddSidebarDriveItem(DriveEntry drive)
+    {
+        var content = new StackPanel { Spacing = 3 };
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        titleRow.Children.Add(new SymbolIcon { Symbol = Symbol.MapDrive, Width = 16, Height = 16 });
+        titleRow.Children.Add(new TextBlock { Text = drive.Label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+        content.Children.Add(titleRow);
+        if (drive.IsReady && drive.TotalBytes > 0)
+        {
+            var usageRow = new Grid { ColumnSpacing = 8 };
+            usageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            usageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var bar = new ProgressBar
+            {
+                Minimum = 0,
+                Maximum = 100,
+                Value = DriveSummary.UsedFraction(drive.TotalBytes, drive.FreeBytes) * 100,
+                Foreground = ThemeBrush("MeridianAccentBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ToolTipService.SetToolTip(bar, DriveSummary.FreeSpaceLabel(drive.TotalBytes, drive.FreeBytes));
+            usageRow.Children.Add(bar);
+            var usageText = new TextBlock
+            {
+                Text = $"{DriveSummary.UsedPercent(drive.TotalBytes, drive.FreeBytes)}% · {DirectoryReader.FormatSize(drive.TotalBytes)}",
+                FontSize = 11,
+                Foreground = ThemeBrush("MeridianTextSecondaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(usageText, 1);
+            usageRow.Children.Add(usageText);
+            content.Children.Add(usageRow);
+        }
+        else
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = "Not ready",
+                FontSize = 11,
+                Foreground = ThemeBrush("MeridianTextSecondaryBrush")
+            });
+        }
+        var button = new Button
+        {
+            Content = content,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(10, 6, 10, 6),
+            Tag = drive.RootPath,
+            ContextFlyout = BuildDriveContextFlyout(drive)
+        };
+        ToolTipService.SetToolTip(button, drive.ToolTip);
+        AutomationProperties.SetName(button, drive.IsReady
+            ? $"{drive.Label}, {DriveSummary.UsedPercent(drive.TotalBytes, drive.FreeBytes)} percent used, {DriveSummary.FreeSpaceLabel(drive.TotalBytes, drive.FreeBytes)}"
+            : $"{drive.Label}, not ready");
+        button.Click += SidebarItem_Click;
+        button.AllowDrop = true;
+        button.DragOver += SidebarItem_DragOver;
+        button.Drop += SidebarItem_Drop;
+        SidebarContent.Children.Add(button);
+        _sidebarNavButtons.Add((button, drive.RootPath));
     }
 
     private BookmarkSnapshot? BookmarkByPath(string path) =>
@@ -3350,8 +3444,7 @@ public sealed partial class MainWindow : Window
     private void FocusActivePathShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        _activePane.PathBox.Focus(FocusState.Programmatic);
-        _activePane.PathBox.SelectAll();
+        EnterPathEditMode(_activePane);
     }
 
     private void FocusActiveFilterShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -3997,13 +4090,13 @@ public sealed partial class MainWindow : Window
     private void LeftItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateSelectionStatus(_left);
-        if (ReferenceEquals(_activePane, _left)) RefreshDetailsStrip();
+        RefreshPreviewBlock(_left);
     }
 
     private void RightItems_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateSelectionStatus(_right);
-        if (ReferenceEquals(_activePane, _right)) RefreshDetailsStrip();
+        RefreshPreviewBlock(_right);
     }
 
     // Mirrors the counts ApplyFilter writes, without rebuilding the item list.
@@ -4137,7 +4230,6 @@ public sealed partial class MainWindow : Window
         _activePane = pane;
         UpdateActivePaneVisuals();
         RefreshSidebarSelection();
-        RefreshDetailsStrip();
     }
 
     private void UpdateActivePaneVisuals()
@@ -4237,164 +4329,333 @@ public sealed partial class MainWindow : Window
     }
     private async void LeftItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_left);
     private async void RightItems_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => await OpenSelectedAsync(_right);
-    private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); } }
-    private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); } }
-
-    // ----- Details strip -----
-
-    private void DetailsStripMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void LeftPath_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        _detailsStripVisible = DetailsStripMenuItem.IsChecked;
-        ApplyDetailsStripVisibility();
+        if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_left, LeftPath.Text); }
+        else if (e.Key == VirtualKey.Escape) { e.Handled = true; ExitPathEditMode(_left); }
+    }
+
+    private async void RightPath_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter) { e.Handled = true; await NavigateAsync(_right, RightPath.Text); }
+        else if (e.Key == VirtualKey.Escape) { e.Handled = true; ExitPathEditMode(_right); }
+    }
+
+    private void LeftPath_LostFocus(object sender, RoutedEventArgs e) => ExitPathEditMode(_left);
+
+    private void RightPath_LostFocus(object sender, RoutedEventArgs e) => ExitPathEditMode(_right);
+
+    // ----- Breadcrumb path bar -----
+
+    /// <summary>The empty stretch of a pane's breadcrumb bar: clicking it
+    /// swaps the breadcrumbs for the path text box, and files dropped on it
+    /// land in the pane's current folder, like drops on the old path box's
+    /// pane targets.</summary>
+    private void WireBreadcrumbEditArea(PaneState pane, Border editArea)
+    {
+        editArea.Tapped += (s, e) => { EnterPathEditMode(pane); e.Handled = true; };
+        editArea.AllowDrop = true;
+        editArea.DragOver += (s, e) => HandleDropTargetDragOver(e, pane.CurrentPath, list: null);
+        editArea.Drop += (s, e) => _ = HandleDropAsync(e, pane.CurrentPath, list: null);
+    }
+
+    /// <summary>
+    /// Rebuilds a pane's breadcrumb segments from its current path and
+    /// returns the bar to breadcrumb mode: every navigation commit and
+    /// every failed navigation lands here, so the bar always names the
+    /// folder the pane is actually showing. The path text box keeps the
+    /// current path as its text (empty at Home, where the placeholder
+    /// invites a typed path instead).
+    /// </summary>
+    private void RebuildBreadcrumbs(PaneState pane)
+    {
+        pane.EditingPath = false;
+        pane.PathBox.Visibility = Visibility.Collapsed;
+        pane.PathBox.Text = pane.IsHome ? string.Empty : pane.CurrentPath;
+        if (pane.BreadcrumbPanel is not { } panel) return;
+        panel.Visibility = Visibility.Visible;
+        panel.Children.Clear();
+        var segments = BreadcrumbPath.SegmentsFor(pane.CurrentPath, HomePath);
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var segment = segments[i];
+            if (i > 0)
+            {
+                panel.Children.Add(new FontIcon
+                {
+                    Glyph = "\uE76C",
+                    FontSize = 9,
+                    Foreground = ThemeBrush("MeridianTextTertiaryBrush"),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+            var label = new TextBlock
+            {
+                Text = segment.Label,
+                MaxWidth = 110,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontWeight = i == segments.Count - 1 ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal
+            };
+            var button = new Button
+            {
+                Content = label,
+                Padding = new Thickness(6, 3, 6, 3),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                Tag = segment.Path
+            };
+            ToolTipService.SetToolTip(button, segment.Path);
+            AutomationProperties.SetName(button, $"Open {segment.Label}");
+            var target = segment.Path;
+            button.Click += async (s, e) => await NavigateAsync(pane, target);
+            if (!string.Equals(target, HomePath, StringComparison.OrdinalIgnoreCase))
+            {
+                button.AllowDrop = true;
+                button.DragOver += (s, e) => HandleDropTargetDragOver(e, target, list: null);
+                button.Drop += (s, e) => _ = HandleDropAsync(e, target, list: null);
+            }
+            panel.Children.Add(button);
+        }
+    }
+
+    /// <summary>Swaps a pane's breadcrumbs for its path text box, holding
+    /// the full current path (empty at Home). Enter navigates, Escape or
+    /// simply moving focus away returns to the breadcrumbs.</summary>
+    private void EnterPathEditMode(PaneState pane)
+    {
+        pane.EditingPath = true;
+        if (pane.BreadcrumbPanel is { } panel) panel.Visibility = Visibility.Collapsed;
+        pane.PathBox.Text = pane.IsHome ? string.Empty : pane.CurrentPath;
+        pane.PathBox.Visibility = Visibility.Visible;
+        pane.PathBox.Focus(FocusState.Programmatic);
+        pane.PathBox.SelectAll();
+    }
+
+    /// <summary>Leaves path editing without navigating: the typed text is
+    /// discarded and the breadcrumbs return. A no-op outside edit mode, so
+    /// the focus loss that follows a committed navigation is harmless.</summary>
+    private void ExitPathEditMode(PaneState pane)
+    {
+        if (!pane.EditingPath) return;
+        pane.EditingPath = false;
+        pane.PathBox.Text = pane.IsHome ? string.Empty : pane.CurrentPath;
+        pane.PathBox.Visibility = Visibility.Collapsed;
+        if (pane.BreadcrumbPanel is { } panel) panel.Visibility = Visibility.Visible;
+    }
+
+    // ----- Preview blocks (one per pane, below the file area) -----
+
+    private void LeftPreviewToggle_Click(object sender, RoutedEventArgs e) => TogglePreviewBlock(_left);
+
+    private void RightPreviewToggle_Click(object sender, RoutedEventArgs e) => TogglePreviewBlock(_right);
+
+    private void TogglePreviewBlock(PaneState pane)
+    {
+        pane.PreviewBlockExpanded = !pane.PreviewBlockExpanded;
+        RefreshPreviewBlock(pane);
         _ = PersistSettingsAsync();
     }
 
-    private void DetailsStripShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    /// <summary>Applies a pane's expanded/collapsed state to its block:
+    /// content visibility, the chevron's direction, and the toggle's own
+    /// explanation, which names the action the button will take.</summary>
+    private void ApplyPreviewBlockVisibility(PaneState pane)
     {
-        args.Handled = true;
-        _detailsStripVisible = !_detailsStripVisible;
-        ApplyDetailsStripVisibility();
-        _ = PersistSettingsAsync();
+        if (pane.Block is not { } block) return;
+        var expanded = pane.PreviewBlockExpanded;
+        block.Content.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        block.ToggleGlyph.Glyph = expanded ? "\uE70D" : "\uE70E";
+        ToolTipService.SetToolTip(block.Toggle, expanded
+            ? "Hide this pane's preview and details"
+            : "Show this pane's preview and details");
+        AutomationProperties.SetName(block.Toggle, expanded
+            ? $"Hide preview and details, {pane.Name.ToLowerInvariant()} pane"
+            : $"Show preview and details, {pane.Name.ToLowerInvariant()} pane");
     }
 
-    private void ApplyDetailsStripVisibility()
+    /// <summary>
+    /// Refreshes a pane's block after anything it describes changes — the
+    /// pane navigated, its selection changed, folder sizes landed in the
+    /// cache. The totals header always updates; the preview and details
+    /// load only while the block is expanded, and collapsing stops any
+    /// load still in flight.
+    /// </summary>
+    private void RefreshPreviewBlock(PaneState pane)
     {
-        DetailsStrip.Visibility = _detailsStripVisible ? Visibility.Visible : Visibility.Collapsed;
-        DetailsStripMenuItem.IsChecked = _detailsStripVisible;
-        if (_detailsStripVisible)
+        UpdatePreviewBlockTotals(pane);
+        ApplyPreviewBlockVisibility(pane);
+        if (!pane.PreviewBlockExpanded)
         {
-            RefreshDetailsStrip();
+            pane.PreviewBlockGeneration++;
+            pane.PreviewBlockCancellation?.Cancel();
+            return;
         }
-        else
+        _ = RefreshPreviewBlockAsync(pane);
+    }
+
+    /// <summary>The listing a pane's block totals describe: in the columns
+    /// layout the deepest column's folder (the convention the pane status
+    /// line uses), elsewhere the pane's own listing.</summary>
+    private static IReadOnlyList<FileEntry> BlockItems(PaneState pane) =>
+        pane.Layout == PaneLayout.Columns && pane.Columns.Count > 0
+            ? pane.Columns[^1].AllItems
+            : pane.AllItems;
+
+    /// <summary>A folder's already-measured size, or null when it has not
+    /// been measured (or has changed since): the totals rule that keeps the
+    /// header from ever starting a folder-size walk of its own.</summary>
+    private long? CachedFolderSize(FileEntry entry) =>
+        _folderSizeCache.TryGet(entry.FullPath, entry.ModifiedUtc, out var cached) ? cached.TotalBytes : null;
+
+    private void UpdatePreviewBlockTotals(PaneState pane)
+    {
+        if (pane.Block is not { } block) return;
+        if (pane.IsHome)
         {
-            // Stop any in-flight detail work; a hidden strip shows nothing.
-            _detailsStripGeneration++;
-            _detailsStripCancellation?.Cancel();
+            block.Totals.Text = "Home";
+            return;
         }
+        var items = BlockItems(pane);
+        var selected = GetSelectedEntries(pane);
+        var (total, selectedTotal) = PaneTotals.SumSizes(items, selected, CachedFolderSize);
+        block.Totals.Text = PaneTotals.FormatHeader(items.Count, total, selected.Count, selectedTotal);
     }
 
-    private void RefreshDetailsStrip()
+    private async Task RefreshPreviewBlockAsync(PaneState pane)
     {
-        if (!_detailsStripVisible) return;
-        _ = RefreshDetailsStripAsync();
-    }
+        if (pane.Block is not { } block) return;
+        var generation = ++pane.PreviewBlockGeneration;
+        pane.PreviewBlockCancellation?.Cancel();
+        pane.PreviewBlockCancellation?.Dispose();
+        pane.PreviewBlockCancellation = new CancellationTokenSource();
+        var token = pane.PreviewBlockCancellation.Token;
 
-    private async Task RefreshDetailsStripAsync()
-    {
-        var generation = ++_detailsStripGeneration;
-        _detailsStripCancellation?.Cancel();
-        _detailsStripCancellation?.Dispose();
-        _detailsStripCancellation = new CancellationTokenSource();
-        var token = _detailsStripCancellation.Token;
+        block.Image.Source = null;
+        block.Image.Visibility = Visibility.Collapsed;
+        block.Text.Visibility = Visibility.Collapsed;
+        block.Glyph.Visibility = Visibility.Visible;
+        block.Glyph.Glyph = "\uE946";
+        block.Exif.Text = string.Empty;
+        block.Exif.Visibility = Visibility.Collapsed;
+        ToolTipService.SetToolTip(block.Name, null);
+
         try
         {
-            var selected = GetSelectedEntries(_activePane);
-            if (selected.Count != 1)
+            if (pane.IsHome)
             {
-                _detailsCurrentEntry = null;
-                ShowDetailsStripHint(selected.Count);
+                block.Glyph.Glyph = "\uE80F";
+                block.Name.Text = "Home";
+                block.Meta.Text = "Pinned folders, drives and recent items";
+                return;
+            }
+
+            var selected = GetSelectedEntries(pane);
+            if (selected.Count > 1)
+            {
+                var (_, selectedBytes) = PaneTotals.SumSizes([], selected, CachedFolderSize);
+                block.Name.Text = $"{selected.Count:N0} items selected";
+                block.Meta.Text = $"Size: {DirectoryReader.FormatSize(selectedBytes)}";
+                return;
+            }
+
+            if (selected.Count == 0)
+            {
+                ShowCurrentFolderDetails(pane, block);
                 return;
             }
 
             var entry = selected[0];
-            _detailsCurrentEntry = entry;
             FileSystemInfo info = entry.IsDirectory ? new DirectoryInfo(entry.FullPath) : new FileInfo(entry.FullPath);
             info.Refresh();
             if (!info.Exists)
             {
-                ShowDetailsStripHint(0, "That item is no longer available.");
+                block.Name.Text = "Details";
+                block.Meta.Text = "That item is no longer available.";
                 return;
             }
 
-            DetailsName.Text = entry.Name;
-            ToolTipService.SetToolTip(DetailsName, entry.FullPath);
-            DetailsHintText.Text = string.Empty;
-            DetailsHintText.Visibility = Visibility.Collapsed;
-            DetailsTypeText.Text = entry.TypeLabel;
-            DetailsLocationText.Text = info.FullName;
-            DetailsOpensInText.Text = entry.IsDirectory
-                ? "—"
-                : DefaultAppReader.TryGetFriendlyAppName(entry.FullPath) ?? "No default app found";
-            DetailsCreatedText.Text = info.CreationTime.ToString("g");
-            DetailsModifiedText.Text = info.LastWriteTime.ToString("g");
-            DetailsAccessedText.Text = info.LastAccessTime.ToString("g");
-            DetailsDimensionsText.Text = string.Empty;
-            DetailsSizeText.Text = entry.IsDirectory ? "Calculating…" : FormatFileSize(((FileInfo)info).Length);
-            DetailsExifText.Text = string.Empty;
-            DetailsExifText.Visibility = Visibility.Collapsed;
-            DetailsThumbnail.Source = null;
-            DetailsThumbnail.Visibility = Visibility.Collapsed;
-            DetailsThumbnailGlyph.Glyph = entry.Glyph;
-            DetailsThumbnailGlyph.Visibility = Visibility.Visible;
-            DetailsAccessText.Text = "Reading who can open this…";
-            DetailsSecurityButton.IsEnabled = false;
-
-            _ = LoadDetailsThumbnailAsync(entry, generation);
+            block.Glyph.Glyph = entry.Glyph;
+            block.Name.Text = entry.Name;
+            ToolTipService.SetToolTip(block.Name, entry.FullPath);
+            var lines = new List<string>
+            {
+                $"Type: {entry.TypeLabel}",
+                $"Created: {info.CreationTime.ToString("g")}",
+                $"Modified: {info.LastWriteTime.ToString("g")}"
+            };
             if (entry.IsDirectory)
-                _ = LoadDetailsFolderSizeAsync(entry, generation, token);
+            {
+                // The folder treatment the Space quick preview gives a
+                // folder: its glyph, then its measured size and counts
+                // when the walk finishes.
+                block.Meta.Text = string.Join("\n", lines.Append("Size: calculating…"));
+                _ = LoadBlockFolderSizeAsync(pane, entry, generation, token, string.Join("\n", lines));
+            }
             else
-                _ = LoadDetailsExifAsync(entry, generation);
-            _ = LoadDetailsMetadataAsync(entry, generation);
-            _ = LoadDetailsAccessAsync(entry, generation);
+            {
+                lines.Add($"Size: {FormatFileSize(((FileInfo)info).Length)}");
+                lines.Add($"Opens in: {DefaultAppReader.TryGetFriendlyAppName(entry.FullPath) ?? "No default app found"}");
+                block.Meta.Text = string.Join("\n", lines);
+                if (Meridian.Core.Viewer.ViewerRouter.Classify(entry.FullPath).Kind == Meridian.Core.Viewer.ViewerKind.Text)
+                    _ = LoadBlockTextPreviewAsync(pane, entry, generation);
+                else
+                    _ = LoadBlockThumbnailAsync(pane, entry, generation);
+                _ = LoadBlockExifAsync(pane, entry, generation);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            if (generation == _detailsStripGeneration)
-                ShowDetailsStripHint(0, "Details could not be read · " + ex.Message);
+            if (generation == pane.PreviewBlockGeneration)
+            {
+                block.Name.Text = "Details";
+                block.Meta.Text = "Details could not be read · " + ex.Message;
+            }
         }
     }
 
-    private void ShowDetailsStripHint(int selectionCount, string? message = null)
+    /// <summary>The no-selection state: the block describes the folder the
+    /// pane is standing in — its name, how much the listing holds, and when
+    /// it last changed — with the plain folder treatment as its preview.</summary>
+    private void ShowCurrentFolderDetails(PaneState pane, PreviewBlockControls block)
     {
-        DetailsName.Text = "Details";
-        ToolTipService.SetToolTip(DetailsName, null);
-        DetailsHintText.Text = message ?? (selectionCount == 0
-            ? "Select an item to see its details here."
-            : $"{selectionCount:N0} items are selected. Details are shown for one item at a time.");
-        DetailsHintText.Visibility = Visibility.Visible;
-        DetailsTypeText.Text = string.Empty;
-        DetailsOpensInText.Text = string.Empty;
-        DetailsLocationText.Text = string.Empty;
-        DetailsSizeText.Text = string.Empty;
-        DetailsDimensionsText.Text = string.Empty;
-        DetailsCreatedText.Text = string.Empty;
-        DetailsModifiedText.Text = string.Empty;
-        DetailsAccessedText.Text = string.Empty;
-        DetailsExifText.Text = string.Empty;
-        DetailsExifText.Visibility = Visibility.Collapsed;
-        DetailsThumbnail.Source = null;
-        DetailsThumbnail.Visibility = Visibility.Collapsed;
-        DetailsThumbnailGlyph.Glyph = "\uE946";
-        DetailsThumbnailGlyph.Visibility = Visibility.Visible;
-        DetailsAccessText.Text = string.Empty;
-        DetailsSecurityButton.IsEnabled = false;
-        SetDetailsEditorEnabled(false, "Select one file to see the details you can edit.");
+        var path = pane.CurrentPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            block.Name.Text = "Details";
+            block.Meta.Text = string.Empty;
+            return;
+        }
+        try
+        {
+            var info = new DirectoryInfo(path);
+            info.Refresh();
+            block.Glyph.Glyph = "\uE8B7";
+            block.Name.Text = string.IsNullOrWhiteSpace(info.Name) ? path : info.Name;
+            ToolTipService.SetToolTip(block.Name, path);
+            block.Meta.Text = string.Join("\n",
+                "Type: Folder",
+                $"Contains: {BlockItems(pane).Count:N0} items",
+                $"Modified: {info.LastWriteTime.ToString("g")}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            block.Name.Text = "Details";
+            block.Meta.Text = "Details could not be read · " + ex.Message;
+        }
     }
 
-    private async Task LoadDetailsThumbnailAsync(FileEntry entry, int generation)
+    private async Task LoadBlockThumbnailAsync(PaneState pane, FileEntry entry, int generation)
     {
         Microsoft.UI.Xaml.Media.Imaging.BitmapImage? bitmap = null;
         try
         {
-            if (entry.IsDirectory)
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
+            using var thumbnail = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 256);
+            if (thumbnail is not null)
             {
-                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(entry.FullPath);
-                using var thumbnail = await folder.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 120);
-                if (thumbnail is not null)
-                {
-                    bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                    await bitmap.SetSourceAsync(thumbnail);
-                }
-            }
-            else
-            {
-                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
-                using var thumbnail = await file.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.SingleItem, 120);
-                if (thumbnail is not null)
-                {
-                    bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                    await bitmap.SetSourceAsync(thumbnail);
-                }
+                bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                await bitmap.SetSourceAsync(thumbnail);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
@@ -4403,13 +4664,53 @@ public sealed partial class MainWindow : Window
             bitmap = null;
         }
 
-        if (generation != _detailsStripGeneration || bitmap is null) return;
-        DetailsThumbnail.Source = bitmap;
-        DetailsThumbnail.Visibility = Visibility.Visible;
-        DetailsThumbnailGlyph.Visibility = Visibility.Collapsed;
+        if (generation != pane.PreviewBlockGeneration || bitmap is null || pane.Block is not { } block) return;
+        block.Image.Source = bitmap;
+        block.Image.Visibility = Visibility.Visible;
+        block.Glyph.Visibility = Visibility.Collapsed;
     }
 
-    private async Task LoadDetailsExifAsync(FileEntry entry, int generation)
+    /// <summary>A text file's preview: the opening of the file, decoded by
+    /// the same bounded reader and decoder the Space quick preview uses. A
+    /// file that does not decode as text keeps its glyph instead.</summary>
+    private async Task LoadBlockTextPreviewAsync(PaneState pane, FileEntry entry, int generation)
+    {
+        string? sample = null;
+        try
+        {
+            var bytes = await Meridian.Core.Viewer.SafeFilePreview.ReadPrefixAsync(entry.FullPath, maxBytes: 65536);
+            if (Meridian.Core.Viewer.PreviewTextDecoder.TryDecode(bytes, out var decoded))
+                sample = decoded.Length <= 800 ? decoded : decoded[..800];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            sample = null;
+        }
+
+        if (generation != pane.PreviewBlockGeneration || sample is null || pane.Block is not { } block) return;
+        block.Text.Text = sample;
+        block.Text.Visibility = Visibility.Visible;
+        block.Glyph.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task LoadBlockFolderSizeAsync(PaneState pane, FileEntry entry, int generation, CancellationToken token, string baseMeta)
+    {
+        try
+        {
+            var result = await FolderSizeCalculator.CalculateAsync(entry.FullPath, token);
+            if (generation != pane.PreviewBlockGeneration || token.IsCancellationRequested || pane.Block is not { } block) return;
+            block.Meta.Text = baseMeta + $"\nSize: {DirectoryReader.FormatSize(result.TotalBytes)} · {result.FileCount:N0} files in {result.DirectoryCount:N0} folders" +
+                (result.SkippedCount > 0 ? $" · {result.SkippedCount:N0} items could not be counted" : string.Empty);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            if (generation == pane.PreviewBlockGeneration && pane.Block is { } block)
+                block.Meta.Text = baseMeta + "\nSize: could not be calculated · " + ex.Message;
+        }
+    }
+
+    private async Task LoadBlockExifAsync(PaneState pane, FileEntry entry, int generation)
     {
         var extension = Path.GetExtension(entry.FullPath);
         if (!extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) &&
@@ -4428,10 +4729,10 @@ public sealed partial class MainWindow : Window
             summary = null;
         }
 
-        if (generation != _detailsStripGeneration || summary is null) return;
+        if (generation != pane.PreviewBlockGeneration || summary is null || pane.Block is not { } block) return;
         var lines = new List<string>();
         if (summary.PixelWidth is { } width && summary.PixelHeight is { } height)
-            DetailsDimensionsText.Text = $"{width:N0} × {height:N0} pixels";
+            lines.Add($"Dimensions: {width:N0} × {height:N0} pixels");
         if (FormatCameraName(summary.CameraMake, summary.CameraModel) is { } camera)
             lines.Add("Camera: " + camera);
         if (summary.DateTaken is { } taken)
@@ -4439,8 +4740,8 @@ public sealed partial class MainWindow : Window
         if (summary.FormatCoordinates() is { } coordinates)
             lines.Add("Location recorded in the photo: " + coordinates);
         if (lines.Count == 0) return;
-        DetailsExifText.Text = string.Join("\n", lines);
-        DetailsExifText.Visibility = Visibility.Visible;
+        block.Exif.Text = string.Join("\n", lines);
+        block.Exif.Visibility = Visibility.Visible;
     }
 
     private static string? FormatCameraName(string? make, string? model)
@@ -4448,244 +4749,6 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(model)) return string.IsNullOrWhiteSpace(make) ? null : make;
         if (string.IsNullOrWhiteSpace(make)) return model;
         return model.StartsWith(make, StringComparison.OrdinalIgnoreCase) ? model : make + " " + model;
-    }
-
-    private async Task LoadDetailsFolderSizeAsync(FileEntry entry, int generation, CancellationToken token)
-    {
-        try
-        {
-            var result = await FolderSizeCalculator.CalculateAsync(entry.FullPath, token, snapshot =>
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    if (generation != _detailsStripGeneration || token.IsCancellationRequested) return;
-                    DetailsSizeText.Text = $"{DirectoryReader.FormatSize(snapshot.TotalBytes)} so far · counting…";
-                });
-            });
-            if (generation != _detailsStripGeneration || token.IsCancellationRequested) return;
-            DetailsSizeText.Text = $"{DirectoryReader.FormatSize(result.TotalBytes)} · {result.FileCount:N0} files in {result.DirectoryCount:N0} folders" +
-                (result.SkippedCount > 0 ? $" · {result.SkippedCount:N0} items could not be counted" : string.Empty);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            if (generation == _detailsStripGeneration)
-                DetailsSizeText.Text = "Could not be calculated · " + ex.Message;
-        }
-    }
-
-    private async Task LoadDetailsMetadataAsync(FileEntry entry, int generation)
-    {
-        var values = new Dictionary<MetadataProperty, string>
-        {
-            [MetadataProperty.Title] = string.Empty,
-            [MetadataProperty.Comment] = string.Empty,
-            [MetadataProperty.Rating] = string.Empty,
-            [MetadataProperty.Keywords] = string.Empty
-        };
-        bool markedReadOnly;
-        try
-        {
-            markedReadOnly = !entry.IsDirectory && new FileInfo(entry.FullPath).IsReadOnly;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            markedReadOnly = false;
-        }
-
-        if (!EditableMetadataPolicy.TryGetEditableProperties(entry.FullPath, entry.IsDirectory, markedReadOnly, out _, out var reason))
-        {
-            if (generation != _detailsStripGeneration) return;
-            _detailsCurrentValues = values;
-            ApplyDetailsValuesToEditor(values);
-            SetDetailsEditorEnabled(false, reason);
-            return;
-        }
-
-        try
-        {
-            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
-            var stored = await file.Properties.RetrievePropertiesAsync(
-                EditableMetadataPolicy.All.Select(descriptor => descriptor.ShellName));
-            values[MetadataProperty.Title] = StoredText(stored, "System.Title");
-            values[MetadataProperty.Comment] = StoredText(stored, "System.Comment");
-            values[MetadataProperty.Keywords] = MetadataEditPlanner.NormalizeKeywords(StoredKeywords(stored));
-            values[MetadataProperty.Rating] = RatingScale.ToDisplayText(StoredRating(stored));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
-            System.Runtime.InteropServices.COMException or NotSupportedException or InvalidOperationException)
-        {
-            if (generation != _detailsStripGeneration) return;
-            _detailsCurrentValues = values;
-            ApplyDetailsValuesToEditor(values);
-            SetDetailsEditorEnabled(false, "Windows could not read this file's details here · " + ex.Message);
-            return;
-        }
-
-        if (generation != _detailsStripGeneration) return;
-        _detailsCurrentValues = values;
-        ApplyDetailsValuesToEditor(values);
-        SetDetailsEditorEnabled(true, null);
-    }
-
-    private static string StoredText(IDictionary<string, object> stored, string shellName) =>
-        stored.TryGetValue(shellName, out var value) && value is string text ? text : string.Empty;
-
-    private static string StoredKeywords(IDictionary<string, object> stored)
-    {
-        if (!stored.TryGetValue("System.Keywords", out var value) || value is null) return string.Empty;
-        return value switch
-        {
-            string single => single,
-            IEnumerable<string> many => string.Join("; ", many),
-            System.Collections.IEnumerable items => string.Join("; ", items.Cast<object>().Select(item => item?.ToString() ?? string.Empty)),
-            _ => value.ToString() ?? string.Empty
-        };
-    }
-
-    private static uint StoredRating(IDictionary<string, object> stored)
-    {
-        if (!stored.TryGetValue("System.Rating", out var value) || value is null) return 0;
-        return value switch
-        {
-            uint unsigned => unsigned,
-            int signed => signed <= 0 ? 0u : (uint)signed,
-            long wide => wide <= 0 ? 0u : (uint)Math.Min(wide, uint.MaxValue),
-            _ => 0
-        };
-    }
-
-    private void ApplyDetailsValuesToEditor(IReadOnlyDictionary<MetadataProperty, string> values)
-    {
-        DetailsTitleBox.Text = values[MetadataProperty.Title];
-        DetailsCommentBox.Text = values[MetadataProperty.Comment];
-        DetailsKeywordsBox.Text = values[MetadataProperty.Keywords];
-        DetailsRating.Value = int.TryParse(values[MetadataProperty.Rating], out var stars) ? stars : 0;
-    }
-
-    private void SetDetailsEditorEnabled(bool enabled, string? reason)
-    {
-        DetailsTitleBox.IsEnabled = enabled;
-        DetailsCommentBox.IsEnabled = enabled;
-        DetailsKeywordsBox.IsEnabled = enabled;
-        DetailsRating.IsEnabled = enabled;
-        DetailsReviewButton.IsEnabled = enabled;
-        DetailsEditReason.Text = reason ?? string.Empty;
-        DetailsEditReason.Visibility = string.IsNullOrEmpty(reason) ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    private async void DetailsReviewButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_detailsCurrentEntry is not { } entry) return;
-        var stars = (int)Math.Round(DetailsRating.Value);
-        var requested = new Dictionary<MetadataProperty, string>
-        {
-            [MetadataProperty.Title] = DetailsTitleBox.Text,
-            [MetadataProperty.Comment] = DetailsCommentBox.Text,
-            [MetadataProperty.Rating] = stars == 0 ? string.Empty : stars.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            [MetadataProperty.Keywords] = DetailsKeywordsBox.Text
-        };
-        var plan = MetadataEditPlanner.BuildPlan(entry.FullPath, _detailsCurrentValues, requested);
-        if (!plan.HasChanges)
-        {
-            SetStatus("No detail changes to save.", StatusSeverity.Warning);
-            return;
-        }
-
-        var lines = string.Join("\n", plan.Changes.Select(change => $"{change.Property.Label}: \"{change.OldDisplay}\" → \"{change.NewDisplay}\""));
-        var dialog = new ContentDialog
-        {
-            Title = "Save detail changes?",
-            Content = $"Change the details stored inside this file?\n\n{entry.FullPath}\n\n{lines}\n\nOnly this file is changed. The old values are replaced; you can edit them again here at any time. If Windows cannot save a detail, nothing is written and the problem is reported.",
-            PrimaryButtonText = "Save changes",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Content.XamlRoot
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        // Revalidate, like every other confirmed action: if the selection
-        // moved on while the dialog was open, do not write to a file the
-        // user is no longer looking at.
-        var current = GetSelectedEntries(_activePane);
-        if (current.Count != 1 || !string.Equals(current[0].FullPath, plan.Path, StringComparison.OrdinalIgnoreCase))
-        {
-            SetStatus("Save cancelled · The selection changed. Review the item and its details again.", StatusSeverity.Warning);
-            return;
-        }
-
-        await ApplyMetadataPlanAsync(entry, plan, requested);
-    }
-
-    private async Task ApplyMetadataPlanAsync(FileEntry entry, MetadataEditPlan plan, IReadOnlyDictionary<MetadataProperty, string> requested)
-    {
-        try
-        {
-            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(entry.FullPath);
-            var values = new List<KeyValuePair<string, object>>();
-            foreach (var change in plan.Changes)
-            {
-                var raw = requested.TryGetValue(change.Property.Property, out var text) ? text : string.Empty;
-                object? value = change.Property.Property switch
-                {
-                    MetadataProperty.Title => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim(),
-                    MetadataProperty.Comment => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim(),
-                    MetadataProperty.Rating => string.IsNullOrWhiteSpace(raw)
-                        ? null
-                        : RatingScale.ToShellValue(int.Parse(raw, System.Globalization.CultureInfo.InvariantCulture)),
-                    MetadataProperty.Keywords => MetadataEditPlanner.SplitKeywords(raw) is { Count: > 0 } tags
-                        ? tags.ToArray()
-                        : null,
-                    _ => null
-                };
-                values.Add(new KeyValuePair<string, object>(change.Property.ShellName, value!));
-            }
-
-            await file.Properties.SavePropertiesAsync(values);
-            SetStatus($"Details saved · {entry.Name}", StatusSeverity.Success);
-            RefreshDetailsStrip();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or FormatException or
-            System.Runtime.InteropServices.COMException or NotSupportedException or InvalidOperationException)
-        {
-            SetStatus("Details could not be saved · " + ex.Message, StatusSeverity.Error);
-        }
-    }
-
-    private async Task LoadDetailsAccessAsync(FileEntry entry, int generation)
-    {
-        AccessControlSummary summary;
-        try
-        {
-            summary = await Task.Run(() => AccessControlReader.Read(entry.FullPath, entry.IsDirectory));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
-        {
-            summary = new AccessControlSummary(null, [], "The access list could not be read.");
-        }
-
-        if (generation != _detailsStripGeneration) return;
-        DetailsAccessText.Text = string.Join("\n", AccessControlSummaryFormatter.DescribeLines(summary));
-        DetailsSecurityButton.IsEnabled = true;
-    }
-
-    private void DetailsSecurityButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_detailsCurrentEntry is not { } entry) return;
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = entry.FullPath,
-                UseShellExecute = true,
-                Verb = "properties"
-            });
-            SetStatus("Opened Windows Properties · permissions are changed on its Security tab. Meridian only shows them.");
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            SetStatus("Could not open Windows Properties · " + ex.Message, StatusSeverity.Error);
-        }
     }
 
     // ----- Quick preview (Space) -----
@@ -4980,6 +5043,31 @@ public sealed partial class MainWindow : Window
         /// child load can tell it has been superseded.</summary>
         public int FolderTreeGeneration { get; set; }
 
+        // ----- Breadcrumb bar + preview block state -----
+
+        /// <summary>The panel this pane's breadcrumb segment buttons are
+        /// built into; assigned after construction from the named XAML.</summary>
+        public StackPanel? BreadcrumbPanel { get; set; }
+
+        /// <summary>True while the pane's path text box replaces its
+        /// breadcrumbs for typed-path editing.</summary>
+        public bool EditingPath { get; set; }
+
+        /// <summary>This pane's preview block controls; assigned after
+        /// construction from the named XAML.</summary>
+        public PreviewBlockControls? Block { get; set; }
+
+        /// <summary>Whether this pane's preview block is expanded. Resolved
+        /// at startup by PreviewBlockMigration and saved per pane.</summary>
+        public bool PreviewBlockExpanded { get; set; }
+
+        /// <summary>Bumped whenever the block refreshes, so a stale
+        /// asynchronous preview load can tell it has been superseded.</summary>
+        public int PreviewBlockGeneration { get; set; }
+
+        /// <summary>Cancels the block's in-flight folder-size walk.</summary>
+        public CancellationTokenSource? PreviewBlockCancellation { get; set; }
+
         // ----- View mode state (standard layout only; the columns layout is unaffected) -----
 
         /// <summary>Which view mode the standard layout renders: Details, Grid, or Tiles.</summary>
@@ -5078,3 +5166,19 @@ public sealed class FolderTreeItem
     public required string Name { get; init; }
     public required string FullPath { get; init; }
 }
+
+/// <summary>The named controls of one pane's preview block, gathered so the
+/// block logic addresses a pane's set as one value instead of ten fields.
+/// Content is the collapsible details area; the header row (totals +
+/// toggle) stays visible either way.</summary>
+public sealed record PreviewBlockControls(
+    Grid Content,
+    TextBlock Totals,
+    Button Toggle,
+    FontIcon ToggleGlyph,
+    FontIcon Glyph,
+    Image Image,
+    TextBlock Text,
+    TextBlock Name,
+    TextBlock Meta,
+    TextBlock Exif);

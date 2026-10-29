@@ -17,6 +17,11 @@ public static class DriveSummary
         return (double)used / totalBytes;
     }
 
+    /// <summary>Whole percent of the drive in use (0–100), for text like the
+    /// sidebar's "80%". Zero or unknown totals give 0.</summary>
+    public static int UsedPercent(long totalBytes, long freeBytes) =>
+        (int)Math.Round(UsedFraction(totalBytes, freeBytes) * 100);
+
     /// <summary>"84 GB free of 492 GB", using the same size formatting as the file lists.</summary>
     public static string FreeSpaceLabel(long totalBytes, long freeBytes)
     {
